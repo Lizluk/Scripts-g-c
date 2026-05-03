@@ -1,0 +1,545 @@
+-- MAGNET: ANTI-DROP + PLAYER DELIVERY - Fixed v2
+-- G = Bật/Tắt
+-- FIX 1: Dùng Heartbeat thay vì task.wait → không bị rơi khi bị đánh/va tường
+-- FIX 2: Auto-scan toàn map mỗi 1s → tự lượm đồ trong bán kính
+-- FIX 3: Proximity pickup → đồ gần bạn tự bay lên không cần chạm
+-- FIX 4: Không giới hạn số lượng vật phẩm
+
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService      = game:GetService("HttpService")
+local client           = Players.LocalPlayer
+
+local FILE_NAME        = "MagnetStation_Data.json"
+local inversionEnabled = false
+local capturedParts    = {}   -- [part] = {bp, conn}
+local savedStations    = {}
+local currentTargetPos = nil
+local targetPlayer     = nil
+
+-- Config
+local AUTO_PICKUP_RADIUS = 20   -- studs: đồ trong bán kính này tự bay lên
+local SCAN_INTERVAL      = 1.0  -- giây: quét đồ mới trong map
+local BP_POWER           = 5000 -- lực kéo (cao hơn → không bị rơi khi bị đánh)
+local BP_DAMPING         = 800  -- chống rung/bounce
+local STACK_OFFSET_Y     = 8    -- độ cao bay trên target
+
+-- =============================================
+-- CLAIM OWNERSHIP
+-- =============================================
+local function claimOwnership(part)
+    pcall(function()
+        if sethiddenproperty then
+            sethiddenproperty(client, "SimulationRadius", math.huge)
+            sethiddenproperty(client, "MaxSimulationRadius", math.huge)
+        end
+        -- Claim network ownership của part
+        if part:IsA("BasePart") then
+            pcall(function() part:SetNetworkOwner(client) end)
+        end
+    end)
+end
+
+-- =============================================
+-- FILE MANAGEMENT
+-- =============================================
+local function saveToFile()
+    if writefile then
+        pcall(function() writefile(FILE_NAME, HttpService:JSONEncode(savedStations)) end)
+    end
+end
+local function loadFromFile()
+    if isfile and isfile(FILE_NAME) then
+        pcall(function() savedStations = HttpService:JSONDecode(readfile(FILE_NAME)) end)
+    end
+end
+loadFromFile()
+
+-- =============================================
+-- GUI
+-- =============================================
+local sg = client:WaitForChild("PlayerGui"):FindFirstChild("MagnetUI")
+if sg then sg:Destroy() end
+sg = Instance.new("ScreenGui")
+sg.Name = "MagnetUI"; sg.ResetOnSpawn = false; sg.Parent = client.PlayerGui
+
+local mainFrame = Instance.new("Frame", sg)
+mainFrame.Size = UDim2.new(0, 330, 0, 520)
+mainFrame.Position = UDim2.new(0, 10, 0.5, -260)
+mainFrame.BackgroundColor3 = Color3.fromRGB(13, 13, 13)
+mainFrame.Draggable = true; mainFrame.Active = true
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
+
+local label = Instance.new("TextLabel", mainFrame)
+label.Size = UDim2.new(1, 0, 0, 38); label.Text = "(G) Magnet: OFF 🔴"
+label.TextColor3 = Color3.new(1,0,0); label.BackgroundTransparency = 1
+label.TextSize = 17; label.Font = Enum.Font.GothamBold
+
+local statusLabel = Instance.new("TextLabel", mainFrame)
+statusLabel.Size = UDim2.new(1,-10,0,22); statusLabel.Position = UDim2.new(0,5,0,40)
+statusLabel.Text = "Items: 0 | Mode: OFF"
+statusLabel.TextColor3 = Color3.new(0.9,0.9,0.9)
+statusLabel.BackgroundColor3 = Color3.fromRGB(22,22,22)
+statusLabel.TextSize = 12; statusLabel.Font = Enum.Font.GothamBold
+Instance.new("UICorner", statusLabel).CornerRadius = UDim.new(0,5)
+
+-- Config row
+local cfgRow = Instance.new("Frame", mainFrame)
+cfgRow.Size = UDim2.new(1,-10,0,28); cfgRow.Position = UDim2.new(0,5,0,66)
+cfgRow.BackgroundColor3 = Color3.fromRGB(20,20,20); cfgRow.BorderSizePixel=0
+Instance.new("UICorner", cfgRow).CornerRadius = UDim.new(0,5)
+
+local radiusLbl = Instance.new("TextLabel", cfgRow)
+radiusLbl.Size = UDim2.new(0.55,0,1,0); radiusLbl.Position = UDim2.new(0,6,0,0)
+radiusLbl.BackgroundTransparency=1; radiusLbl.Text="📏 Auto-pickup: "..AUTO_PICKUP_RADIUS.."s"
+radiusLbl.TextColor3=Color3.fromRGB(100,255,100); radiusLbl.TextSize=11
+radiusLbl.Font=Enum.Font.GothamBold; radiusLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+-- Radius +/- buttons
+local function makeSmallBtn(parent, txt, posX, posY, w, h, bg, tc)
+    local b = Instance.new("TextButton", parent)
+    b.Size = UDim2.new(0,w,0,h); b.Position = UDim2.new(0,posX,0,posY)
+    b.Text=txt; b.BackgroundColor3=bg; b.TextColor3=tc
+    b.TextSize=11; b.Font=Enum.Font.GothamBold; b.BorderSizePixel=0
+    Instance.new("UICorner",b).CornerRadius=UDim.new(0,4)
+    return b
+end
+local radMinus = makeSmallBtn(cfgRow,"-",175,4,22,20,Color3.fromRGB(60,20,20),Color3.new(1,1,1))
+local radPlus  = makeSmallBtn(cfgRow,"+",200,4,22,20,Color3.fromRGB(20,60,20),Color3.new(1,1,1))
+radMinus.MouseButton1Click:Connect(function()
+    AUTO_PICKUP_RADIUS=math.max(5,AUTO_PICKUP_RADIUS-5)
+    radiusLbl.Text="📏 Auto-pickup: "..AUTO_PICKUP_RADIUS.."s"
+end)
+radPlus.MouseButton1Click:Connect(function()
+    AUTO_PICKUP_RADIUS=math.min(200,AUTO_PICKUP_RADIUS+5)
+    radiusLbl.Text="📏 Auto-pickup: "..AUTO_PICKUP_RADIUS.."s"
+end)
+
+-- Container
+local container = Instance.new("Frame", mainFrame)
+container.Size = UDim2.new(1,-10,1,-175); container.Position = UDim2.new(0,5,0,98)
+container.BackgroundTransparency = 1
+
+-- Station column
+local stLbl = Instance.new("TextLabel", container)
+stLbl.Size=UDim2.new(0.48,0,0,22); stLbl.Text="📍 POSITIONS"
+stLbl.BackgroundColor3=Color3.fromRGB(28,28,28); stLbl.TextColor3=Color3.new(1,1,1)
+stLbl.TextSize=12; stLbl.Font=Enum.Font.GothamBold
+Instance.new("UICorner",stLbl).CornerRadius=UDim.new(0,5)
+
+local stationScroll = Instance.new("ScrollingFrame", container)
+stationScroll.Size=UDim2.new(0.48,0,1,-26); stationScroll.Position=UDim2.new(0,0,0,26)
+stationScroll.BackgroundColor3=Color3.fromRGB(18,18,18); stationScroll.BorderSizePixel=0
+stationScroll.ScrollBarThickness=4; stationScroll.CanvasSize=UDim2.new(0,0,0,0)
+Instance.new("UICorner",stationScroll).CornerRadius=UDim.new(0,5)
+local stLayout = Instance.new("UIListLayout",stationScroll); stLayout.Padding=UDim.new(0,3)
+
+-- Player column
+local plLbl = Instance.new("TextLabel", container)
+plLbl.Size=UDim2.new(0.48,0,0,22); plLbl.Position=UDim2.new(0.52,0,0,0)
+plLbl.Text="👥 PLAYERS"; plLbl.BackgroundColor3=Color3.fromRGB(28,28,28)
+plLbl.TextColor3=Color3.new(1,1,1); plLbl.TextSize=12; plLbl.Font=Enum.Font.GothamBold
+Instance.new("UICorner",plLbl).CornerRadius=UDim.new(0,5)
+
+local playerScroll = Instance.new("ScrollingFrame", container)
+playerScroll.Size=UDim2.new(0.48,0,1,-26); playerScroll.Position=UDim2.new(0.52,0,0,26)
+playerScroll.BackgroundColor3=Color3.fromRGB(18,18,18); playerScroll.BorderSizePixel=0
+playerScroll.ScrollBarThickness=4; playerScroll.CanvasSize=UDim2.new(0,0,0,0)
+Instance.new("UICorner",playerScroll).CornerRadius=UDim.new(0,5)
+local plLayout = Instance.new("UIListLayout",playerScroll); plLayout.Padding=UDim.new(0,3)
+
+-- Save button
+local saveBtn = Instance.new("TextButton", mainFrame)
+saveBtn.Size=UDim2.new(1,-10,0,32); saveBtn.Position=UDim2.new(0,5,1,-100)
+saveBtn.Text="💾 SAVE MY POSITION"; saveBtn.BackgroundColor3=Color3.fromRGB(25,25,65)
+saveBtn.TextColor3=Color3.new(1,1,1); saveBtn.Font=Enum.Font.GothamBold; saveBtn.TextSize=13
+Instance.new("UICorner",saveBtn).CornerRadius=UDim.new(0,6)
+
+-- Scan all btn
+local scanAllBtn = Instance.new("TextButton", mainFrame)
+scanAllBtn.Size=UDim2.new(1,-10,0,32); scanAllBtn.Position=UDim2.new(0,5,1,-64)
+scanAllBtn.Text="🔍 SCAN TOÀN MAP NGAY"; scanAllBtn.BackgroundColor3=Color3.fromRGB(40,25,0)
+scanAllBtn.TextColor3=Color3.fromRGB(255,200,50); scanAllBtn.Font=Enum.Font.GothamBold; scanAllBtn.TextSize=13
+Instance.new("UICorner",scanAllBtn).CornerRadius=UDim.new(0,6)
+
+local infoLabel = Instance.new("TextLabel", mainFrame)
+infoLabel.Size=UDim2.new(1,-10,0,26); infoLabel.Position=UDim2.new(0,5,1,-30)
+infoLabel.Text="⚡ ANTI-DROP: Heartbeat lock | Auto-proximity scan"
+infoLabel.BackgroundColor3=Color3.fromRGB(20,20,20)
+infoLabel.TextColor3=Color3.fromRGB(100,255,100)
+infoLabel.TextSize=11; infoLabel.Font=Enum.Font.GothamBold
+Instance.new("UICorner",infoLabel).CornerRadius=UDim.new(0,5)
+
+-- =============================================
+-- MAGNET CORE - HEARTBEAT (không bị rơi khi bị đánh)
+-- =============================================
+local function getTargetPos()
+    if targetPlayer and targetPlayer.Character then
+        local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then return hrp.Position + Vector3.new(0, STACK_OFFSET_Y, 0) end
+    end
+    if currentTargetPos then return currentTargetPos end
+    local rp = client.Character and client.Character:FindFirstChild("HumanoidRootPart")
+    if rp then return (rp.CFrame * CFrame.new(0, STACK_OFFSET_Y, -3)).Position end
+    return nil
+end
+
+-- Heartbeat: update BodyPosition mỗi frame → không bao giờ rơi
+local heartbeatConn = nil
+
+local function startHeartbeat()
+    if heartbeatConn then heartbeatConn:Disconnect() end
+    heartbeatConn = RunService.Heartbeat:Connect(function()
+        if not inversionEnabled then return end
+        local targetPos = getTargetPos()
+        if not targetPos then return end
+
+        for part, data in pairs(capturedParts) do
+            if not part or not part.Parent then
+                capturedParts[part] = nil
+                continue
+            end
+            local bp = data.bp
+            if bp and bp.Parent then
+                bp.Position = targetPos
+                -- Chống bounce khi gần đích
+                local dist = (targetPos - part.Position).Magnitude
+                if dist < 3 then
+                    part.Velocity = part.Velocity * 0.3
+                    part.RotVelocity = part.RotVelocity * 0.3
+                end
+            end
+        end
+    end)
+end
+
+local function stopHeartbeat()
+    if heartbeatConn then
+        heartbeatConn:Disconnect()
+        heartbeatConn = nil
+    end
+end
+
+-- =============================================
+-- CAPTURE PART
+-- =============================================
+local function capturePart(part)
+    if not part:IsA("BasePart") then return end
+    if part.Anchored then return end
+    if capturedParts[part] then return end  -- đã capture rồi
+
+    claimOwnership(part)
+
+    local targetPos = getTargetPos() or Vector3.new(0,100,0)
+
+    local bp = Instance.new("BodyPosition", part)
+    bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bp.D        = BP_DAMPING
+    bp.P        = BP_POWER
+    bp.Position = targetPos
+
+    -- BodyGyro để giữ orientation (không bị xoay lung tung)
+    local bg = Instance.new("BodyGyro", part)
+    bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    bg.D = 200
+    bg.P = 1000
+    bg.CFrame = CFrame.new(part.Position)
+
+    part.CanCollide = false
+
+    capturedParts[part] = {bp=bp, bg=bg}
+end
+
+-- =============================================
+-- RELEASE ALL
+-- =============================================
+local function releaseAll()
+    for part, data in pairs(capturedParts) do
+        pcall(function()
+            if data.bp and data.bp.Parent then data.bp:Destroy() end
+            if data.bg and data.bg.Parent then data.bg:Destroy() end
+            if part and part.Parent then
+                part.CanCollide = true
+            end
+        end)
+    end
+    capturedParts = {}
+end
+
+-- =============================================
+-- SCAN: quét tất cả đồ vật trong workspace
+-- Đồ trong bán kính AUTO_PICKUP_RADIUS → tự capture
+-- Đồ xa hơn → bỏ qua (chờ bạn lại gần)
+-- =============================================
+local function isDroppedItem(obj)
+    -- Kiểm tra obj là dropped item (BasePart, không phải terrain, không phải character)
+    if not obj:IsA("BasePart") then return false end
+    if obj.Anchored then return false end
+    if obj.Name == "HumanoidRootPart" or obj.Name == "Torso"
+    or obj.Name == "UpperTorso" or obj.Name == "LowerTorso"
+    or obj.Name == "Head" then return false end
+    -- Không thuộc character nào
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character and obj:IsDescendantOf(plr.Character) then return false end
+    end
+    -- Phải thuộc DroppedItems hoặc là loose part trong workspace
+    local inDropFolder = false
+    local ancestor = obj.Parent
+    while ancestor do
+        if ancestor.Name == "DroppedItems" then inDropFolder = true; break end
+        ancestor = ancestor.Parent
+    end
+    return inDropFolder
+end
+
+local function scanAndCapture()
+    local rp = client.Character and client.Character:FindFirstChild("HumanoidRootPart")
+    if not rp then return end
+    local myPos = rp.Position
+
+    -- Quét DroppedItems folder
+    local folder = workspace:FindFirstChild("DroppedItems")
+    if folder then
+        for _, obj in ipairs(folder:GetDescendants()) do
+            if obj:IsA("BasePart") and not obj.Anchored then
+                if not capturedParts[obj] then
+                    local dist = (obj.Position - myPos).Magnitude
+                    if dist <= AUTO_PICKUP_RADIUS then
+                        capturePart(obj)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Quét thêm toàn workspace (loose parts)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and not obj.Anchored and not capturedParts[obj] then
+            -- Chỉ lấy part trong folder DroppedItems
+            local ancestor = obj.Parent
+            local valid = false
+            while ancestor and ancestor ~= game do
+                if ancestor.Name == "DroppedItems" then valid=true; break end
+                ancestor = ancestor.Parent
+            end
+            if valid then
+                local dist = (obj.Position - myPos).Magnitude
+                if dist <= AUTO_PICKUP_RADIUS then
+                    capturePart(obj)
+                end
+            end
+        end
+    end
+end
+
+-- =============================================
+-- AUTO SCAN LOOP
+-- =============================================
+local scanConn = nil
+local function startScanLoop()
+    if scanConn then scanConn:Disconnect() end
+    local t = 0
+    scanConn = RunService.Heartbeat:Connect(function(dt)
+        if not inversionEnabled then return end
+        t = t + dt
+        if t >= SCAN_INTERVAL then
+            t = 0
+            scanAndCapture()
+        end
+    end)
+end
+local function stopScanLoop()
+    if scanConn then scanConn:Disconnect(); scanConn=nil end
+end
+
+-- =============================================
+-- STATUS UPDATE
+-- =============================================
+task.spawn(function()
+    while true do
+        if inversionEnabled then
+            local count = 0
+            for _ in pairs(capturedParts) do count += 1 end
+            local mode = "FOLLOW ME"
+            if targetPlayer and targetPlayer ~= client then
+                mode = "→ " .. targetPlayer.Name
+            elseif currentTargetPos then
+                mode = "STATION"
+            end
+            statusLabel.Text = string.format("Items: %d | %s | R: %ds", count, mode, AUTO_PICKUP_RADIUS)
+        end
+        task.wait(0.5)
+    end
+end)
+
+-- =============================================
+-- MONITOR NEW ITEMS (DroppedItems.DescendantAdded)
+-- =============================================
+local folder = workspace:FindFirstChild("DroppedItems")
+if folder then
+    folder.DescendantAdded:Connect(function(v)
+        if not inversionEnabled then return end
+        if not v:IsA("BasePart") or v.Anchored then return end
+        task.wait(0.15)
+        local rp = client.Character and client.Character:FindFirstChild("HumanoidRootPart")
+        if rp then
+            local dist = (v.Position - rp.Position).Magnitude
+            if dist <= AUTO_PICKUP_RADIUS then
+                capturePart(v)
+            end
+        end
+    end)
+end
+
+-- =============================================
+-- PLAYER LIST
+-- =============================================
+local function updatePlayerList()
+    for _, v in ipairs(playerScroll:GetChildren()) do
+        if v:IsA("TextButton") then v:Destroy() end
+    end
+    local count = 0
+    for _, plr in ipairs(Players:GetPlayers()) do
+        local btn = Instance.new("TextButton", playerScroll)
+        btn.Size=UDim2.new(1,-4,0,26); btn.LayoutOrder=count
+        btn.Text=(plr==client) and "👤 "..plr.Name.." (ME)" or "👤 "..plr.Name
+        btn.BackgroundColor3=(targetPlayer==plr) and Color3.fromRGB(60,60,20) or Color3.fromRGB(30,30,30)
+        btn.TextColor3=Color3.new(1,1,1); btn.Font=Enum.Font.GothamBold; btn.TextSize=11
+        btn.TextXAlignment=Enum.TextXAlignment.Left; btn.BorderSizePixel=0
+        local pad=Instance.new("UIPadding",btn); pad.PaddingLeft=UDim.new(0,5)
+        Instance.new("UICorner",btn).CornerRadius=UDim.new(0,4)
+        btn.MouseButton1Click:Connect(function()
+            targetPlayer=plr; currentTargetPos=nil
+            updatePlayerList()
+        end)
+        count+=1
+    end
+    playerScroll.CanvasSize=UDim2.new(0,0,0,count*29)
+end
+
+-- =============================================
+-- STATION LIST
+-- =============================================
+local function updateStationList()
+    for _, v in ipairs(stationScroll:GetChildren()) do
+        if v:IsA("TextButton") or v:IsA("Frame") then v:Destroy() end
+    end
+    local followBtn=Instance.new("TextButton",stationScroll)
+    followBtn.Size=UDim2.new(1,-4,0,26); followBtn.LayoutOrder=0
+    followBtn.Text="📍 Follow Me"
+    followBtn.BackgroundColor3=(targetPlayer==client and not currentTargetPos) and Color3.fromRGB(20,55,20) or Color3.fromRGB(30,30,30)
+    followBtn.TextColor3=Color3.new(1,1,1); followBtn.Font=Enum.Font.GothamBold; followBtn.TextSize=11
+    followBtn.BorderSizePixel=0
+    Instance.new("UICorner",followBtn).CornerRadius=UDim.new(0,4)
+    followBtn.MouseButton1Click:Connect(function()
+        targetPlayer=client; currentTargetPos=nil
+        updatePlayerList(); updateStationList()
+    end)
+
+    for i, pos in ipairs(savedStations) do
+        local entry=Instance.new("Frame",stationScroll)
+        entry.Size=UDim2.new(1,-4,0,26); entry.LayoutOrder=i; entry.BackgroundTransparency=1
+
+        local sBtn=Instance.new("TextButton",entry)
+        sBtn.Size=UDim2.new(0.68,0,1,0); sBtn.Text="🎯 Station "..i
+        sBtn.BackgroundColor3=Color3.fromRGB(30,30,30); sBtn.TextColor3=Color3.new(1,1,1)
+        sBtn.Font=Enum.Font.GothamBold; sBtn.TextSize=11; sBtn.BorderSizePixel=0
+        Instance.new("UICorner",sBtn).CornerRadius=UDim.new(0,4)
+        sBtn.MouseButton1Click:Connect(function()
+            targetPlayer=nil; currentTargetPos=Vector3.new(pos.x,pos.y,pos.z)
+            updatePlayerList(); updateStationList()
+        end)
+
+        local dBtn=Instance.new("TextButton",entry)
+        dBtn.Size=UDim2.new(0.3,0,1,0); dBtn.Position=UDim2.new(0.7,0,0,0)
+        dBtn.Text="❌"; dBtn.BackgroundColor3=Color3.fromRGB(70,15,15)
+        dBtn.TextColor3=Color3.new(1,1,1); dBtn.Font=Enum.Font.GothamBold
+        dBtn.TextSize=12; dBtn.BorderSizePixel=0
+        Instance.new("UICorner",dBtn).CornerRadius=UDim.new(0,4)
+        dBtn.MouseButton1Click:Connect(function()
+            table.remove(savedStations,i); saveToFile(); updateStationList()
+        end)
+    end
+    stationScroll.CanvasSize=UDim2.new(0,0,0,(#savedStations+1)*29)
+end
+
+-- =============================================
+-- TOGGLE
+-- =============================================
+local function toggle()
+    inversionEnabled = not inversionEnabled
+    if inversionEnabled then
+        label.Text="(G) Magnet: ON 🟢"; label.TextColor3=Color3.new(0,1,0)
+        if not targetPlayer and not currentTargetPos then targetPlayer=client end
+        startHeartbeat()
+        startScanLoop()
+        -- Capture ngay những gì trong DroppedItems
+        local f=workspace:FindFirstChild("DroppedItems")
+        if f then
+            for _,v in ipairs(f:GetDescendants()) do
+                if v:IsA("BasePart") and not v.Anchored then
+                    capturePart(v)
+                end
+            end
+        end
+        game.StarterGui:SetCore("SendNotification",{Title="🧲 Magnet ON",Duration=2,Text="Heartbeat lock | Auto-proximity ON"})
+    else
+        label.Text="(G) Magnet: OFF 🔴"; label.TextColor3=Color3.new(1,0,0)
+        stopHeartbeat()
+        stopScanLoop()
+        releaseAll()
+        statusLabel.Text="Items: 0 | Mode: OFF"
+        game.StarterGui:SetCore("SendNotification",{Title="❌ Magnet OFF",Duration=2,Text="Items released"})
+    end
+end
+
+-- Scan all button
+scanAllBtn.MouseButton1Click:Connect(function()
+    if not inversionEnabled then
+        game.StarterGui:SetCore("SendNotification",{Title="⚠️",Duration=2,Text="Bật Magnet (G) trước!"})
+        return
+    end
+    local rp=client.Character and client.Character:FindFirstChild("HumanoidRootPart")
+    if not rp then return end
+    -- Scan toàn bộ không giới hạn bán kính
+    local f=workspace:FindFirstChild("DroppedItems")
+    local count=0
+    if f then
+        for _,v in ipairs(f:GetDescendants()) do
+            if v:IsA("BasePart") and not v.Anchored and not capturedParts[v] then
+                capturePart(v); count+=1
+            end
+        end
+    end
+    game.StarterGui:SetCore("SendNotification",{Title="🔍 Scan Done",Duration=3,Text="Captured "..count.." items từ toàn map"})
+end)
+
+-- Save button
+saveBtn.MouseButton1Click:Connect(function()
+    local rp=client.Character and client.Character:FindFirstChild("HumanoidRootPart")
+    if rp then
+        table.insert(savedStations,{x=rp.Position.X,y=rp.Position.Y,z=rp.Position.Z})
+        saveToFile(); updateStationList()
+        game.StarterGui:SetCore("SendNotification",{Title="💾 Saved!",Duration=2,Text="Station #"..#savedStations.." saved!"})
+    end
+end)
+
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
+
+-- INPUT
+UserInputService.InputBegan:Connect(function(input,gpe)
+    if not gpe and input.KeyCode==Enum.KeyCode.G then toggle() end
+end)
+
+-- Init
+updateStationList(); updatePlayerList()
+game.StarterGui:SetCore("SendNotification",{
+    Title="🧲 Magnet v2 Ready",Duration=3,
+    Text="[G] Toggle | Heartbeat lock | Auto-proximity "..AUTO_PICKUP_RADIUS.."s"
+})
+
+print("🧲 Magnet v2 | G=toggle | Heartbeat lock (không rơi khi bị đánh)")
+print("   Auto-pickup radius: "..AUTO_PICKUP_RADIUS.." studs")
+print("   Scan all button: capture toàn map không giới hạn")
