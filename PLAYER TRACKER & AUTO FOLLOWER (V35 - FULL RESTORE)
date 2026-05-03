@@ -1,0 +1,209 @@
+--[[
+    PLAYER TRACKER & AUTO FOLLOWER (V35 - FULL RESTORE)
+    
+    CẬP NHẬT:
+     khôi phục đầy đủ 5 thanh trượt (Distance, Height, Side, Tilt, Angle).
+     khôi phục nút xóa (X) trong danh sách Pose và Object.
+    🔒 LOCK CURRENT POSITION: Giữ nguyên tính năng đứng đâu khóa đó.
+--]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+
+local LP = Players.LocalPlayer
+local Mouse = LP:GetMouse()
+local fileName = "FollowerFull_V35.json"
+
+local followSettings = {
+    enabled = false,
+    mode = "Object",
+    targetObj = nil,
+    target = nil,
+    objOffset = CFrame.new(),
+    selectMode = false,
+    distance = 0, height = 0, side = 0, tilt = 0, angle = 0
+}
+
+local favorites = {}
+local savedObjects = {}
+
+local SelectionBox = Instance.new("SelectionBox")
+SelectionBox.Name = "FollowerHighlight"
+SelectionBox.Color3 = Color3.fromRGB(0, 255, 100)
+SelectionBox.LineThickness = 0.05
+SelectionBox.Parent = game.CoreGui
+
+local function saveData()
+    writefile(fileName, HttpService:JSONEncode({favorites = favorites, savedObjects = savedObjects}))
+end
+
+-- =============================================
+-- LOGIC CORE
+-- =============================================
+local function lockAtCurrentPos(obj)
+    if not obj or not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = LP.Character.HumanoidRootPart
+    followSettings.mode = "Object"
+    followSettings.targetObj = obj
+    followSettings.objOffset = obj.CFrame:ToObjectSpace(hrp.CFrame)
+    
+    -- Reset về 0 để khớp vị trí hiện tại
+    followSettings.distance = 0; followSettings.height = 0; followSettings.side = 0; followSettings.angle = 0
+    followSettings.enabled = true
+
+    table.insert(savedObjects, {
+        name = "Locked: " .. obj.Name,
+        objName = obj.Name,
+        parentName = obj.Parent.Name,
+        cf = {followSettings.objOffset:GetComponents()}
+    })
+    saveData()
+    if updateUI then updateUI() end
+end
+
+RunService.RenderStepped:Connect(function()
+    if followSettings.selectMode then
+        SelectionBox.Adornee = Mouse.Target
+    elseif followSettings.enabled and followSettings.targetObj then
+        SelectionBox.Adornee = followSettings.targetObj
+    else
+        SelectionBox.Adornee = nil
+    end
+end)
+
+Mouse.Button1Down:Connect(function()
+    if followSettings.selectMode and Mouse.Target then
+        lockAtCurrentPos(Mouse.Target)
+        followSettings.selectMode = false
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not followSettings.enabled then return end
+    local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    local goalCF
+    if followSettings.mode == "Object" and followSettings.targetObj then
+        if followSettings.targetObj.Parent then
+            goalCF = followSettings.targetObj.CFrame * followSettings.objOffset
+            goalCF = goalCF * CFrame.new(followSettings.side, followSettings.height, followSettings.distance)
+            -- Thêm khả năng xoay Angle quanh vật thể
+            goalCF = goalCF * CFrame.Angles(0, math.rad(followSettings.angle), 0)
+        else followSettings.enabled = false end
+    elseif followSettings.mode == "Follow" and followSettings.target then
+        local tHRP = followSettings.target.Character and followSettings.target.Character:FindFirstChild("HumanoidRootPart")
+        if tHRP then
+            local rot = CFrame.Angles(0, math.rad(followSettings.angle), 0)
+            local targetPos = tHRP.Position + (tHRP.CFrame * rot).LookVector * followSettings.distance + (tHRP.CFrame * rot).RightVector * followSettings.side
+            local rotY = math.atan2((tHRP.Position - targetPos).X, (tHRP.Position - targetPos).Z)
+            goalCF = CFrame.new(targetPos + Vector3.new(0, followSettings.height, 0)) * CFrame.Angles(0, rotY + math.pi, 0)
+        end
+    end
+    
+    if goalCF then
+        hrp.CFrame = goalCF * CFrame.Angles(math.rad(followSettings.tilt), 0, 0)
+        hrp.Velocity = Vector3.zero
+    end
+end)
+
+-- =============================================
+-- GIAO DIỆN V35 (FULL 5 SLIDERS + NÚT X)
+-- =============================================
+local SG = Instance.new("ScreenGui", LP.PlayerGui); SG.Name = "FollowerV35"; SG.ResetOnSpawn = false
+local MF = Instance.new("Frame", SG); MF.Size = UDim2.new(0, 340, 0, 720); MF.Position = UDim2.new(1, -350, 0.5, -360); MF.BackgroundColor3 = Color3.fromRGB(25, 25, 30); Instance.new("UICorner", MF)
+local TB = Instance.new("Frame", MF); TB.Size = UDim2.new(1, 0, 0, 35); TB.BackgroundColor3 = Color3.fromRGB(100, 50, 200); Instance.new("UICorner", TB)
+local TL = Instance.new("TextLabel", TB); TL.Size = UDim2.new(1, 0, 1, 0); TL.Text = "V35 - FULL FIX"; TL.TextColor3 = Color3.new(1, 1, 1); TL.Font = "GothamBold"; TL.BackgroundTransparency = 1
+
+local function createSlider(text, min, max, key, pos)
+    local label = Instance.new("TextLabel", MF); label.Size = UDim2.new(1,-20,0,15); label.Position = UDim2.new(0,10,0,pos+45); label.TextColor3 = Color3.new(1,1,1); label.Font = "GothamBold"; label.TextSize = 9; label.BackgroundTransparency = 1
+    local bg = Instance.new("Frame", MF); bg.Size = UDim2.new(1,-20,0,6); bg.Position = UDim2.new(0,10,0,pos+62); bg.BackgroundColor3 = Color3.fromRGB(45,45,60); Instance.new("UICorner", bg)
+    local fill = Instance.new("Frame", bg); fill.BackgroundColor3 = Color3.fromRGB(180, 100, 255); Instance.new("UICorner", fill)
+    RunService.RenderStepped:Connect(function()
+        fill.Size = UDim2.new(math.clamp((followSettings[key] - min)/(max - min), 0, 1), 0, 1, 0)
+        label.Text = text .. ": " .. string.format("%.1f", followSettings[key])
+    end)
+    bg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local conn; conn = RunService.RenderStepped:Connect(function()
+                if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then conn:Disconnect() return end
+                followSettings[key] = min + (math.clamp((UserInputService:GetMouseLocation().X - bg.AbsolutePosition.X)/bg.AbsoluteSize.X, 0, 1) * (max - min))
+            end)
+        end
+    end)
+end
+
+createSlider("↔️ Distance", -100, 100, "distance", 0)
+createSlider("↕️ Height", -100, 100, "height", 35)
+createSlider("⬅️➡️ Side", -100, 100, "side", 70)
+createSlider("📐 Tilt", -180, 180, "tilt", 105)
+createSlider("🔄 Angle", -360, 360, "angle", 140)
+
+local TabPose = Instance.new("ScrollingFrame", MF); TabPose.Size = UDim2.new(0.5,-15,0,110); TabPose.Position = UDim2.new(0,10,0,230); TabPose.BackgroundColor3 = Color3.fromRGB(15,15,20); Instance.new("UIListLayout", TabPose).Padding = UDim.new(0,2)
+local TabObj = Instance.new("ScrollingFrame", MF); TabObj.Size = UDim2.new(0.5,-15,0,110); TabObj.Position = UDim2.new(0.5,5,0,230); TabObj.BackgroundColor3 = Color3.fromRGB(15,15,20); Instance.new("UIListLayout", TabObj).Padding = UDim.new(0,2)
+local PScroll = Instance.new("ScrollingFrame", MF); PScroll.Size = UDim2.new(1,-20,0,90); PScroll.Position = UDim2.new(0,10,0,350); PScroll.BackgroundColor3 = Color3.fromRGB(15,15,20); Instance.new("UIListLayout", PScroll).Padding = UDim.new(0,2)
+
+updateUI = function()
+    for _, v in pairs(TabPose:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
+    for _, v in pairs(TabObj:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
+    if isfile(fileName) then pcall(function() local data = HttpService:JSONDecode(readfile(fileName)) favorites = data.favorites or {}; savedObjects = data.savedObjects or {} end) end
+    
+    -- Load danh sách Pose + Nút xóa
+    for i, f in ipairs(favorites) do
+        local fr = Instance.new("Frame", TabPose); fr.Size = UDim2.new(1,-5,0,28); fr.BackgroundColor3 = Color3.fromRGB(40,40,60); Instance.new("UICorner", fr)
+        local b = Instance.new("TextButton", fr); b.Size = UDim2.new(0.75,0,1,0); b.Text = f.name; b.TextColor3 = Color3.new(1,1,1); b.BackgroundTransparency = 1; b.TextSize = 8
+        local d = Instance.new("TextButton", fr); d.Size = UDim2.new(0.25,0,1,0); d.Position = UDim2.new(0.75,0,0,0); d.Text = "X"; d.TextColor3 = Color3.new(1,0,0); d.BackgroundTransparency = 1
+        b.MouseButton1Click:Connect(function() followSettings.distance, followSettings.height, followSettings.side, followSettings.tilt, followSettings.angle = f.distance, f.height, f.side, f.tilt, f.angle end)
+        d.MouseButton1Click:Connect(function() table.remove(favorites, i); saveData(); updateUI() end)
+    end
+    
+    -- Load danh sách Vật thể + Nút xóa
+    for i, o in ipairs(savedObjects) do
+        local fr = Instance.new("Frame", TabObj); fr.Size = UDim2.new(1,-5,0,28); fr.BackgroundColor3 = Color3.fromRGB(30,45,50); Instance.new("UICorner", fr)
+        local b = Instance.new("TextButton", fr); b.Size = UDim2.new(0.75,0,1,0); b.Text = o.name; b.TextColor3 = Color3.new(1,1,1); b.BackgroundTransparency = 1; b.TextSize = 7
+        local d = Instance.new("TextButton", fr); d.Size = UDim2.new(0.25,0,1,0); d.Position = UDim2.new(0.75,0,0,0); d.Text = "X"; d.TextColor3 = Color3.new(1,0.2,0.2); d.BackgroundTransparency = 1
+        b.MouseButton1Click:Connect(function()
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("BasePart") and v.Name == o.objName and v.Parent.Name == o.parentName then
+                    followSettings.mode = "Object"; followSettings.targetObj = v
+                    if o.cf then followSettings.objOffset = CFrame.new(unpack(o.cf)) end
+                    followSettings.enabled = true; break
+                end
+            end
+        end)
+        d.MouseButton1Click:Connect(function() table.remove(savedObjects, i); saveData(); updateUI() end)
+    end
+end
+
+local NameBox = Instance.new("TextBox", MF); NameBox.Size = UDim2.new(1,-20,0,30); NameBox.Position = UDim2.new(0,10,0,450); NameBox.PlaceholderText = "Enter Pose Name..."; NameBox.Text = ""; NameBox.BackgroundColor3 = Color3.fromRGB(30,30,40); NameBox.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", NameBox)
+local BtnSavePose = Instance.new("TextButton", MF); BtnSavePose.Size = UDim2.new(1,-20,0,35); BtnSavePose.Position = UDim2.new(0,10,0,485); BtnSavePose.Text = "💾 SAVE POSE"; BtnSavePose.BackgroundColor3 = Color3.fromRGB(60, 150, 60); BtnSavePose.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", BtnSavePose)
+local BtnLockPos = Instance.new("TextButton", MF); BtnLockPos.Size = UDim2.new(1,-20,0,40); BtnLockPos.Position = UDim2.new(0,10,0,530); BtnLockPos.Text = "🔒 LOCK AT CURRENT POS (CLICK XE)"; BtnLockPos.BackgroundColor3 = Color3.fromRGB(0, 120, 200); BtnLockPos.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", BtnLockPos)
+local Stop = Instance.new("TextButton", MF); Stop.Size = UDim2.new(1,-20,0,40); Stop.Position = UDim2.new(0,10,0,670); Stop.Text = "🛑 STOP ALL"; Stop.BackgroundColor3 = Color3.fromRGB(150,50,50); Stop.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", Stop)
+
+BtnLockPos.MouseButton1Click:Connect(function() followSettings.selectMode = not followSettings.selectMode end)
+BtnSavePose.MouseButton1Click:Connect(function()
+    table.insert(favorites, {name = NameBox.Text ~= "" and NameBox.Text or "Pose", distance = followSettings.distance, height = followSettings.height, side = followSettings.side, tilt = followSettings.tilt, angle = followSettings.angle})
+    saveData(); updateUI(); NameBox.Text = ""
+end)
+Stop.MouseButton1Click:Connect(function() followSettings.enabled = false end)
+
+local function refreshPlayers()
+    for _, v in pairs(PScroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP then
+            local b = Instance.new("TextButton", PScroll); b.Size = UDim2.new(1,0,0,25); b.Text = p.DisplayName; b.TextColor3 = Color3.new(1,1,1); b.BackgroundColor3 = Color3.fromRGB(45,45,60); Instance.new("UICorner", b)
+            b.MouseButton1Click:Connect(function() followSettings.mode = "Follow"; followSettings.target = p; followSettings.enabled = true end)
+        end
+    end
+end
+
+refreshPlayers(); updateUI()
+Players.PlayerAdded:Connect(refreshPlayers); Players.PlayerRemoving:Connect(refreshPlayers)
+
+-- Drag GUI
+local dragToggle, dragStart, startPos
+TB.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragToggle = true dragStart = input.Position startPos = MF.Position end end)
+UserInputService.InputChanged:Connect(function(input) if dragToggle and input.UserInputType == Enum.UserInputType.MouseMovement then local delta = input.Position - dragStart MF.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y) end end)
+UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragToggle = false end end)
