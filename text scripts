@@ -1,0 +1,542 @@
+--// MAGNET: PERSISTENT SAVE + UNLIMITED ITEMS (NO DROP)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local client = Players.LocalPlayer
+
+local TARGET_FOLDER_NAME = "DroppedItems"
+local SAVE_FILE = "MagnetStations_v2.json"
+
+local inversionEnabled = false
+local targetPlayer = nil
+local currentTargetPos = nil
+local movingTargetObj = nil 
+local relativeOffset = CFrame.new(0, 5, 0) 
+local savedStations = {} 
+local selectedStationIdx = nil
+
+-- =============================================
+-- LƯU/TẢI FILE (PERSISTENT STORAGE)
+-- =============================================
+local function saveToFile()
+    if not writefile then 
+        warn("⚠️ writefile not supported!")
+        return 
+    end
+    
+    local dataToSave = {}
+    for i, station in ipairs(savedStations) do
+        if station.Type == "Static" and station.Position then
+            table.insert(dataToSave, {
+                Type = "Static",
+                Position = {
+                    X = station.Position.X,
+                    Y = station.Position.Y,
+                    Z = station.Position.Z
+                }
+            })
+        end
+        -- Dynamic stations không lưu được (vì object có thể mất)
+    end
+    
+    local success, err = pcall(function()
+        writefile(SAVE_FILE, HttpService:JSONEncode(dataToSave))
+    end)
+    
+    if success then
+        print(string.format("✅ Saved %d stations to file", #dataToSave))
+    else
+        warn("❌ Save failed:", err)
+    end
+end
+
+local function loadFromFile()
+    if not isfile or not readfile then 
+        print("⚠️ File functions not supported")
+        return 
+    end
+    
+    if not isfile(SAVE_FILE) then
+        print("ℹ️ No save file found, starting fresh")
+        return
+    end
+    
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(readfile(SAVE_FILE))
+    end)
+    
+    if success and result then
+        savedStations = {}
+        for _, data in ipairs(result) do
+            if data.Type == "Static" and data.Position then
+                table.insert(savedStations, {
+                    Type = "Static",
+                    Position = Vector3.new(
+                        data.Position.X,
+                        data.Position.Y,
+                        data.Position.Z
+                    )
+                })
+            end
+        end
+        print(string.format("✅ Loaded %d stations from file", #savedStations))
+    else
+        warn("❌ Load failed:", result)
+    end
+end
+
+-- Load stations khi script khởi động
+loadFromFile()
+
+-- =============================================
+-- KHỞI TẠO GUI
+-- =============================================
+local function GetSafeParent()
+    local success, coreGui = pcall(function() return game:GetService("CoreGui") end)
+    if success and coreGui then return coreGui end
+    return client:WaitForChild("PlayerGui")
+end
+
+local safeParent = GetSafeParent()
+if safeParent:FindFirstChild("MagnetPull_DroppedItems") then 
+    safeParent["MagnetPull_DroppedItems"]:Destroy() 
+end
+
+local screenGui = Instance.new("ScreenGui", safeParent)
+screenGui.Name = "MagnetPull_DroppedItems"
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 340, 0, 580) 
+mainFrame.Position = UDim2.new(0, 20, 0.5, -290)
+mainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+mainFrame.Active = true
+mainFrame.Draggable = true
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
+
+local label = Instance.new("TextLabel", mainFrame)
+label.Size = UDim2.new(1, 0, 0, 40)
+label.Text = "(G) Magnet: OFF 🔴"
+label.TextColor3 = Color3.new(1, 0, 0)
+label.BackgroundTransparency = 1
+label.Font = Enum.Font.GothamBold
+label.TextSize = 18
+
+-- Status label
+local statusLabel = Instance.new("TextLabel", mainFrame)
+statusLabel.Size = UDim2.new(1, -20, 0, 30)
+statusLabel.Position = UDim2.new(0, 10, 0, 45)
+statusLabel.Text = "Items: 0 | Mode: OFF | ∞ UNLIMITED"
+statusLabel.TextColor3 = Color3.new(0.9, 0.9, 0.9)
+statusLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+statusLabel.TextSize = 12
+statusLabel.Font = Enum.Font.GothamBold
+Instance.new("UICorner", statusLabel).CornerRadius = UDim.new(0, 5)
+
+-- Headers
+local stationHeader = Instance.new("TextLabel", mainFrame)
+stationHeader.Size = UDim2.new(0.45, 0, 0, 25)
+stationHeader.Position = UDim2.new(0, 10, 0, 80)
+stationHeader.Text = "📍 STATIONS"
+stationHeader.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+stationHeader.TextColor3 = Color3.new(1, 1, 1)
+stationHeader.Font = Enum.Font.GothamBold
+stationHeader.TextSize = 13
+Instance.new("UICorner", stationHeader)
+
+local playerHeader = Instance.new("TextLabel", mainFrame)
+playerHeader.Size = UDim2.new(0.45, 0, 0, 25)
+playerHeader.Position = UDim2.new(0.55, -10, 0, 80)
+playerHeader.Text = "👥 PLAYERS"
+playerHeader.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+playerHeader.TextColor3 = Color3.new(1, 1, 1)
+playerHeader.Font = Enum.Font.GothamBold
+playerHeader.TextSize = 13
+Instance.new("UICorner", playerHeader)
+
+local stationScroll = Instance.new("ScrollingFrame", mainFrame)
+stationScroll.Size = UDim2.new(0.45, 0, 0, 200)
+stationScroll.Position = UDim2.new(0, 10, 0, 110)
+stationScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+stationScroll.BorderSizePixel = 0
+stationScroll.ScrollBarThickness = 4
+stationScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+Instance.new("UICorner", stationScroll)
+Instance.new("UIListLayout", stationScroll).Padding = UDim.new(0, 3)
+
+local playerScroll = Instance.new("ScrollingFrame", mainFrame)
+playerScroll.Size = UDim2.new(0.45, 0, 0, 200)
+playerScroll.Position = UDim2.new(0.55, -10, 0, 110)
+playerScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+playerScroll.BorderSizePixel = 0
+playerScroll.ScrollBarThickness = 4
+playerScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+Instance.new("UICorner", playerScroll)
+Instance.new("UIListLayout", playerScroll).Padding = UDim.new(0, 3)
+
+-- =============================================
+-- ĐIỀU KHIỂN 6 HƯỚNG (OFFSET CONTROL)
+-- =============================================
+local controlFrame = Instance.new("Frame", mainFrame)
+controlFrame.Size = UDim2.new(1, -20, 0, 150)
+controlFrame.Position = UDim2.new(0, 10, 0, 320)
+controlFrame.BackgroundTransparency = 1
+
+local offsetLabel = Instance.new("TextLabel", controlFrame)
+offsetLabel.Size = UDim2.new(1, 0, 0, 25)
+offsetLabel.Position = UDim2.new(0, 0, 0, 90)
+offsetLabel.Text = "Offset: Y+5"
+offsetLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+offsetLabel.TextColor3 = Color3.new(1, 1, 1)
+offsetLabel.Font = Enum.Font.GothamBold
+offsetLabel.TextSize = 11
+Instance.new("UICorner", offsetLabel)
+
+local function updateOffsetLabel()
+    local pos = relativeOffset.Position
+    offsetLabel.Text = string.format("Offset: X%.0f Y%.0f Z%.0f", pos.X, pos.Y, pos.Z)
+end
+
+local function createAdjustBtn(text, pos, offsetVec)
+    local btn = Instance.new("TextButton", controlFrame)
+    btn.Size = UDim2.new(0, 65, 0, 35)
+    btn.Position = pos
+    btn.Text = text
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    Instance.new("UICorner", btn)
+    
+    btn.MouseButton1Click:Connect(function()
+        relativeOffset = relativeOffset * CFrame.new(offsetVec)
+        updateOffsetLabel()
+        if selectedStationIdx and savedStations[selectedStationIdx].Type == "Dynamic" then
+            savedStations[selectedStationIdx].Offset = relativeOffset
+        end
+    end)
+end
+
+createAdjustBtn("⬆️ LÊN", UDim2.new(0, 90, 0, 0), Vector3.new(0, 2, 0))
+createAdjustBtn("⬇️ XUỐNG", UDim2.new(0, 170, 0, 0), Vector3.new(0, -2, 0))
+createAdjustBtn("⬆️ TIẾN", UDim2.new(0, 90, 0, 45), Vector3.new(0, 0, -2))
+createAdjustBtn("⬇️ LÙI", UDim2.new(0, 170, 0, 45), Vector3.new(0, 0, 2))
+createAdjustBtn("⬅️ TRÁI", UDim2.new(0, 10, 0, 45), Vector3.new(-2, 0, 0))
+createAdjustBtn("➡️ PHẢI", UDim2.new(0, 250, 0, 45), Vector3.new(2, 0, 0))
+
+local saveBtn = Instance.new("TextButton", mainFrame)
+saveBtn.Size = UDim2.new(1, -20, 0, 40)
+saveBtn.Position = UDim2.new(0, 10, 1, -90)
+saveBtn.Text = "💾 SAVE POSITION (Persistent)"
+saveBtn.BackgroundColor3 = Color3.fromRGB(40, 80, 40)
+saveBtn.TextColor3 = Color3.new(1, 1, 1)
+saveBtn.Font = Enum.Font.GothamBold
+saveBtn.TextSize = 14
+Instance.new("UICorner", saveBtn)
+
+local infoLabel = Instance.new("TextLabel", mainFrame)
+infoLabel.Size = UDim2.new(1, -20, 0, 35)
+infoLabel.Position = UDim2.new(0, 10, 1, -45)
+infoLabel.Text = "⚡ UNLIMITED: No item limit!\n💾 Stations auto-saved to file"
+infoLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+infoLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+infoLabel.TextSize = 10
+infoLabel.Font = Enum.Font.GothamBold
+Instance.new("UICorner", infoLabel)
+
+-- =============================================
+-- LOGIC CẬP NHẬT DANH SÁCH
+-- =============================================
+local function updateLists()
+    for _, v in pairs(playerScroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+    for _, v in pairs(stationScroll:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
+
+    -- Update players
+    local playerCount = 0
+    for _, p in pairs(Players:GetPlayers()) do
+        local btn = Instance.new("TextButton", playerScroll)
+        btn.Size = UDim2.new(1, -5, 0, 28)
+        btn.Text = (p == client) and "⭐ ME" or "👤 " .. p.Name
+        btn.BackgroundColor3 = (targetPlayer == p) and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(40, 40, 40)
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 11
+        Instance.new("UICorner", btn)
+        
+        btn.MouseButton1Click:Connect(function()
+            movingTargetObj, currentTargetPos, selectedStationIdx = nil, nil, nil
+            targetPlayer = p
+            updateLists()
+            
+            local mode = (p == client) and "FOLLOW ME" or "FOLLOW " .. p.Name
+            statusLabel.Text = string.format("Items: ∞ | %s", mode)
+        end)
+        
+        playerCount = playerCount + 1
+    end
+    playerScroll.CanvasSize = UDim2.new(0, 0, 0, playerCount * 31)
+
+    -- Update stations
+    local stationCount = 0
+    for i, data in pairs(savedStations) do
+        local frame = Instance.new("Frame", stationScroll)
+        frame.Size = UDim2.new(1, -5, 0, 28)
+        frame.BackgroundTransparency = 1
+        
+        local btn = Instance.new("TextButton", frame)
+        btn.Size = UDim2.new(0.7, 0, 1, 0)
+        btn.Text = (data.Type == "Dynamic") and "🚚 ST-"..i or "📍 ST-"..i
+        btn.BackgroundColor3 = (selectedStationIdx == i) and Color3.fromRGB(100, 100, 50) or Color3.fromRGB(35, 35, 35)
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 11
+        Instance.new("UICorner", btn)
+        
+        btn.MouseButton1Click:Connect(function()
+            targetPlayer = nil
+            selectedStationIdx = i
+            if data.Type == "Dynamic" then
+                movingTargetObj = data.Object
+                relativeOffset = data.Offset
+                currentTargetPos = nil
+            else
+                currentTargetPos = data.Position
+                movingTargetObj = nil
+            end
+            updateLists()
+            statusLabel.Text = string.format("Items: ∞ | STATION %d", i)
+        end)
+
+        local del = Instance.new("TextButton", frame)
+        del.Size = UDim2.new(0.3, 0, 1, 0)
+        del.Position = UDim2.new(0.7, 0, 0, 0)
+        del.Text = "❌"
+        del.BackgroundColor3 = Color3.fromRGB(100, 40, 40)
+        del.TextColor3 = Color3.new(1, 1, 1)
+        del.Font = Enum.Font.GothamBold
+        del.TextSize = 13
+        Instance.new("UICorner", del)
+        
+        del.MouseButton1Click:Connect(function()
+            table.remove(savedStations, i)
+            saveToFile()  -- Lưu ngay khi xóa
+            if selectedStationIdx == i then selectedStationIdx = nil end
+            updateLists()
+            
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "🗑️ Deleted",
+                Duration = 2,
+                Text = string.format("Station #%d removed", i),
+            })
+        end)
+        
+        stationCount = stationCount + 1
+    end
+    stationScroll.CanvasSize = UDim2.new(0, 0, 0, stationCount * 31)
+end
+
+saveBtn.MouseButton1Click:Connect(function()
+    local char = client.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    local ray = Ray.new(hrp.Position, Vector3.new(0, -10, 0))
+    local hit, _ = workspace:FindPartOnRayWithIgnoreList(ray, {char})
+    
+    if hit and not hit.Anchored and hit.Parent ~= workspace then
+        -- Dynamic station (đứng trên object)
+        table.insert(savedStations, {
+            Type = "Dynamic", 
+            Object = hit, 
+            Offset = hit.CFrame:ToObjectSpace(hrp.CFrame)
+        })
+        print("✅ Saved Dynamic Station (cannot persist)")
+    else
+        -- Static station (vị trí cố định)
+        table.insert(savedStations, {
+            Type = "Static", 
+            Position = hrp.Position
+        })
+        saveToFile()  -- Lưu vào file
+        print("✅ Saved Static Station to file")
+    end
+    
+    updateLists()
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "💾 Station Saved",
+        Duration = 2,
+        Text = string.format("Station #%d saved!", #savedStations),
+    })
+end)
+
+-- =============================================
+-- CLAIM OWNERSHIP (1 lần duy nhất để giảm lag)
+-- =============================================
+local ownershipClaimed = false
+local function claimOwnership()
+    if ownershipClaimed then return end
+    ownershipClaimed = true
+    
+    pcall(function()
+        if sethiddenproperty then
+            sethiddenproperty(client, "SimulationRadius", math.huge)
+            sethiddenproperty(client, "MaxSimulationRadius", math.huge)
+        end
+    end)
+    
+    print("✅ Ownership claimed (infinite range)")
+end
+
+-- =============================================
+-- LOGIC HÚT ĐỒ VẬT - UNLIMITED (KHÔNG GIỚI HẠN)
+-- =============================================
+local itemCount = 0
+
+RunService.Heartbeat:Connect(function()
+    if not inversionEnabled then return end
+    
+    claimOwnership()
+    
+    local destination = nil
+    
+    -- Tìm destination
+    if targetPlayer and targetPlayer.Character and targetPlayer.Character.PrimaryPart then
+        destination = (targetPlayer.Character.PrimaryPart.CFrame * relativeOffset).Position
+    elseif movingTargetObj and movingTargetObj.Parent then
+        destination = (movingTargetObj.CFrame * relativeOffset).Position
+    elseif currentTargetPos then
+        destination = (CFrame.new(currentTargetPos) * relativeOffset).Position
+    end
+    
+    if not destination then return end
+    
+    -- Hút TẤT CẢ items (KHÔNG GIỚI HẠN)
+    local folder = workspace:FindFirstChild(TARGET_FOLDER_NAME)
+    if not folder then return end
+    
+    itemCount = 0
+    for _, item in pairs(folder:GetChildren()) do
+        local p = item:FindFirstChildWhichIsA("BasePart") or item:FindFirstChild("Handle")
+        
+        if p and not p.Anchored then
+            itemCount = itemCount + 1
+            
+            -- Dùng BodyPosition để GIỮ CHẶT (không rơi)
+            local bp = p:FindFirstChild("MagnetBodyPos")
+            if not bp then
+                bp = Instance.new("BodyPosition")
+                bp.Name = "MagnetBodyPos"
+                bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)  -- Lực vô hạn
+                bp.D = 500  -- Damping
+                bp.P = 3000  -- Power
+                bp.Parent = p
+            end
+            
+            bp.Position = destination
+            p.CanCollide = false
+            
+            -- Giảm velocity nếu đến gần
+            local dist = (destination - p.Position).Magnitude
+            if dist < 5 then
+                p.Velocity = p.Velocity * 0.5
+            end
+        end
+    end
+end)
+
+-- =============================================
+-- UPDATE STATUS
+-- =============================================
+task.spawn(function()
+    while true do
+        if inversionEnabled then
+            local mode = "OFF"
+            if targetPlayer then
+                mode = (targetPlayer == client) and "FOLLOW ME" or "FOLLOW " .. targetPlayer.Name
+            elseif selectedStationIdx then
+                mode = "STATION " .. selectedStationIdx
+            end
+            
+            statusLabel.Text = string.format("Items: %d | %s | ∞ UNLIMITED", itemCount, mode)
+        end
+        task.wait(1)
+    end
+end)
+
+-- =============================================
+-- TOGGLE ON/OFF
+-- =============================================
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.G then
+        inversionEnabled = not inversionEnabled
+        
+        if inversionEnabled then
+            label.Text = "(G) Magnet: ON 🟢"
+            label.TextColor3 = Color3.new(0, 1, 0)
+            
+            print("\n" .. string.rep("=", 60))
+            print("🧲 MAGNET ENABLED - UNLIMITED MODE")
+            print(string.rep("=", 60))
+            
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "🧲 Magnet ON",
+                Duration = 2,
+                Text = "Unlimited items - no drop!",
+            })
+        else
+            label.Text = "(G) Magnet: OFF 🔴"
+            label.TextColor3 = Color3.new(1, 0, 0)
+            
+            -- Xóa tất cả BodyPosition
+            local folder = workspace:FindFirstChild(TARGET_FOLDER_NAME)
+            if folder then
+                for _, item in pairs(folder:GetChildren()) do
+                    local p = item:FindFirstChildWhichIsA("BasePart") or item:FindFirstChild("Handle")
+                    if p then
+                        local bp = p:FindFirstChild("MagnetBodyPos")
+                        if bp then bp:Destroy() end
+                        p.CanCollide = true
+                    end
+                end
+            end
+            
+            statusLabel.Text = "Items: 0 | Mode: OFF | ∞ UNLIMITED"
+            
+            print("\n" .. string.rep("=", 60))
+            print("❌ MAGNET DISABLED - Items released")
+            print(string.rep("=", 60))
+            
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "❌ Magnet OFF",
+                Duration = 2,
+                Text = "Items can drop now",
+            })
+        end
+    end
+end)
+
+-- =============================================
+-- INIT
+-- =============================================
+Players.PlayerAdded:Connect(updateLists)
+Players.PlayerRemoving:Connect(updateLists)
+updateLists()
+updateOffsetLabel()
+
+print("\n" .. string.rep("=", 60))
+print("🧲 UNLIMITED MAGNET - Persistent Save")
+print(string.rep("=", 60))
+print(string.format("✅ Loaded %d saved stations", #savedStations))
+print("📁 Save file: " .. SAVE_FILE)
+print("📍 Press [G] to toggle magnet")
+print("∞  UNLIMITED items - no drop when ON!")
+print("💾 Stations saved to file automatically")
+print(string.rep("=", 60))
+
+game.StarterGui:SetCore("SendNotification", {
+    Title = "🧲 Unlimited Magnet Ready",
+    Duration = 3,
+    Text = "[G] Toggle | ∞ No limit!\n💾 Auto-saves to file!",
+})
