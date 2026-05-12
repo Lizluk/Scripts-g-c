@@ -1,0 +1,55 @@
+--// SELF-REPULSOR: AUTO-EVADE NEXTBOTS
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local client = Players.LocalPlayer
+
+local active = false
+local SAFE_DISTANCE = 10 -- Khoảng cách cảnh báo (22m)
+local TARGET_PATH = workspace:WaitForChild("Game"):WaitForChild("Players")
+
+-- Bật/Tắt bằng phím F
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.F then
+        active = not active
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "AUTO EVADE",
+            Text = active and "TỰ ĐỘNG NÉ: BẬT 🏃‍♂️" or "TỰ ĐỘNG NÉ: TẮT 🔴",
+            Duration = 2
+        })
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not active then return end
+    
+    local char = client.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    -- Quét tìm Nextbot trong workspace.Game.Players
+    for _, obj in pairs(TARGET_PATH:GetChildren()) do
+        -- Lọc bỏ người chơi và bản thân
+        if obj ~= char and not Players:GetPlayerFromCharacter(obj) then
+            local botRoot = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("BasePart")
+            
+            if botRoot then
+                local vectorToMe = hrp.Position - botRoot.Position
+                local distance = vectorToMe.Magnitude
+                
+                -- Nếu Nextbot quá gần bạn (dưới 22m)
+                if distance < SAFE_DISTANCE then
+                    -- Tính toán hướng né (hướng từ Bot đến bạn)
+                    local evadeDirection = vectorToMe.Unit
+                    
+                    -- Dịch chuyển CHÍNH BẠN ra xa
+                    -- Cách này mượt hơn và không làm bạn bị kẹt dưới đất
+                    hrp.CFrame = CFrame.new(botRoot.Position + evadeDirection * (SAFE_DISTANCE + 2)) 
+                    
+                    -- Thêm một chút vận tốc để né mượt mà hơn
+                    hrp.Velocity = evadeDirection * 30
+                end
+            end
+        end
+    end
+end)
