@@ -5,7 +5,7 @@ local UserInputService = game:GetService("UserInputService")
 local client = Players.LocalPlayer
 
 local active = false
-local SAFE_DISTANCE = 10 -- Khoảng cách cảnh báo (22m)
+local SAFE_DISTANCE = 13 -- Khoảng cách cảnh báo (22m)
 local TARGET_PATH = workspace:WaitForChild("Game"):WaitForChild("Players")
 
 -- Bật/Tắt bằng phím F
