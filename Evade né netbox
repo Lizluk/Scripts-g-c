@@ -10,7 +10,7 @@ local TARGET_PATH = workspace:WaitForChild("Game"):WaitForChild("Players")
 
 -- Bật/Tắt bằng phím F
 UserInputService.InputBegan:Connect(function(input, gpe)
-    if not gpe and input.KeyCode == Enum.KeyCode.F then
+    if not gpe and input.KeyCode == Enum.KeyCode.X then
         active = not active
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = "AUTO EVADE",
