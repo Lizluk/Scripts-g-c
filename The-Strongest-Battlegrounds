@@ -1,64 +1,71 @@
---// ULTIMATE PLAYER STALKER GUI (WITH WHITELIST & CUSTOM DISTANCE)
+--// NINJA GHOST STALKER V2 (KEYBIND G - AUTO FILTER 0 HP - RANGE INPUT)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local client = Players.LocalPlayer
 
--- Biến cấu hình mặc định
+-- Biến cấu hình
 local active = false
 local scanRange = 30
-local stickDist = 5
-local ignoredPlayers = {} -- Danh sách người chơi bị bỏ qua (Màu đỏ)
+local stickDist = 6
+local blinkSpeed = 0.05 
+local ignoredPlayers = {}
+local lastBlink = 0
+local randomAngle = 180
 
 -- =============================================
--- TẠO GIAO DIỆN (GUI)
+-- GIAO DIỆN (GUI)
 -- =============================================
 local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-ScreenGui.Name = "Stalker_UI"
+ScreenGui.Name = "Ninja_Stalker_V2"
 
 local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 250, 0, 400)
+MainFrame.Size = UDim2.new(0, 250, 0, 420)
 MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.Active = true
 MainFrame.Draggable = true
 Instance.new("UICorner", MainFrame)
 
 local Title = Instance.new("TextLabel", MainFrame)
 Title.Size = UDim2.new(1, 0, 0, 40)
-Title.Text = "STALKER SETTINGS"
+Title.Text = "NINJA STALKER V2 [G]"
 Title.TextColor3 = Color3.new(1, 1, 1)
 Title.Font = Enum.Font.GothamBold
 Title.BackgroundTransparency = 1
 
--- Ô nhập khoảng cách đứng sau (Stick Distance)
+-- Input Khoảng cách (Stick)
 local StickInput = Instance.new("TextBox", MainFrame)
 StickInput.Size = UDim2.new(0.4, 0, 0, 30)
 StickInput.Position = UDim2.new(0.05, 0, 0.12, 0)
-StickInput.PlaceholderText = "Dist (5)"
-StickInput.Text = "5"
-StickInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+StickInput.Text = tostring(stickDist)
+StickInput.PlaceholderText = "Dist"
+StickInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 StickInput.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", StickInput)
 
--- Ô nhập phạm vi quét (Scan Range)
+-- Input Tầm quét (Range) - ĐÃ THÊM LẠI
 local RangeInput = Instance.new("TextBox", MainFrame)
 RangeInput.Size = UDim2.new(0.4, 0, 0, 30)
 RangeInput.Position = UDim2.new(0.55, 0, 0.12, 0)
-RangeInput.PlaceholderText = "Range (30)"
-RangeInput.Text = "30"
-RangeInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+RangeInput.Text = tostring(scanRange)
+RangeInput.PlaceholderText = "Range"
+RangeInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 RangeInput.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", RangeInput)
 
 local Scroll = Instance.new("ScrollingFrame", MainFrame)
-Scroll.Size = UDim2.new(0.9, 0, 0.6, 0)
+Scroll.Size = UDim2.new(0.9, 0, 0.55, 0)
 Scroll.Position = UDim2.new(0.05, 0, 0.22, 0)
-Scroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Scroll.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+Scroll.BorderSizePixel = 0
 Instance.new("UIListLayout", Scroll)
 
 local ToggleBtn = Instance.new("TextButton", MainFrame)
-ToggleBtn.Size = UDim2.new(0.9, 0, 0, 40)
-ToggleBtn.Position = UDim2.new(0.05, 0, 0.85, 0)
-ToggleBtn.Text = "STATUS: OFF"
+ToggleBtn.Size = UDim2.new(0.9, 0, 0, 45)
+ToggleBtn.Position = UDim2.new(0.05, 0, 0.82, 0)
+ToggleBtn.Text = "NINJA MODE: OFF"
+ToggleBtn.Font = Enum.Font.GothamBold
 ToggleBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
 ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
 Instance.new("UICorner", ToggleBtn)
@@ -68,47 +75,44 @@ Instance.new("UICorner", ToggleBtn)
 -- =============================================
 
 -- Cập nhật thông số từ ô nhập
-StickInput.FocusLost:Connect(function() stickDist = tonumber(StickInput.Text) or 5 end)
+StickInput.FocusLost:Connect(function() stickDist = tonumber(StickInput.Text) or 6 end)
 RangeInput.FocusLost:Connect(function() scanRange = tonumber(RangeInput.Text) or 30 end)
 
--- Hàm làm mới danh sách người chơi
+-- Phím tắt G để bật/tắt
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.G then
+        active = not active
+        ToggleBtn.Text = active and "NINJA MODE: ON" or "NINJA MODE: OFF"
+        ToggleBtn.BackgroundColor3 = active and Color3.fromRGB(0, 120, 200) or Color3.fromRGB(150, 0, 0)
+    end
+end)
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    active = not active
+    ToggleBtn.Text = active and "NINJA MODE: ON" or "NINJA MODE: OFF"
+    ToggleBtn.BackgroundColor3 = active and Color3.fromRGB(0, 120, 200) or Color3.fromRGB(150, 0, 0)
+end)
+
 local function RefreshList()
     for _, v in pairs(Scroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
-    
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= client then
             local btn = Instance.new("TextButton", Scroll)
-            btn.Size = UDim2.new(1, 0, 0, 30)
+            btn.Size = UDim2.new(1, 0, 0, 35)
             btn.Text = p.Name
-            btn.Font = Enum.Font.Gotham
-            
-            -- Cập nhật màu sắc dựa trên trạng thái bị bỏ qua
-            local function UpdateColor()
-                btn.BackgroundColor3 = ignoredPlayers[p.UserId] and Color3.fromRGB(150, 50, 50) or Color3.fromRGB(60, 60, 60)
-                btn.TextColor3 = Color3.new(1, 1, 1)
-            end
-            
-            UpdateColor()
-            
+            btn.BackgroundColor3 = ignoredPlayers[p.UserId] and Color3.fromRGB(100, 30, 30) or Color3.fromRGB(40, 40, 40)
+            btn.TextColor3 = Color3.new(1, 1, 1)
             btn.MouseButton1Click:Connect(function()
                 ignoredPlayers[p.UserId] = not ignoredPlayers[p.UserId]
-                UpdateColor()
+                btn.BackgroundColor3 = ignoredPlayers[p.UserId] and Color3.fromRGB(100, 30, 30) or Color3.fromRGB(40, 40, 40)
             end)
         end
     end
 end
-
 Players.PlayerAdded:Connect(RefreshList)
 Players.PlayerRemoving:Connect(RefreshList)
 RefreshList()
 
-ToggleBtn.MouseButton1Click:Connect(function()
-    active = not active
-    ToggleBtn.Text = active and "STATUS: ON" or "STATUS: OFF"
-    ToggleBtn.BackgroundColor3 = active and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
-end)
-
--- VÒNG LẶP STALKER
 RunService.Heartbeat:Connect(function()
     if not active then return end
     
@@ -120,21 +124,37 @@ RunService.Heartbeat:Connect(function()
     local distLimit = scanRange
 
     for _, p in pairs(Players:GetPlayers()) do
-        -- LỌC: Không phải mình, có Character, và KHÔNG nằm trong danh sách bỏ qua (màu đỏ)
-        if p ~= client and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and not ignoredPlayers[p.UserId] then
-            local tHrp = p.Character.HumanoidRootPart
-            local d = (hrp.Position - tHrp.Position).Magnitude
+        if p ~= client and p.Character and not ignoredPlayers[p.UserId] then
+            local tHrp = p.Character:FindFirstChild("HumanoidRootPart")
+            local tHum = p.Character:FindFirstChild("Humanoid")
             
-            if d < distLimit then
-                distLimit = d
-                closestHrp = tHrp
+            -- KIỂM TRA: Phải có HRP và Máu phải lớn hơn 0
+            if tHrp and tHum and tHum.Health > 0 then
+                local d = (hrp.Position - tHrp.Position).Magnitude
+                if d < distLimit then
+                    distLimit = d
+                    closestHrp = tHrp
+                end
             end
         end
     end
 
     if closestHrp then
-        local targetPos = closestHrp.CFrame * CFrame.new(0, 0, stickDist)
-        hrp.CFrame = CFrame.lookAt(targetPos.Position, closestHrp.Position)
+        -- Blink ngẫu nhiên
+        if tick() - lastBlink > blinkSpeed then
+            randomAngle = math.random(90, 270) 
+            lastBlink = tick()
+        end
+        
+        local rad = math.rad(randomAngle)
+        local offset = Vector3.new(math.sin(rad) * stickDist, 0, math.cos(rad) * stickDist)
+        local targetPos = (closestHrp.CFrame * CFrame.new(offset.X, 0, offset.Z)).Position
+        
+        -- Luôn giữ thăng bằng
+        local lookAtPos = Vector3.new(closestHrp.Position.X, targetPos.Y, closestHrp.Position.Z)
+        hrp.CFrame = CFrame.lookAt(targetPos, lookAtPos)
+        
         hrp.Velocity = Vector3.zero
+        hrp.RotVelocity = Vector3.zero
     end
 end)
