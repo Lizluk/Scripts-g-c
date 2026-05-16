@@ -1,0 +1,140 @@
+--// ULTIMATE PLAYER STALKER GUI (WITH WHITELIST & CUSTOM DISTANCE)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local client = Players.LocalPlayer
+
+-- Biến cấu hình mặc định
+local active = false
+local scanRange = 30
+local stickDist = 5
+local ignoredPlayers = {} -- Danh sách người chơi bị bỏ qua (Màu đỏ)
+
+-- =============================================
+-- TẠO GIAO DIỆN (GUI)
+-- =============================================
+local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+ScreenGui.Name = "Stalker_UI"
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 250, 0, 400)
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Active = true
+MainFrame.Draggable = true
+Instance.new("UICorner", MainFrame)
+
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "STALKER SETTINGS"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = Enum.Font.GothamBold
+Title.BackgroundTransparency = 1
+
+-- Ô nhập khoảng cách đứng sau (Stick Distance)
+local StickInput = Instance.new("TextBox", MainFrame)
+StickInput.Size = UDim2.new(0.4, 0, 0, 30)
+StickInput.Position = UDim2.new(0.05, 0, 0.12, 0)
+StickInput.PlaceholderText = "Dist (5)"
+StickInput.Text = "5"
+StickInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+StickInput.TextColor3 = Color3.new(1, 1, 1)
+
+-- Ô nhập phạm vi quét (Scan Range)
+local RangeInput = Instance.new("TextBox", MainFrame)
+RangeInput.Size = UDim2.new(0.4, 0, 0, 30)
+RangeInput.Position = UDim2.new(0.55, 0, 0.12, 0)
+RangeInput.PlaceholderText = "Range (30)"
+RangeInput.Text = "30"
+RangeInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+RangeInput.TextColor3 = Color3.new(1, 1, 1)
+
+local Scroll = Instance.new("ScrollingFrame", MainFrame)
+Scroll.Size = UDim2.new(0.9, 0, 0.6, 0)
+Scroll.Position = UDim2.new(0.05, 0, 0.22, 0)
+Scroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Instance.new("UIListLayout", Scroll)
+
+local ToggleBtn = Instance.new("TextButton", MainFrame)
+ToggleBtn.Size = UDim2.new(0.9, 0, 0, 40)
+ToggleBtn.Position = UDim2.new(0.05, 0, 0.85, 0)
+ToggleBtn.Text = "STATUS: OFF"
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", ToggleBtn)
+
+-- =============================================
+-- LOGIC XỬ LÝ
+-- =============================================
+
+-- Cập nhật thông số từ ô nhập
+StickInput.FocusLost:Connect(function() stickDist = tonumber(StickInput.Text) or 5 end)
+RangeInput.FocusLost:Connect(function() scanRange = tonumber(RangeInput.Text) or 30 end)
+
+-- Hàm làm mới danh sách người chơi
+local function RefreshList()
+    for _, v in pairs(Scroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+    
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= client then
+            local btn = Instance.new("TextButton", Scroll)
+            btn.Size = UDim2.new(1, 0, 0, 30)
+            btn.Text = p.Name
+            btn.Font = Enum.Font.Gotham
+            
+            -- Cập nhật màu sắc dựa trên trạng thái bị bỏ qua
+            local function UpdateColor()
+                btn.BackgroundColor3 = ignoredPlayers[p.UserId] and Color3.fromRGB(150, 50, 50) or Color3.fromRGB(60, 60, 60)
+                btn.TextColor3 = Color3.new(1, 1, 1)
+            end
+            
+            UpdateColor()
+            
+            btn.MouseButton1Click:Connect(function()
+                ignoredPlayers[p.UserId] = not ignoredPlayers[p.UserId]
+                UpdateColor()
+            end)
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(RefreshList)
+Players.PlayerRemoving:Connect(RefreshList)
+RefreshList()
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    active = not active
+    ToggleBtn.Text = active and "STATUS: ON" or "STATUS: OFF"
+    ToggleBtn.BackgroundColor3 = active and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+end)
+
+-- VÒNG LẶP STALKER
+RunService.Heartbeat:Connect(function()
+    if not active then return end
+    
+    local char = client.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local closestHrp = nil
+    local distLimit = scanRange
+
+    for _, p in pairs(Players:GetPlayers()) do
+        -- LỌC: Không phải mình, có Character, và KHÔNG nằm trong danh sách bỏ qua (màu đỏ)
+        if p ~= client and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and not ignoredPlayers[p.UserId] then
+            local tHrp = p.Character.HumanoidRootPart
+            local d = (hrp.Position - tHrp.Position).Magnitude
+            
+            if d < distLimit then
+                distLimit = d
+                closestHrp = tHrp
+            end
+        end
+    end
+
+    if closestHrp then
+        local targetPos = closestHrp.CFrame * CFrame.new(0, 0, stickDist)
+        hrp.CFrame = CFrame.lookAt(targetPos.Position, closestHrp.Position)
+        hrp.Velocity = Vector3.zero
+    end
+end)
