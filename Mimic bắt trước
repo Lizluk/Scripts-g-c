@@ -1,0 +1,186 @@
+--// FACE-TO-FACE MIRROR V14 (SUPER FAST SYNC + ORIENTATION FIX)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local client = Players.LocalPlayer
+
+-- Biến điều chỉnh
+local active = false
+local faceEachOther = true -- Chế độ đối diện mặt
+local targetPlayer = nil
+local offsetForward = 5 -- Mặc định đứng cách ra một chút để nhìn mặt
+local offsetRight = 0
+local moveSpeed = 20
+
+-- =============================================
+-- GIAO DIỆN GUI (THÊM NÚT CHỈNH ĐỐI DIỆN)
+-- =============================================
+local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 280, 0, 500)
+Main.Position = UDim2.new(0.7, 0, 0.2, 0)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+Main.Active = true
+Main.Draggable = true
+Instance.new("UICorner", Main)
+
+local function CreateSlider(name, pos, min, max, default, callback)
+    local label = Instance.new("TextLabel", Main)
+    label.Size = UDim2.new(0.9, 0, 0, 20)
+    label.Position = pos
+    label.Text = name .. ": " .. default
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamMedium
+
+    local sliderFrame = Instance.new("Frame", Main)
+    sliderFrame.Size = UDim2.new(0.8, 0, 0, 4)
+    sliderFrame.Position = pos + UDim2.new(0.05, 0, 0.05, 0)
+    sliderFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+
+    local btn = Instance.new("TextButton", sliderFrame)
+    btn.Size = UDim2.new(0, 14, 0, 14)
+    btn.AnchorPoint = Vector2.new(0.5, 0.5)
+    btn.Position = UDim2.new((default - min) / (max - min), 0, 0.5, 0)
+    btn.Text = ""
+    btn.BackgroundColor3 = Color3.fromRGB(0, 255, 150)
+    Instance.new("UICorner", btn)
+
+    local dragging = false
+    btn.MouseButton1Down:Connect(function() dragging = true end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+
+    RunService.RenderStepped:Connect(function()
+        if dragging then
+            local mousePos = UserInputService:GetMouseLocation().X
+            local relativePos = math.clamp((mousePos - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
+            btn.Position = UDim2.new(relativePos, 0, 0.5, 0)
+            local val = math.floor(min + (relativePos * (max - min)))
+            label.Text = name .. ": " .. val
+            callback(val)
+        end
+    end)
+end
+
+CreateSlider("Khoảng cách", UDim2.new(0.05, 0, 0.08, 0), -20, 20, 5, function(v) offsetForward = v end)
+CreateSlider("Lệch Trái/Phải", UDim2.new(0.05, 0, 0.18, 0), -15, 15, 0, function(v) offsetRight = v end)
+CreateSlider("Tốc độ bám", UDim2.new(0.05, 0, 0.28, 0), 0, 100, 20, function(v) moveSpeed = v end)
+
+local FaceBtn = Instance.new("TextButton", Main)
+FaceBtn.Size = UDim2.new(0.9, 0, 0, 35)
+FaceBtn.Position = UDim2.new(0.05, 0, 0.38, 0)
+FaceBtn.Text = "CHẾ ĐỘ: ĐỐI DIỆN MẶT"
+FaceBtn.BackgroundColor3 = Color3.fromRGB(60, 0, 120)
+FaceBtn.TextColor3 = Color3.new(1, 1, 1)
+FaceBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", FaceBtn)
+
+FaceBtn.MouseButton1Click:Connect(function()
+    faceEachOther = not faceEachOther
+    FaceBtn.Text = faceEachOther and "CHẾ ĐỘ: ĐỐI DIỆN MẶT" or "CHẾ ĐỘ: CÙNG HƯỚNG"
+    FaceBtn.BackgroundColor3 = faceEachOther and Color3.fromRGB(60, 0, 120) or Color3.fromRGB(0, 80, 120)
+end)
+
+local Scroll = Instance.new("ScrollingFrame", Main)
+Scroll.Size = UDim2.new(0.9, 0, 0.3, 0)
+Scroll.Position = UDim2.new(0.05, 0, 0.48, 0)
+Scroll.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+Instance.new("UIListLayout", Scroll)
+
+local function RefreshList()
+    for _, v in pairs(Scroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= client then
+            local b = Instance.new("TextButton", Scroll)
+            b.Size = UDim2.new(1, -5, 0, 25)
+            b.Text = p.DisplayName or p.Name
+            b.BackgroundColor3 = (targetPlayer == p) and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(30, 30, 30)
+            b.TextColor3 = (targetPlayer == p) and Color3.new(0, 0, 0) or Color3.new(1, 1, 1)
+            b.MouseButton1Click:Connect(function() targetPlayer = p RefreshList() end)
+        end
+    end
+end
+Players.PlayerAdded:Connect(RefreshList)
+Players.PlayerRemoving:Connect(RefreshList)
+RefreshList()
+
+local ToggleBtn = Instance.new("TextButton", Main)
+ToggleBtn.Size = UDim2.new(0.9, 0, 0, 45)
+ToggleBtn.Position = UDim2.new(0.05, 0, 0.85, 0)
+ToggleBtn.Text = "STATUS: OFF"
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.MouseButton1Click:Connect(function()
+    active = not active
+    ToggleBtn.Text = active and "STATUS: ON" or "STATUS: OFF"
+    ToggleBtn.BackgroundColor3 = active and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+end)
+
+-- =============================================
+-- LOGIC ĐỒNG BỘ SIÊU TỐC
+-- =============================================
+
+local function InstantSyncAnims(tChar)
+    local tHum = tChar:FindFirstChildOfClass("Humanoid")
+    local myHum = client.Character and client.Character:FindFirstChildOfClass("Humanoid")
+    if tHum and myHum then
+        local tTracks = tHum:GetPlayingAnimationTracks()
+        local myTracks = myHum:GetPlayingAnimationTracks()
+        for _, myTrack in pairs(myTracks) do
+            local exists = false
+            for _, tTrack in pairs(tTracks) do
+                if tTrack.Animation.AnimationId == myTrack.Animation.AnimationId then exists = true break end
+            end
+            if not exists then myTrack:Stop(0) end
+        end
+        for _, tTrack in pairs(tTracks) do
+            local isPlaying = false
+            for _, myTrack in pairs(myTracks) do
+                if myTrack.Animation.AnimationId == tTrack.Animation.AnimationId then
+                    isPlaying = true
+                    if math.abs(myTrack.TimePosition - tTrack.TimePosition) > 0.05 then myTrack.TimePosition = tTrack.TimePosition end
+                    myTrack:AdjustSpeed(tTrack.Speed)
+                    break
+                end
+            end
+            if not isPlaying then
+                local anim = myHum:LoadAnimation(tTrack.Animation)
+                anim:Play(0)
+                anim.TimePosition = tTrack.TimePosition
+            end
+        end
+    end
+end
+
+RunService.PreRender:Connect(function()
+    if not active or not targetPlayer or not targetPlayer.Character then return end
+    
+    local myChar = client.Character
+    local myHrp = myChar and (myChar:FindFirstChild("HumanoidRootPart") or myChar:FindFirstChild("TorsoRot"))
+    local tChar = targetPlayer.Character
+    local tHrp = tChar:FindFirstChild("TorsoRot") or tChar:FindFirstChild("HumanoidRootPart") or tChar:FindFirstChild("Base")
+
+    if myHrp and tHrp then
+        -- Vị trí bám dựa trên Offset
+        -- Mẹo: Nếu đối diện mặt, mình đứng phía trước (Z âm) và xoay ngược lại
+        local goalCF
+        if faceEachOther then
+            -- Đứng trước mặt mục tiêu và nhìn thẳng vào mục tiêu
+            goalCF = tHrp.CFrame * CFrame.new(offsetRight, 0, -offsetForward) * CFrame.Angles(0, math.pi, 0)
+        else
+            -- Đứng cùng hướng (bám sau lưng hoặc đứng cạnh)
+            goalCF = tHrp.CFrame * CFrame.new(offsetRight, 0, -offsetForward)
+        end
+        
+        local speed = math.clamp(moveSpeed / 100, 0.1, 1)
+        myHrp.CFrame = myHrp.CFrame:Lerp(goalCF, speed)
+        
+        InstantSyncAnims(tChar)
+        
+        myHrp.Velocity = Vector3.new(0,0,0)
+        for _, part in pairs(myChar:GetChildren()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
+        end
+    end
+end)
