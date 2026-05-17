@@ -1,269 +1,270 @@
---// SMART MIRROR STALKER V24 (HOLD LEFT-CLICK TO STALK)
+--// SMART MIRROR STALKER V28 (BIG TEXT & UI OPTIMIZED)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
 local lp = Players.LocalPlayer
 
--- Biến cấu hình
+-- Khởi tạo biến
 local active = false
-local isHoldingMouse = false -- Kiểm tra giữ CHUỘT TRÁI
-local faceEachOther = true -- Mặc định bật để nhìn thẳng đối phương khi đánh
-local revengeMode = true
-local targetPlayer = nil
-local stalkRange = 25
-local offsetForward = 3.5 -- Khoảng cách cực gần để đánh trúng
-local offsetRight = 0
-local moveSpeed = 35 -- Tốc độ cao để áp sát nhanh
-local blacklisted = {}
+local isHoldingMouse = false
 local lastHealth = 100
+local targetPlayer = nil
+local blacklisted = {}
 
--- Xóa GUI cũ
-if lp.PlayerGui:FindFirstChild("MirrorStalker_V24") then
-    lp.PlayerGui:FindFirstChild("MirrorStalker_V24"):Destroy()
+local Config = {
+    stalkRange = 25,
+    offsetForward = 3.5,
+    moveSpeed = 35,
+    faceEachOther = true,
+    revengeMode = true
+}
+
+-- =============================================
+-- HÀM LƯU/TẢI CÀI ĐẶT
+-- =============================================
+local fileName = "Stalker_V28_Config.json"
+local function SaveSettings()
+    pcall(function() if writefile then writefile(fileName, HttpService:JSONEncode(Config)) end end)
+end
+local function LoadSettings()
+    pcall(function()
+        if isfile and isfile(fileName) then
+            local decoded = HttpService:JSONDecode(readfile(fileName))
+            for k, v in pairs(decoded) do Config[k] = v end
+        end
+    end)
+end
+LoadSettings()
+
+-- =============================================
+-- GIAO DIỆN GUI (TO & RÕ)
+-- =============================================
+if lp.PlayerGui:FindFirstChild("MirrorStalker_V28") then
+    lp.PlayerGui:FindFirstChild("MirrorStalker_V28"):Destroy()
 end
 
--- =============================================
--- GIAO DIỆN GUI
--- =============================================
 local ScreenGui = Instance.new("ScreenGui", lp.PlayerGui)
-ScreenGui.Name = "MirrorStalker_V24"
+ScreenGui.Name = "MirrorStalker_V28"
 ScreenGui.ResetOnSpawn = false
 
 local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 280, 0, 500)
-Main.Position = UDim2.new(0.5, -140, 0.5, -250)
-Main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+Main.Size = UDim2.new(0, 300, 0, 550) -- Tăng chiều rộng một chút
+Main.Position = UDim2.new(0.5, -150, 0.5, -275)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 Main.Active = true
 Main.Draggable = true
 Instance.new("UICorner", Main)
 
 local Title = Instance.new("TextLabel", Main)
-Title.Size = UDim2.new(1, 0, 0, 35)
-Title.Text = "STALKER V24 [GIỮ CHUỘT TRÁI]"
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "STALKER V28 - BIG TEXT"
 Title.TextColor3 = Color3.new(1, 1, 1)
-Title.BackgroundColor3 = Color3.fromRGB(0, 80, 0)
+Title.TextSize = 18 -- Chữ tiêu đề to
+Title.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
 Title.Font = Enum.Font.GothamBold
 
-local function CreateSlider(name, pos, min, max, default, callback)
+local function CreateSlider(name, configKey, pos, min, max, default)
+    local val = Config[configKey] or default
     local label = Instance.new("TextLabel", Main)
-    label.Size = UDim2.new(0.9, 0, 0, 20)
+    label.Size = UDim2.new(0.9, 0, 0, 25)
     label.Position = pos
-    label.Text = name .. ": " .. default
+    label.Text = name .. ": " .. val
     label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextSize = 14
     label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamSemibold
 
     local sliderFrame = Instance.new("Frame", Main)
-    sliderFrame.Size = UDim2.new(0.8, 0, 0, 4)
-    sliderFrame.Position = pos + UDim2.new(0.05, 0, 0.05, 0)
+    sliderFrame.Size = UDim2.new(0.8, 0, 0, 6)
+    sliderFrame.Position = pos + UDim2.new(0.05, 0, 0.05, 5)
     sliderFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 
     local btn = Instance.new("TextButton", sliderFrame)
-    btn.Size = UDim2.new(0, 14, 0, 14)
+    btn.Size = UDim2.new(0, 16, 0, 16)
     btn.AnchorPoint = Vector2.new(0.5, 0.5)
-    btn.Position = UDim2.new((default - min) / (max - min), 0, 0.5, 0)
+    btn.Position = UDim2.new((val - min) / (max - min), 0, 0.5, 0)
     btn.Text = ""
-    btn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
     Instance.new("UICorner", btn)
 
     local dragging = false
     btn.MouseButton1Down:Connect(function() dragging = true end)
-    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false SaveSettings() end end)
 
     RunService.Heartbeat:Connect(function()
         if dragging then
             local mousePos = UserInputService:GetMouseLocation().X
             local relativePos = math.clamp((mousePos - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
             btn.Position = UDim2.new(relativePos, 0, 0.5, 0)
-            local val = math.floor(min + (relativePos * (max - min)))
-            label.Text = name .. ": " .. val
-            callback(val)
+            local currentVal = math.floor(min + (relativePos * (max - min)))
+            label.Text = name .. ": " .. currentVal
+            Config[configKey] = currentVal
         end
     end)
 end
 
-CreateSlider("Tầm nhận diện", UDim2.new(0.05, 0, 0.1, 0), 5, 100, 25, function(v) stalkRange = v end)
-CreateSlider("Khoảng cách", UDim2.new(0.05, 0, 0.18, 0), -20, 20, 3.5, function(v) offsetForward = v end)
-CreateSlider("Tốc độ bám", UDim2.new(0.05, 0, 0.26, 0), 0, 100, 35, function(v) moveSpeed = v end)
-
-local RevengeBtn = Instance.new("TextButton", Main)
-RevengeBtn.Size = UDim2.new(0.42, 0, 0, 35)
-RevengeBtn.Position = UDim2.new(0.05, 0, 0.35, 0)
-RevengeBtn.Text = "REVENGE: ON"
-RevengeBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
-RevengeBtn.TextColor3 = Color3.new(1, 1, 1)
-Instance.new("UICorner", RevengeBtn)
-
-local FaceBtn = Instance.new("TextButton", Main)
-FaceBtn.Size = UDim2.new(0.42, 0, 0, 35)
-FaceBtn.Position = UDim2.new(0.53, 0, 0.35, 0)
-FaceBtn.Text = "FACE: ON"
-FaceBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
-FaceBtn.TextColor3 = Color3.new(1, 1, 1)
-Instance.new("UICorner", FaceBtn)
+CreateSlider("Tầm quét", "stalkRange", UDim2.new(0.05, 0, 0.08, 0), 5, 100, 25)
+CreateSlider("Khoảng cách", "offsetForward", UDim2.new(0.05, 0, 0.16, 0), -20, 20, 3.5)
+CreateSlider("Tốc độ bám", "moveSpeed", UDim2.new(0.05, 0, 0.24, 0), 0, 100, 35)
 
 local Scroll = Instance.new("ScrollingFrame", Main)
-Scroll.Size = UDim2.new(0.9, 0, 0.35, 0)
-Scroll.Position = UDim2.new(0.05, 0, 0.45, 0)
+Scroll.Size = UDim2.new(0.92, 0, 0.42, 0)
+Scroll.Position = UDim2.new(0.04, 0, 0.33, 0)
 Scroll.BackgroundColor3 = Color3.fromRGB(5, 5, 5)
-Instance.new("UIListLayout", Scroll)
+Scroll.ScrollBarThickness = 6
+local listLayout = Instance.new("UIListLayout", Scroll)
+listLayout.Padding = UDim.new(0, 4) -- Tạo khoảng cách giữa các tên
 
 local function RefreshList()
     for _, v in pairs(Scroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= lp then
             local b = Instance.new("TextButton", Scroll)
-            b.Size = UDim2.new(1, -5, 0, 30)
-            b.Text = p.Name
-            b.BackgroundColor3 = blacklisted[p.Name] and Color3.fromRGB(150,0,0) or (targetPlayer == p and Color3.fromRGB(0,150,0) or Color3.fromRGB(30,30,30))
+            b.Size = UDim2.new(1, -8, 0, 45) -- Dòng tên cao hơn để dễ bấm
+            b.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ")" -- Hiện cả tên hiển thị
             b.TextColor3 = Color3.new(1, 1, 1)
-            b.MouseButton1Click:Connect(function() 
-                if not blacklisted[p.Name] then targetPlayer = p RefreshList() end 
+            b.TextSize = 18 -- CHỮ TO RÕ
+            b.Font = Enum.Font.SourceSansBold
+            b.TextXAlignment = Enum.TextXAlignment.Left
+            Instance.new("UICorner", b)
+            
+            local function UpdateColor()
+                if blacklisted[p.Name] then
+                    b.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+                elseif targetPlayer == p then
+                    b.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+                else
+                    b.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                end
+            end
+            UpdateColor()
+
+            b.MouseButton1Click:Connect(function()
+                if blacklisted[p.Name] then return end
+                targetPlayer = (targetPlayer == p) and nil or p
+                RefreshList()
             end)
-            -- Chuột phải trong List vẫn là Blacklist
-            b.MouseButton2Click:Connect(function() 
-                blacklisted[p.Name] = not blacklisted[p.Name] 
+
+            b.MouseButton2Click:Connect(function()
+                blacklisted[p.Name] = not blacklisted[p.Name]
                 if blacklisted[p.Name] and targetPlayer == p then targetPlayer = nil end
-                RefreshList() 
+                RefreshList()
             end)
         end
     end
+    Scroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y)
 end
+RefreshList()
 Players.PlayerAdded:Connect(RefreshList)
 Players.PlayerRemoving:Connect(RefreshList)
-RefreshList()
+
+local FaceBtn = Instance.new("TextButton", Main)
+FaceBtn.Size = UDim2.new(0.44, 0, 0, 35)
+FaceBtn.Position = UDim2.new(0.04, 0, 0.77, 0)
+FaceBtn.Text = Config.faceEachOther and "FACE: ON" or "FACE: OFF"
+FaceBtn.TextSize = 16
+FaceBtn.BackgroundColor3 = Config.faceEachOther and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
+FaceBtn.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", FaceBtn)
+
+local RevengeBtn = Instance.new("TextButton", Main)
+RevengeBtn.Size = UDim2.new(0.44, 0, 0, 35)
+RevengeBtn.Position = UDim2.new(0.52, 0, 0.77, 0)
+RevengeBtn.Text = Config.revengeMode and "REVENGE: ON" or "REVENGE: OFF"
+RevengeBtn.TextSize = 16
+RevengeBtn.BackgroundColor3 = Config.revengeMode and Color3.fromRGB(150, 0, 0) or Color3.fromRGB(60, 60, 60)
+RevengeBtn.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", RevengeBtn)
 
 local ToggleBtn = Instance.new("TextButton", Main)
-ToggleBtn.Size = UDim2.new(0.9, 0, 0, 45)
-ToggleBtn.Position = UDim2.new(0.05, 0, 0.88, 0)
+ToggleBtn.Size = UDim2.new(0.92, 0, 0, 50)
+ToggleBtn.Position = UDim2.new(0.04, 0, 0.88, 0)
 ToggleBtn.Text = "SYSTEM: OFF [F]"
+ToggleBtn.TextSize = 20 -- Nút tổng rất to
 ToggleBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
 ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
 ToggleBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", ToggleBtn)
 
 -- =============================================
--- LOGIC ĐIỀU KHIỂN
+-- LOGIC XỬ LÝ
 -- =============================================
-local function ResetAnims()
-    if lp.Character and lp.Character:FindFirstChildOfClass("Humanoid") then
-        for _, t in pairs(lp.Character.Humanoid:GetPlayingAnimationTracks()) do t:Stop(0.1) end
-    end
-end
-
 local function ToggleHack()
     active = not active
-    ToggleBtn.Text = active and "READY [F]\n(Giữ Chuột Trái để bám/đánh)" or "SYSTEM: OFF [F]"
+    ToggleBtn.Text = active and "SYSTEM: READY [F]" or "SYSTEM: OFF [F]"
     ToggleBtn.BackgroundColor3 = active and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
-    if not active then targetPlayer = nil isHoldingMouse = false ResetAnims() end
+    if not active then targetPlayer = nil end
 end
 
 ToggleBtn.MouseButton1Click:Connect(ToggleHack)
+FaceBtn.MouseButton1Click:Connect(function() Config.faceEachOther = not Config.faceEachOther FaceBtn.Text = Config.faceEachOther and "FACE: ON" or "FACE: OFF" FaceBtn.BackgroundColor3 = Config.faceEachOther and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60) SaveSettings() end)
+RevengeBtn.MouseButton1Click:Connect(function() Config.revengeMode = not Config.revengeMode RevengeBtn.Text = Config.revengeMode and "REVENGE: ON" or "REVENGE: OFF" RevengeBtn.BackgroundColor3 = Config.revengeMode and Color3.fromRGB(150, 0, 0) or Color3.fromRGB(60, 60, 60) SaveSettings() end)
 
 UserInputService.InputBegan:Connect(function(i, gpe)
     if gpe then return end
     if i.KeyCode == Enum.KeyCode.F then ToggleHack() end
     if i.UserInputType == Enum.UserInputType.MouseButton1 then isHoldingMouse = true end
 end)
+UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then isHoldingMouse = false end end)
 
-UserInputService.InputEnded:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then 
-        isHoldingMouse = false 
-        ResetAnims() 
-    end
-end)
-
-RevengeBtn.MouseButton1Click:Connect(function()
-    revengeMode = not revengeMode
-    RevengeBtn.Text = revengeMode and "REVENGE: ON" or "REVENGE: OFF"
-    RevengeBtn.BackgroundColor3 = revengeMode and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
-end)
-
-FaceBtn.MouseButton1Click:Connect(function()
-    faceEachOther = not faceEachOther
-    FaceBtn.Text = faceEachOther and "FACE: ON" or "FACE: OFF"
-    FaceBtn.BackgroundColor3 = faceEachOther and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
-end)
-
--- =============================================
--- VÒNG LẶP XỬ LÝ (PRE-RENDER)
--- =============================================
 RunService.PreRender:Connect(function()
     if not active then return end
     local char = lp.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    -- Tự động đổi mục tiêu nếu bị tấn công
-    if revengeMode and char:FindFirstChild("Humanoid") then
-        local currentHealth = char.Humanoid.Health
-        if currentHealth < lastHealth and currentHealth > 0 then
-            local dist = 20
+    -- Revenge Logic
+    if Config.revengeMode and char:FindFirstChild("Humanoid") then
+        local h = char.Humanoid.Health
+        if h < lastHealth and h > 0 then
             for _, p in pairs(Players:GetPlayers()) do
-                if p ~= lp and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    local d = (hrp.Position - p.Character.HumanoidRootPart.Position).Magnitude
-                    if d < dist then targetPlayer = p RefreshList() break end
+                if p ~= lp and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
+                    if (hrp.Position - p.Character.HumanoidRootPart.Position).Magnitude < 15 then
+                        targetPlayer = p
+                        RefreshList()
+                        break
+                    end
                 end
             end
         end
-        lastHealth = currentHealth
+        lastHealth = h
     end
 
-    -- CHỈ BÁM KHI ĐANG GIỮ CHUỘT TRÁI (VỪA ĐÁNH VỪA BÁM)
     if isHoldingMouse then
-        -- Tìm người gần nhất nếu chưa có target
+        -- Xóa target nếu chết
+        if targetPlayer and (not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("Humanoid") or targetPlayer.Character.Humanoid.Health <= 0) then
+            targetPlayer = nil
+            RefreshList()
+        end
+
+        -- Tự tìm target gần nhất nếu trống
         if not targetPlayer then
-            local closestDist = stalkRange
+            local closestDist = Config.stalkRange
             for _, p in pairs(Players:GetPlayers()) do
-                if p ~= lp and not blacklisted[p.Name] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                if p ~= lp and not blacklisted[p.Name] and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
                     local d = (hrp.Position - p.Character.HumanoidRootPart.Position).Magnitude
                     if d < closestDist then
                         closestDist = d
                         targetPlayer = p
-                        RefreshList()
                     end
                 end
             end
         end
 
-        -- Thực hiện di chuyển áp sát
-        if targetPlayer and targetPlayer.Character then
-            local tHrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-            local tHum = targetPlayer.Character:FindFirstChild("Humanoid")
+        -- Di chuyển áp sát (Khóa trục đứng)
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local tHrp = targetPlayer.Character.HumanoidRootPart
+            local _, yRot, _ = tHrp.CFrame:ToEulerAnglesYXZ()
+            local baseCF = CFrame.new(tHrp.Position) * CFrame.Angles(0, yRot, 0)
+            local targetCF = baseCF * CFrame.new(0, 0, -Config.offsetForward)
+            if Config.faceEachOther then targetCF = targetCF * CFrame.Angles(0, math.pi, 0) end
             
-            if tHrp and tHum and tHum.Health > 0 then
-                -- Giữ nhân vật thẳng đứng (V20)
-                local _, yRotation, _ = tHrp.CFrame:ToEulerAnglesYXZ()
-                local baseCF = CFrame.new(tHrp.Position) * CFrame.Angles(0, yRotation, 0)
-                
-                -- Tính vị trí áp sát
-                local targetCF = baseCF * CFrame.new(offsetRight, 0, -offsetForward)
-                if faceEachOther then targetCF = targetCF * CFrame.Angles(0, math.pi, 0) end
-                
-                hrp.CFrame = hrp.CFrame:Lerp(targetCF, moveSpeed/100)
-                
-                -- Đồng bộ hành động
-                local myHum = char:FindFirstChildOfClass("Humanoid")
-                if myHum then
-                    for _, track in pairs(tHum:GetPlayingAnimationTracks()) do
-                        local playing = false
-                        for _, mt in pairs(myHum:GetPlayingAnimationTracks()) do
-                            if mt.Animation.AnimationId == track.Animation.AnimationId then playing = true break end
-                        end
-                        if not playing then myHum:LoadAnimation(track.Animation):Play(0) end
-                    end
-                end
-                
-                hrp.Velocity = Vector3.zero
-                -- Noclip khi bám
-                for _, p in pairs(char:GetChildren()) do if p:IsA("BasePart") then p.CanCollide = false end end
-            else
-                targetPlayer = nil -- Người kia chết thì bỏ target để tìm người mới
-                RefreshList()
-            end
+            hrp.CFrame = hrp.CFrame:Lerp(targetCF, Config.moveSpeed/100)
+            hrp.Velocity = Vector3.zero
+            for _, p in pairs(char:GetChildren()) do if p:IsA("BasePart") then p.CanCollide = false end end
         end
     else
-        -- Khi thả chuột, khôi phục va chạm để không lọt sàn
-        if char then
-            for _, p in pairs(char:GetChildren()) do if p:IsA("BasePart") then p.CanCollide = true end end
-        end
+        if char then for _, p in pairs(char:GetChildren()) do if p:IsA("BasePart") then p.CanCollide = true end end end
     end
 end)
