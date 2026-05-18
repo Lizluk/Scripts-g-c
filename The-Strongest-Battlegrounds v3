@@ -1,0 +1,410 @@
+--// MIRROR MIMIC V46 (ANTI-GROUND SINK + AUTO-SAVE CONFIG + ROTATION FIX)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local lp = Players.LocalPlayer
+
+-- Cấu hình mặc định
+local active = false
+local faceEachOther = true
+local targetPlayer = nil
+local Blacklist = {} -- Danh sách đen lưu UserId
+local Config = {F = 5, R = 0, H = 0, S = 100, AR = 150}
+
+local FILE_NAME = "mirror_mimic_config.json"
+
+-- =============================================
+-- LOGIC LƯU VÀ TẢI CẤU HÌNH (SAVE / LOAD CONFIG)
+-- =============================================
+local function SaveSettings()
+local success, encoded = pcall(function()
+return HttpService:JSONEncode({
+Config = Config,
+Blacklist = Blacklist
+})
+end)
+if success and writefile then
+writefile(FILE_NAME, encoded)
+end
+end
+
+local function LoadSettings()
+if isfile and isfile(FILE_NAME) and readfile then
+local content = readfile(FILE_NAME)
+local success, decoded = pcall(function()
+return HttpService:JSONDecode(content)
+end)
+if success and decoded then
+if decoded.Config then
+for k, v in pairs(decoded.Config) do
+Config[k] = v
+end
+end
+if decoded.Blacklist then
+-- JSON chuyển Key là Number thành String khi lưu, cần chuyển ngược lại về dạng ID (Number)
+for k, v in pairs(decoded.Blacklist) do
+local userId = tonumber(k) or k
+Blacklist[userId] = v
+end
+end
+end
+end
+end
+
+-- Tải cấu hình đã lưu trước khi tạo giao diện
+LoadSettings()
+
+-- Hàm dọn dẹp động tác cũ và khôi phục tự xoay người
+local function StopMyAnims()
+local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+if hum then
+for _, v in pairs(hum:GetPlayingAnimationTracks()) do v:Stop(0) end
+hum.AutoRotate = true -- Khôi phục khả năng xoay hướng tự do
+end
+end
+
+-- =============================================
+-- GIAO DIỆN GUI (ĐÃ TỰ ĐỘNG ĐỒNG BỘ CẤU HÌNH ĐÃ LƯU)
+-- =============================================
+local pGui = lp:WaitForChild("PlayerGui")
+if pGui:FindFirstChild("MimicV46") then pGui:FindFirstChild("MimicV46"):Destroy() end
+local ScreenGui = Instance.new("ScreenGui", pGui); ScreenGui.Name = "MimicV46"; ScreenGui.ResetOnSpawn = false
+
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 320, 0, 620); Main.Position = UDim2.new(0.5, -160, 0.5, -310)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 20); Main.Active = true; Main.Draggable = true
+Instance.new("UICorner", Main); local Stroke = Instance.new("UIStroke", Main)
+Stroke.Color = Color3.fromRGB(0, 255, 200); Stroke.Thickness = 2
+
+-- Nút Thu nhỏ/Hiện lại
+local ToggleBtn = Instance.new("TextButton", ScreenGui)
+ToggleBtn.Size = UDim2.new(0, 45, 0, 45); ToggleBtn.Position = UDim2.new(0, 10, 0.5, -22)
+ToggleBtn.Text = "MENU"; ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+ToggleBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
+ToggleBtn.MouseButton1Click:Connect(function() Main.Visible = not Main.Visible end)
+
+local function CreateSlider(name, prop, pos, min, max, default)
+-- Nếu không có trong file save, áp dụng mặc định ban đầu
+if Config[prop] == nil then
+Config[prop] = default
+end
+local currentVal = Config[prop]
+
+local label = Instance.new("TextLabel", Main); label.Size = UDim2.new(0.9, 0, 0, 18); label.Position = pos
+label.Text = name .. ": " .. currentVal; label.TextColor3 = Color3.new(1, 1, 1); label.BackgroundTransparency = 1; label.Font = Enum.Font.GothamMedium; label.TextSize = 12
+
+local sliderFrame = Instance.new("Frame", Main)
+sliderFrame.Size = UDim2.new(0.8, 0, 0, 4); sliderFrame.Position = pos + UDim2.new(0.05, 0, 0, 18)
+sliderFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+
+local btn = Instance.new("TextButton", sliderFrame); btn.Size = UDim2.new(0, 14, 0, 14); btn.AnchorPoint = Vector2.new(0.5, 0.5)
+btn.Position = UDim2.new((currentVal - min) / (max - min), 0, 0.5, 0); btn.Text = ""; btn.BackgroundColor3 = Color3.fromRGB(0, 255, 150); Instance.new("UICorner", btn)
+
+local dragging = false
+btn.MouseButton1Down:Connect(function() dragging = true end)
+
+-- Chỉ lưu cấu hình khi người chơi thả tay chuột/ngón tay (Tối ưu hóa tránh ghi đĩa liên tục)
+UserInputService.InputEnded:Connect(function(i) 
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then 
+        if dragging then
+            dragging = false 
+            SaveSettings()
+        end
+    end 
+end)
+
+RunService.RenderStepped:Connect(function()
+    if dragging then
+        local rel = math.clamp((UserInputService:GetMouseLocation().X - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1)
+        btn.Position = UDim2.new(rel, 0, 0.5, 0); local val = math.floor(min + (rel * (max - min)))
+        label.Text = name .. ": " .. val; Config[prop] = val
+    end
+end)
+
+
+end
+
+CreateSlider("Khoảng cách", "F", UDim2.new(0.05, 0, 0.03, 0), -20, 20, 5)
+CreateSlider("Lệch Ngang", "R", UDim2.new(0.05, 0, 0.10, 0), -15, 15, 0)
+CreateSlider("Cao/Thấp", "H", UDim2.new(0.05, 0, 0.17, 0), -15, 15, 0)
+CreateSlider("Tốc độ bám", "S", UDim2.new(0.05, 0, 0.24, 0), 1, 100, 100)
+CreateSlider("Phạm vi tự động (AR)", "AR", UDim2.new(0.05, 0, 0.31, 0), 10, 500, 150)
+
+-- DANH SÁCH PLAYER (HỖ TRỢ CLICK BLACKLIST)
+local Scroll = Instance.new("ScrollingFrame", Main)
+Scroll.Size = UDim2.new(0.9, 0, 0.35, 0); Scroll.Position = UDim2.new(0.05, 0, 0.39, 0)
+Scroll.BackgroundColor3 = Color3.fromRGB(10, 10, 15); Scroll.ScrollBarThickness = 5
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+local ListLayout = Instance.new("UIListLayout", Scroll)
+ListLayout.Padding = UDim.new(0, 5)
+ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+Scroll.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+local function RefreshList()
+for _, v in pairs(Scroll:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
+for _, p in pairs(Players:GetPlayers()) do
+if p ~= lp then
+local isBlacklisted = Blacklist[p.UserId] == true
+
+        local item = Instance.new("Frame", Scroll)
+        item.Size = UDim2.new(1, -10, 0, 50)
+        item.BackgroundTransparency = 1
+        
+        -- Nút chọn người chơi chính
+        local b = Instance.new("TextButton", item)
+        b.Size = UDim2.new(0.75, -5, 1, 0)
+        b.Text = ""
+        b.BackgroundColor3 = (targetPlayer == p) and Color3.fromRGB(0, 150, 120) or Color3.fromRGB(35, 35, 45)
+        Instance.new("UICorner", b)
+        
+        local img = Instance.new("ImageLabel", b)
+        img.Size = UDim2.new(0, 40, 0, 40)
+        img.Position = UDim2.new(0, 5, 0, 5)
+        img.Image = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+        Instance.new("UICorner", img).CornerRadius = UDim.new(1, 0)
+        
+        local info = Instance.new("TextLabel", b)
+        info.Size = UDim2.new(1, -55, 1, 0)
+        info.Position = UDim2.new(0, 50, 0, 0)
+        info.BackgroundTransparency = 1
+        info.TextXAlignment = Enum.TextXAlignment.Left
+        info.Font = Enum.Font.GothamMedium
+        info.RichText = true
+        
+        -- Nếu trong danh sách đen thì tên hiển thị màu đỏ rực
+        local tagColor = isBlacklisted and "#FF3333" or "#00FFCC"
+        info.Text = "<b>" .. p.DisplayName .. "</b>\n<font color='" .. tagColor .. "'>@" .. p.Name .. "</font>"
+        info.TextColor3 = isBlacklisted and Color3.fromRGB(255, 100, 100) or Color3.new(1, 1, 1)
+        
+        b.MouseButton1Click:Connect(function()
+            if not Blacklist[p.UserId] then
+                StopMyAnims()
+                targetPlayer = p
+                RefreshList()
+            end
+        end)
+
+        -- Nút Blacklist nằm bên phải mỗi dòng
+        local blBtn = Instance.new("TextButton", item)
+        blBtn.Size = UDim2.new(0.25, 0, 1, 0)
+        blBtn.Position = UDim2.new(0.75, 5, 0, 0)
+        blBtn.Text = isBlacklisted and "UNBAN" or "BLACK"
+        blBtn.BackgroundColor3 = isBlacklisted and Color3.fromRGB(200, 50, 50) or Color3.fromRGB(45, 45, 55)
+        blBtn.TextColor3 = Color3.new(1, 1, 1)
+        blBtn.Font = Enum.Font.GothamBold
+        blBtn.TextSize = 10
+        Instance.new("UICorner", blBtn)
+        
+        blBtn.MouseButton1Click:Connect(function()
+            Blacklist[p.UserId] = not Blacklist[p.UserId]
+            -- Lưu cấu hình Blacklist ngay khi bấm thay đổi
+            SaveSettings()
+            
+            -- Nếu đang bám mà đưa vào danh sách đen thì hủy bám ngay lập tức
+            if Blacklist[p.UserId] and targetPlayer == p then
+                targetPlayer = nil
+                StopMyAnims()
+            end
+            RefreshList()
+        end)
+    end
+end
+
+
+end
+RefreshList(); Players.PlayerAdded:Connect(RefreshList); Players.PlayerRemoving:Connect(RefreshList)
+
+local FaceBtn = Instance.new("TextButton", Main); FaceBtn.Size = UDim2.new(0.9, 0, 0, 35); FaceBtn.Position = UDim2.new(0.05, 0, 0.77, 0)
+FaceBtn.Text = "CHẾ ĐỘ: ĐỐI DIỆN MẶT"; FaceBtn.BackgroundColor3 = Color3.fromRGB(80, 0, 180); FaceBtn.TextColor3 = Color3.new(1, 1, 1); FaceBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", FaceBtn)
+FaceBtn.MouseButton1Click:Connect(function() faceEachOther = not faceEachOther FaceBtn.Text = faceEachOther and "CHẾ ĐỘ: ĐỐI DIỆN MẶT" or "CHẾ ĐỘ: CÙNG HƯỚNG" end)
+
+local StatusBtn = Instance.new("TextButton", Main); StatusBtn.Size = UDim2.new(0.9, 0, 0, 50); StatusBtn.Position = UDim2.new(0.05, 0, 0.88, 0)
+StatusBtn.Text = "STATUS: OFF [E]"; StatusBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0); StatusBtn.TextColor3 = Color3.new(1, 1, 1); StatusBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", StatusBtn)
+
+local function ToggleActive()
+active = not active
+StatusBtn.Text = active and "STATUS: ON [E]" or "STATUS: OFF [E]"
+StatusBtn.BackgroundColor3 = active and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(200, 0, 0)
+if not active then
+StopMyAnims()
+end
+end
+StatusBtn.MouseButton1Click:Connect(ToggleActive)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+if gameProcessed then return end
+if input.KeyCode == Enum.KeyCode.E then ToggleActive() end
+end)
+
+-- =============================================
+-- LOGIC KIỂM TRA MẤT MÁU (CHUYỂN MỤC TIÊU SANG KẺ ĐÁNH)
+-- =============================================
+local lastHealth = 100
+local function SetupDamageListener(char)
+local hum = char:WaitForChild("Humanoid", 10)
+if hum then
+lastHealth = hum.Health
+hum.HealthChanged:Connect(function(health)
+if active and health < lastHealth then
+local attacker = nil
+-- 1. Ưu tiên tìm "creator" tag từ vũ khí chuẩn của Roblox
+local creator = hum:FindFirstChild("creator")
+if creator and creator.Value and creator.Value:IsA("Player") then
+attacker = creator.Value
+else
+-- 2. Nếu không có creator tag, dò tìm người chơi không có trong Blacklist đứng gần bạn nhất (trong cự ly 15 studs)
+local minDist = 15
+for _, p in pairs(Players:GetPlayers()) do
+if p ~= lp and not Blacklist[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+local dist = (p.Character.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
+if dist < minDist then
+minDist = dist
+attacker = p
+end
+end
+end
+end
+
+            -- Khóa mục tiêu sang kẻ tấn công
+            if attacker and attacker ~= lp and not Blacklist[attacker.UserId] then
+                targetPlayer = attacker
+                RefreshList()
+            end
+        end
+        lastHealth = health
+    end)
+end
+
+
+end
+if lp.Character then SetupDamageListener(lp.Character) end
+lp.CharacterAdded:Connect(SetupDamageListener)
+
+-- =============================================
+-- LOGIC ĐỨNG THẲNG TRÊN MẶT ĐẤT & TỰ ĐỘNG BÁM
+-- =============================================
+RunService.Stepped:Connect(function()
+local myChar = lp.Character
+local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+
+-- AN TOÀN TRẢ LẠI GÓC XOAY CHO NHÂN VẬT KHI KHÔNG HOẠT ĐỘNG
+if not active then 
+    if myHum and not myHum.AutoRotate then
+        myHum.AutoRotate = true
+    end
+    return 
+end
+
+-- TỰ ĐỘNG TÌM NGƯỜI CHƠI GẦN NHẤT KHI CHƯA CÓ MỤC TIÊU HOẶC MỤC TIÊU BỊ CHẾT (HEALTH <= 0)
+local targetHum = targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+local isTargetDead = not targetPlayer or not targetPlayer.Character or not targetHum or targetHum.Health <= 0
+
+if isTargetDead and myHrp then
+    local closestPlayer = nil
+    local minDist = Config.AR -- Lấy giới hạn từ Slider "Phạm vi tự động"
+    
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= lp and not Blacklist[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local pHum = p.Character:FindFirstChildOfClass("Humanoid")
+            if pHum and pHum.Health > 0 then
+                local dist = (p.Character.HumanoidRootPart.Position - myHrp.Position).Magnitude
+                if dist < minDist then
+                    minDist = dist
+                    closestPlayer = p
+                end
+            end
+        end
+    end
+    
+    if closestPlayer then
+        targetPlayer = closestPlayer
+        RefreshList()
+    else
+        targetPlayer = nil -- Không tìm thấy ai gần, tạm hủy bám để đợi
+    end
+end
+
+-- AN TOÀN TRẢ LẠI GÓC XOAY CHO NHÂN VẬT KHI KHÔNG CÓ AI ĐỂ BÁM THEO
+if not targetPlayer or not targetPlayer.Character then 
+    if myHum and not myHum.AutoRotate then
+        myHum.AutoRotate = true
+    end
+    return 
+end
+
+local tChar = targetPlayer.Character
+local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
+local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
+
+if myHrp and tHrp and myHum and tHum then
+    myHum.AutoRotate = false -- Khóa tự động xoay khi đang thực hiện mô phỏng bám sát
+    if myHum:GetState() ~= tHum:GetState() then myHum:ChangeState(tHum:GetState()) end
+
+    -- 1. Xử lý hướng xoay phẳng (Chống lật lộn nhào)
+    local rawLook = tHrp.CFrame.LookVector
+    local flatLook = Vector3.new(rawLook.X, 0, rawLook.Z).Unit
+    if flatLook.Magnitude == 0 or tostring(flatLook.X) == "nan" then 
+        flatLook = Vector3.new(0, 0, -1)
+    end
+
+    -- 2. Tính toán vị trí XZ mục tiêu (chưa tính chiều cao Y)
+    local uprightTargetCF = CFrame.lookAt(tHrp.Position, tHrp.Position + flatLook)
+    local goalCF = uprightTargetCF * CFrame.new(Config.R, 0, -Config.F)
+    
+    -- 3. RAYCAST ĐỂ TÌM MẶT ĐẤT THỰC TẾ (Chống lún người bên dưới sàn)
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {myChar, tChar} -- Tránh quét trúng bản thân và mục tiêu
+    
+    -- Bắn tia từ trên cao xuống dưới vị trí đích để tìm sàn nhà
+    local rayOrigin = Vector3.new(goalCF.Position.X, tHrp.Position.Y + 15, goalCF.Position.Z)
+    local rayDirection = Vector3.new(0, -40, 0)
+    local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+    
+    local finalY = tHrp.Position.Y -- Mặc định lấy theo chiều cao người kia nếu không quét trúng đất
+    if raycastResult then
+        -- Tính chiều cao đứng chuẩn dựa trên cấu trúc Rig nhân vật
+        local hipHeight = (myHum.RigType == Enum.HumanoidRigType.R6) and 3 or (myHum.HipHeight + 1.95)
+        finalY = raycastResult.Position.Y + hipHeight
+    end
+    
+    -- 4. Áp dụng chiều cao sàn đã được tính toán kết hợp với Slider "Cao/Thấp (H)"
+    local finalPosition = Vector3.new(goalCF.Position.X, finalY + Config.H, goalCF.Position.Z)
+    local finalCFrame = CFrame.new(finalPosition) * (goalCF - goalCF.Position)
+    
+    if faceEachOther then finalCFrame = finalCFrame * CFrame.Angles(0, math.pi, 0) end
+    
+    -- Đồng bộ vị trí mượt màng
+    myHrp.CFrame = myHrp.CFrame:Lerp(finalCFrame, Config.S/100)
+
+    -- Kiểm tra chuyển đổi Animation động
+    local tTracks = tHum:GetPlayingAnimationTracks()
+    local myTracks = myHum:GetPlayingAnimationTracks()
+    for _, mt in pairs(myTracks) do
+        local exists = false
+        for _, tt in pairs(tTracks) do if tt.Animation.AnimationId == mt.Animation.AnimationId then exists = true break end end
+        if not exists then mt:Stop(0) end
+    end
+    for _, tt in pairs(tTracks) do
+        local isPlay = false
+        for _, mt in pairs(myTracks) do
+            if mt.Animation.AnimationId == tt.Animation.AnimationId then
+                isPlay = true; mt.TimePosition = tt.TimePosition; mt:AdjustSpeed(tt.Speed) break
+            end
+        end
+        if not isPlay then myHum:LoadAnimation(tt.Animation):Play(0) end
+    end
+end
+if myHrp then myHrp.Velocity = Vector3.zero end
+if myChar then
+    for _, p in pairs(myChar:GetChildren()) do if p:IsA("BasePart") then p.CanCollide = false end end
+end
+
+
+end)
