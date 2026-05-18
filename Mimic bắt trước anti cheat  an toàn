@@ -1,0 +1,116 @@
+--// MIRROR MIMIC V48 (STEALTH FOLLOWER - ANTI-BAN + NATURAL SPEED)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local lp = Players.LocalPlayer
+
+-- Cấu hình
+local active = false
+local faceEachOther = true 
+local targetPlayer = nil
+local Config = {F = 5, R = 0, H = 0, S = 16} -- Mặc định là 16 (Tốc độ chuẩn Roblox)
+
+-- Hàm dừng hành động
+local function StopAnims()
+    local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+    if hum then 
+        for _, v in pairs(hum:GetPlayingAnimationTracks()) do v:Stop(0) end 
+        hum:Move(Vector3.new(0,0,0))
+    end
+end
+
+-- =============================================
+-- GIAO DIỆN GUI (FIX KÉO XUỐNG + ẢNH PLAYER)
+-- =============================================
+local pGui = lp:WaitForChild("PlayerGui")
+if pGui:FindFirstChild("MimicV48") then pGui:FindFirstChild("MimicV48"):Destroy() end
+local ScreenGui = Instance.new("ScreenGui", pGui); ScreenGui.Name = "MimicV48"; ScreenGui.ResetOnSpawn = false
+local Main = Instance.new("Frame", ScreenGui); Main.Size = UDim2.new(0, 320, 0, 580); Main.Position = UDim2.new(0.5, -160, 0.5, -290); Main.BackgroundColor3 = Color3.fromRGB(15, 15, 20); Main.Active = true; Main.Draggable = true
+Instance.new("UICorner", Main); local Stroke = Instance.new("UIStroke", Main); Stroke.Color = Color3.fromRGB(0, 255, 200); Stroke.Thickness = 2
+
+local ToggleBtn = Instance.new("TextButton", ScreenGui); ToggleBtn.Size = UDim2.new(0, 45, 0, 45); ToggleBtn.Position = UDim2.new(0, 10, 0.5, -22); ToggleBtn.Text = "MENU"; ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 200); ToggleBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
+ToggleBtn.MouseButton1Click:Connect(function() Main.Visible = not Main.Visible end)
+
+local function CreateSlider(name, prop, pos, min, max, default)
+    local label = Instance.new("TextLabel", Main); label.Size = UDim2.new(0.9, 0, 0, 20); label.Position = pos; label.Text = name .. ": " .. default; label.TextColor3 = Color3.new(1, 1, 1); label.BackgroundTransparency = 1; label.Font = Enum.Font.GothamMedium
+    local sliderFrame = Instance.new("Frame", Main); sliderFrame.Size = UDim2.new(0.8, 0, 0, 4); sliderFrame.Position = pos + UDim2.new(0.05, 0, 0.05, 5); sliderFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    local btn = Instance.new("TextButton", sliderFrame); btn.Size = UDim2.new(0, 16, 0, 16); btn.AnchorPoint = Vector2.new(0.5, 0.5); btn.Position = UDim2.new((default - min) / (max - min), 0, 0.5, 0); btn.Text = ""; btn.BackgroundColor3 = Color3.fromRGB(0, 255, 150); Instance.new("UICorner", btn)
+    local dragging = false
+    btn.MouseButton1Down:Connect(function() dragging = true end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+    RunService.RenderStepped:Connect(function() if dragging then local rel = math.clamp((UserInputService:GetMouseLocation().X - sliderFrame.AbsolutePosition.X) / sliderFrame.AbsoluteSize.X, 0, 1); btn.Position = UDim2.new(rel, 0, 0.5, 0); local val = math.floor(min + (rel * (max - min))); label.Text = name .. ": " .. val; Config[prop] = val end end)
+end
+
+CreateSlider("Khoảng cách", "F", UDim2.new(0.05, 0, 0.06, 0), -20, 20, 5)
+CreateSlider("Ngang", "R", UDim2.new(0.05, 0, 0.14, 0), -15, 15, 0)
+CreateSlider("Cao/Thấp", "H", UDim2.new(0.05, 0, 0.22, 0), -15, 15, 0)
+CreateSlider("Tốc độ an toàn", "S", UDim2.new(0.05, 0, 0.30, 0), 10, 40, 16) -- Giới hạn tối đa 40 để tránh ban
+
+local Scroll = Instance.new("ScrollingFrame", Main); Scroll.Size = UDim2.new(0.9, 0, 0.35, 0); Scroll.Position = UDim2.new(0.05, 0, 0.4, 0); Scroll.BackgroundColor3 = Color3.fromRGB(10, 10, 15); Scroll.ScrollBarThickness = 5; Scroll.CanvasSize = UDim2.new(0,0,0,0)
+local ListLayout = Instance.new("UIListLayout", Scroll); ListLayout.Padding = UDim.new(0, 5); ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() Scroll.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 10) end)
+
+local function RefreshList()
+    for _, v in pairs(Scroll:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= lp then
+            local item = Instance.new("Frame", Scroll); item.Size = UDim2.new(1, -10, 0, 50); item.BackgroundTransparency = 1
+            local b = Instance.new("TextButton", item); b.Size = UDim2.new(1, 0, 1, 0); b.Text = ""; b.BackgroundColor3 = (targetPlayer == p) and Color3.fromRGB(0, 150, 120) or Color3.fromRGB(35, 35, 45); Instance.new("UICorner", b)
+            local img = Instance.new("ImageLabel", item); img.Size = UDim2.new(0, 40, 0, 40); img.Position = UDim2.new(0, 5, 0, 5); img.Image = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48); Instance.new("UICorner", img).CornerRadius = UDim.new(1, 0)
+            local info = Instance.new("TextLabel", item); info.Size = UDim2.new(1, -60, 1, 0); info.Position = UDim2.new(0, 55, 0, 0); info.Text = "<b>" .. p.DisplayName .. "</b>\n<font color='#00FFCC'>@" .. p.Name .. "</font>"; info.RichText = true; info.TextColor3 = Color3.new(1,1,1); info.BackgroundTransparency = 1; info.TextXAlignment = Enum.TextXAlignment.Left; info.Font = Enum.Font.GothamBold
+            b.MouseButton1Click:Connect(function() StopAnims(); targetPlayer = p; RefreshList() end)
+        end
+    end
+end
+RefreshList(); Players.PlayerAdded:Connect(RefreshList); Players.PlayerRemoving:Connect(RefreshList)
+
+local FaceBtn = Instance.new("TextButton", Main); FaceBtn.Size = UDim2.new(0.9, 0, 0, 35); FaceBtn.Position = UDim2.new(0.05, 0, 0.77, 0); FaceBtn.Text = "CHẾ ĐỘ: ĐỐI DIỆN MẶT"; FaceBtn.BackgroundColor3 = Color3.fromRGB(80, 0, 180); FaceBtn.TextColor3 = Color3.new(1, 1, 1); FaceBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", FaceBtn)
+FaceBtn.MouseButton1Click:Connect(function() faceEachOther = not faceEachOther; FaceBtn.Text = faceEachOther and "CHẾ ĐỘ: ĐỐI DIỆN MẶT" or "CHẾ ĐỘ: CÙNG HƯỚNG" end)
+
+local StatusBtn = Instance.new("TextButton", Main); StatusBtn.Size = UDim2.new(0.9, 0, 0, 50); StatusBtn.Position = UDim2.new(0.05, 0, 0.88, 0); StatusBtn.Text = "STATUS: OFF"; StatusBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0); StatusBtn.TextColor3 = Color3.new(1, 1, 1); StatusBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", StatusBtn)
+StatusBtn.MouseButton1Click:Connect(function() active = not active; StatusBtn.Text = active and "STATUS: ON" or "STATUS: OFF"; StatusBtn.BackgroundColor3 = active and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(200, 0, 0) if not active then StopAnims() end end)
+
+-- =============================================
+-- LOGIC DI CHUYỂN TỰ NHIÊN (FIXED SPEED BAN)
+-- =============================================
+RunService.Heartbeat:Connect(function()
+    if not active or not targetPlayer or not targetPlayer.Character then return end
+    local myChar = lp.Character; local tChar = targetPlayer.Character
+    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
+    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
+
+    if myHrp and tHrp and myHum and tHum then
+        -- 1. GIỚI HẠN TỐC ĐỘ AN TOÀN (Không để nhảy lên quá cao)
+        myHum.WalkSpeed = math.min(Config.S, 40) 
+        
+        local goalCF = tHrp.CFrame * CFrame.new(Config.R, Config.H, -Config.F)
+        if faceEachOther then goalCF = goalCF * CFrame.Angles(0, math.pi, 0) end
+        
+        -- 2. KIỂM TRA KHOẢNG CÁCH (Nếu quá xa thì không TP, chỉ đi bộ)
+        local dist = (myHrp.Position - goalCF.Position).Magnitude
+        
+        if dist > 0.5 then
+            myHum:MoveTo(goalCF.Position) -- Đi bộ tự nhiên
+        end
+        
+        -- 3. CHỈ LERP NHẸ KHI ĐÃ ĐẾN GẦN (Để dính tư thế nằm/nghiêng)
+        if dist < 3 then
+            myHrp.CFrame = myHrp.CFrame:Lerp(goalCF, 0.15)
+        end
+
+        -- Animation Sync
+        local tTracks = tHum:GetPlayingAnimationTracks()
+        local myTracks = myHum:GetPlayingAnimationTracks()
+        for _, mt in pairs(myTracks) do
+            local exists = false
+            for _, tt in pairs(tTracks) do if tt.Animation.AnimationId == mt.Animation.AnimationId then exists = true break end end
+            if not exists then mt:Stop(0) end 
+        end
+        for _, tt in pairs(tTracks) do
+            local isPlay = false
+            for _, mt in pairs(myTracks) do if mt.Animation.AnimationId == tt.Animation.AnimationId then isPlay = true; mt.TimePosition = tt.TimePosition; mt:AdjustSpeed(tt.Speed) break end end
+            if not isPlay then myHum:LoadAnimation(tt.Animation):Play(0.1) end
+        end
+    end
+end)
