@@ -10,7 +10,7 @@ local active = false
 local faceEachOther = true
 local targetPlayer = nil
 local Blacklist = {} -- Danh sách đen lưu UserId
-local Config = {F = 5, R = 0, H = 0, S = 100, AR = 150, KB = 15}
+local Config = {F = 5, R = 0, H = 0, S = 100, AR = 150, KB = 15, DD = 10}
 
 local FILE_NAME = "mirror_mimic_config.json"
 local lastDamageTime = 0 -- Lưu thời gian bị nhận sát thương gần nhất
@@ -72,7 +72,7 @@ if pGui:FindFirstChild("MimicV46") then pGui:FindFirstChild("MimicV46"):Destroy(
 local ScreenGui = Instance.new("ScreenGui", pGui); ScreenGui.Name = "MimicV46"; ScreenGui.ResetOnSpawn = false
 
 local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 320, 0, 660); Main.Position = UDim2.new(0.5, -160, 0.5, -330)
+Main.Size = UDim2.new(0, 320, 0, 720); Main.Position = UDim2.new(0.5, -160, 0.5, -360)
 Main.BackgroundColor3 = Color3.fromRGB(15, 15, 20); Main.Active = true; Main.Draggable = true
 Instance.new("UICorner", Main); local Stroke = Instance.new("UIStroke", Main)
 Stroke.Color = Color3.fromRGB(0, 255, 200); Stroke.Thickness = 2
@@ -131,10 +131,11 @@ CreateSlider("Cao/Thấp", "H", UDim2.new(0.05, 0, 0.14, 0), -15, 15, 0)
 CreateSlider("Tốc độ bám", "S", UDim2.new(0.05, 0, 0.20, 0), 1, 100, 100)
 CreateSlider("Phạm vi tự động (AR)", "AR", UDim2.new(0.05, 0, 0.26, 0), 10, 500, 150)
 CreateSlider("Độ đẩy lùi khi bị đánh (KB)", "KB", UDim2.new(0.05, 0, 0.32, 0), 0, 50, 15)
+CreateSlider("Khoảng cách né (DD)", "DD", UDim2.new(0.05, 0, 0.38, 0), 0, 30, 10)
 
 -- DANH SÁCH PLAYER (HỖ TRỢ CLICK BLACKLIST)
 local Scroll = Instance.new("ScrollingFrame", Main)
-Scroll.Size = UDim2.new(0.9, 0, 0.35, 0); Scroll.Position = UDim2.new(0.05, 0, 0.39, 0)
+Scroll.Size = UDim2.new(0.9, 0, 0.32, 0); Scroll.Position = UDim2.new(0.05, 0, 0.44, 0)
 Scroll.BackgroundColor3 = Color3.fromRGB(10, 10, 15); Scroll.ScrollBarThickness = 5
 Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 
@@ -229,7 +230,7 @@ RefreshList() -- Cập nhật đồng bộ "tích xanh" chính xác khi mục ti
 end
 end
 
-local FaceBtn = Instance.new("TextButton", Main); FaceBtn.Size = UDim2.new(0.9, 0, 0, 35); FaceBtn.Position = UDim2.new(0.05, 0, 0.77, 0)
+local FaceBtn = Instance.new("TextButton", Main); FaceBtn.Size = UDim2.new(0.9, 0, 0, 35); FaceBtn.Position = UDim2.new(0.05, 0, 0.79, 0)
 FaceBtn.Text = "CHẾ ĐỘ: ĐỐI DIỆN MẶT"; FaceBtn.BackgroundColor3 = Color3.fromRGB(80, 0, 180); FaceBtn.TextColor3 = Color3.new(1, 1, 1); FaceBtn.Font = Enum.Font.GothamBold; Instance.new("UICorner", FaceBtn)
 FaceBtn.MouseButton1Click:Connect(function() faceEachOther = not faceEachOther FaceBtn.Text = faceEachOther and "CHẾ ĐỘ: ĐỐI DIỆN MẶT" or "CHẾ ĐỘ: CÙNG HƯỚNG" end)
 
@@ -390,7 +391,7 @@ if myHrp and tHrp and myHum and tHum then
     local uprightTargetCF = CFrame.lookAt(tHrp.Position, tHrp.Position + flatLook)
     local goalCF = uprightTargetCF * CFrame.new(Config.R, 0, -Config.F)
     
-    -- [Cơ Chế Đẩy Lùi Mới]: Tính toán khoảng cách đẩy lùi dựa trên sát thương nhận vào
+    -- [Cơ Chế Đẩy Lùi Khi Bị Sát Thương]: Tính toán khoảng cách đẩy lùi
     local timeSinceDamage = os.clock() - lastDamageTime
     if timeSinceDamage < 1.5 then
         local progress = timeSinceDamage / 1.5
@@ -406,6 +407,55 @@ if myHrp and tHrp and myHum and tHum then
         -- Tịnh tiến vị trí đích ra xa đối phương
         goalCF = goalCF + (pushDir * pushDist)
     end
+
+    -- [Cơ Chế Né Tránh Chủ Động (Active Evasion)]: Quét chuyển động & hoạt ảnh của những người xung quanh
+    local dodgeOffset = Vector3.new(0, 0, 0)
+    local dodgeDist = Config.DD or 10
+    if dodgeDist > 0 then
+        for _, p in pairs(Players:GetPlayers()) do
+            -- Chỉ kiểm tra người chơi khác và những người không có trong Blacklist
+            if p ~= lp and not Blacklist[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local oHrp = p.Character.HumanoidRootPart
+                local oHum = p.Character:FindFirstChildOfClass("Humanoid")
+                
+                -- Tính toán khoảng cách từ người chơi đó đến vị trí đích (vùng bám của bạn)
+                local distToGoal = (oHrp.Position - goalCF.Position).Magnitude
+                if distToGoal < dodgeDist then
+                    -- Kiểm tra xem người đó có đang "chuyển động" hoặc "kích hoạt chiêu thức (Animation)" không
+                    local isThreat = false
+                    
+                    -- Nếu họ đang chạy hoặc lao tới nhanh (Vận tốc lớn)
+                    if oHrp.AssemblyLinearVelocity.Magnitude > 3 then
+                        isThreat = true
+                    -- Hoặc nếu họ đang chạy Animation (thường là tung skill)
+                    elseif oHum then
+                        local tracks = oHum:GetPlayingAnimationTracks()
+                        if #tracks > 0 then
+                            for _, track in ipairs(tracks) do
+                                if track.IsPlaying and track.Speed > 0 then
+                                    isThreat = true
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    
+                    -- Nếu là mối đe dọa hoặc đơn giản là họ đã tiến quá sát vùng an toàn (dưới 70% khoảng cách né)
+                    if isThreat or distToGoal < (dodgeDist * 0.7) then
+                        local pushDir = (goalCF.Position - oHrp.Position).Unit
+                        if pushDir.Magnitude == 0 or tostring(pushDir.X) == "nan" then
+                            pushDir = -flatLook -- Dự phòng lướt lùi về sau
+                        end
+                        -- Tạo lực đẩy lướt mượt mà ra xa mối đe dọa đó
+                        local overlapForce = (dodgeDist - distToGoal)
+                        dodgeOffset = dodgeOffset + (pushDir * overlapForce)
+                    end
+                end
+            end
+        end
+    end
+    -- Áp dụng độ lệch né tránh vào vị trí đích
+    goalCF = goalCF + dodgeOffset
     
     -- 3. RAYCAST ĐỂ TÌM MẶT ĐẤT THỰC TẾ (Chống lún người bên dưới sàn)
     local raycastParams = RaycastParams.new()
@@ -438,7 +488,7 @@ if myHrp and tHrp and myHum and tHum then
     
     if faceEachOther then finalCFrame = finalCFrame * CFrame.Angles(0, math.pi, 0) end
     
-    -- Đồng bộ vị trí mượt mà
+    -- Đồng bộ vị trí mượt mờ
     myHrp.CFrame = myHrp.CFrame:Lerp(finalCFrame, Config.S/100)
 end
 if myHrp then 
