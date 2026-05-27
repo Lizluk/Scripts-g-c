@@ -1,0 +1,73 @@
+--// DINO MINI-GAME AUTO WASD SOLVER (v4 - PERFECT MOVEMENT)
+local Players = game:GetService("Players")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+
+local client = Players.LocalPlayer
+local autoMinigame = true 
+
+-- Bảng chuyển đổi từ Chữ văn bản sang Phím bấm hệ thống
+local KEY_MAP = {
+    ["W"] = Enum.KeyCode.W,
+    ["A"] = Enum.KeyCode.A,
+    ["S"] = Enum.KeyCode.S,
+    ["D"] = Enum.KeyCode.D
+}
+
+-- Hàm gửi tín hiệu bấm phím và tự động xả phím đó ngay lập tức
+local function pressKeySafely(keyCode)
+    -- 1. Nhấn phím mini-game xuống
+    VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+    task.wait(0.03) -- Giữ phím 30ms để game nhận diện
+    
+    -- 2. Nhả chính xác phím đó ra ngay sau khi bấm xong
+    VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+end
+
+-- Vòng lặp quét UI của mini-game
+RunService.Heartbeat:Connect(function()
+    if not autoMinigame then return end
+    
+    local pGui = client:FindFirstChild("PlayerGui")
+    if not pGui then return end
+    
+    -- Quét toàn bộ các TextLabel hoặc TextButton trong PlayerGui
+    for _, gui in pairs(pGui:GetDescendants()) do
+        if gui:IsA("TextLabel") or gui:IsA("TextButton") then
+            -- Kiểm tra UI hiển thị hợp lệ trên màn hình
+            if gui.Visible and gui.TextBounds.X > 0 and gui.Parent then
+                
+                -- Lọc văn bản và viết hoa
+                local text = string.upper(string.gsub(gui.Text, "%s+", ""))
+                
+                -- CHỈ KHI NÀO TÌM THẤY CHỮ W, A, S, D CỦA MINI-GAME THÌ MỚI BẤM
+                if KEY_MAP[text] then
+                    local targetKey = KEY_MAP[text]
+                    
+                    -- Chạy luồng bấm và nhả phím biệt lập, không ảnh hưởng phím bấm của bạn
+                    task.spawn(function()
+                        pressKeySafely(targetKey)
+                    end)
+                    
+                    task.wait(0.08) -- Giãn cách nhịp quét để không bị spam trùng nút
+                    break
+                end
+            end
+        end
+    end
+end)
+
+-- Thông báo kích hoạt
+local function sendNotify()
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "DINO ASSISTANT",
+        Text = "AUTO WASD (v4): ĐÃ SỬA LỖI KHÓA CHÂN! MỜI TEST 🦖✔",
+        Duration = 3
+    })
+end
+
+sendNotify()
+client.CharacterAdded:Connect(function()
+    task.wait(1)
+    sendNotify()
+end)
