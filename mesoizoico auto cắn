@@ -1,0 +1,114 @@
+--[[ 
+    DINO AUTO-NECK BITE & LOCK (SIAMO & CRETO) - KEYBIND VERSION
+    - Phím R: Bật/Tắt chế độ tự động khóa mục tiêu và cắn cổ.
+    - Trạng thái mặc định khi chạy script: TẮT (Tránh cắn bậy bạ).
+]]
+local Players = game:GetService("Players")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService") -- Thêm dịch vụ lắng nghe phím bấm
+
+local client = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local autoBiteActive = false -- ĐỔI THÀNH FALSE: Mặc định tắt để an toàn, ấn R để bật
+local BITE_DISTANCE = 12 
+local BITE_COOLDOWN = 0.5 
+
+local lastBiteTime = 0
+local toggleKey = Enum.KeyCode.R -- Cấu hình phím R để bật/tắt
+
+-- Danh sách các tên Part đại diện cho "Cổ"
+local NECK_NAMES = {"Neck", "Neck1", "LowerNeck", "UpperNeck", "Throat", "NeckJoint"}
+
+-- Hàm tìm phần cổ của con khủng long gần nhất trong Workspace
+local function getClosestDinoNeck(myHrp)
+    local closestNeck = nil
+    local shortestDistance = BITE_DISTANCE
+
+    for _, obj in pairs(workspace:GetChildren()) do
+        if obj:IsA("Model") and obj ~= client.Character and obj:FindFirstChild("Creature") then
+            local targetHrp = obj:FindFirstChild("HumanoidRootPart")
+            
+            if targetHrp then
+                local distance = (myHrp.Position - targetHrp.Position).Magnitude
+                if distance < shortestDistance then
+                    
+                    local neckPart = nil
+                    for _, name in pairs(NECK_NAMES) do
+                        local found = obj:FindFirstChild(name, true)
+                        if found and found:IsA("BasePart") then
+                            neckPart = found
+                            break
+                        end
+                    end
+                    
+                    if not neckPart then
+                        neckPart = obj:FindFirstChild("Head") or obj:FindFirstChild("UpperTorso")
+                    end
+                    
+                    if neckPart then
+                        shortestDistance = distance
+                        closestNeck = neckPart
+                    end
+                end
+            end
+        end
+    end
+    return closestNeck
+end
+
+-- Vòng lặp kiểm tra và tự động cắn bằng chuột phải
+RunService.Heartbeat:Connect(function()
+    if not autoBiteActive then return end -- Nếu đang tắt thì dừng không làm gì cả
+    
+    local char = client.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char and char:FindFirstChild("Creature")
+    
+    if not hrp or not humanoid or humanoid.Health <= 0 then return end
+    
+    if os.clock() - lastBiteTime < BITE_COOLDOWN then return end
+    
+    local targetNeck = getClosestDinoNeck(hrp)
+    
+    if targetNeck then
+        lastBiteTime = os.clock()
+        
+        -- 1. XOAY CAMERA VÀ NHÂN VẬT THẲNG VÀO CỔ ĐỐI THỦ
+        local neckPos = targetNeck.Position
+        hrp.CFrame = CFrame.lookAt(Vector3.new(hrp.Position.X, neckPos.Y, hrp.Position.Z), Vector3.new(neckPos.X, neckPos.Y, neckPos.Z))
+        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, neckPos)
+        
+        -- 2. TỰ ĐỘNG KHỞI ĐỘNG CÚ CẮN (CHUỘT PHẢI)
+        task.spawn(function()
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 1, true, game, 1) -- Chuột phải nhấn xuống
+            task.wait(0.05)
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 1, false, game, 1) -- Chuột phải thả ra
+        end)
+    end
+end)
+
+-- LẮNG NGHE SỰ KIỆN BẤM PHÍM R ĐỂ BẬT/TẮT TỰ ĐỘNG CẮN
+UIS.InputBegan:Connect(function(input, chat)
+    if chat then return end -- Không kích hoạt nếu đang gõ khung chat
+    
+    if input.KeyCode == toggleKey then
+        autoBiteActive = not autoBiteActive -- Đảo trạng thái bật/tắt
+        
+        -- Hiển thị thông báo trạng thái hiện tại lên góc màn hình
+        local statusText = autoBiteActive and "ĐÃ BẬT (ON) 🦖⚔️" or "ĐÃ TẮT (OFF) 💤"
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "AUTO BITE STATUS",
+            Text = "Chế độ tự động cắn cổ: " .. statusText,
+            Duration = 2
+        })
+    end
+end)
+
+-- Thông báo khi nạp script thành công lần đầu
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "DINO ASSISTANT",
+    Text = "Ấn phím R để Bật/Tắt Auto Cắn Cổ! 🦖🦴",
+    Duration = 3
+})
