@@ -1,0 +1,198 @@
+local offset = 8 -- CHỈNH SỬA: Đã đổi thành dưới mặt đất 5 block
+local Player = game.Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local invisible = false
+local grips = {}
+local heldTool
+local gripChanged
+local handle
+local weld
+local localFloor
+local interactionHitbox -- Khối tương tác đẩy ngược lên mặt đất
+local loopConnection = nil
+local fixedY = 0
+
+function setDisplayDistance(distance)
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player.Character and player.Character:FindFirstChildWhichIsA("Humanoid") then
+            player.Character:FindFirstChildWhichIsA("Humanoid").NameDisplayDistance = distance
+            player.Character:FindFirstChildWhichIsA("Humanoid").HealthDisplayDistance = distance
+        end
+    end
+end
+
+local function toggleInvisibility()
+    local Character = Player.Character
+    if not Character or not Character:FindFirstChild("HumanoidRootPart") or not Character:FindFirstChildOfClass("Humanoid") then return end
+    
+    local hrp = Character.HumanoidRootPart
+    local humanoid = Character:FindFirstChildOfClass("Humanoid")
+
+    if not invisible then
+        invisible = true
+        
+        if handle then handle:Destroy() end
+        if weld then weld:Destroy() end
+        if localFloor then localFloor:Destroy() end
+        if interactionHitbox then interactionHitbox:Destroy() end
+        if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+        
+        -- Tính toán cao độ cố định dưới lòng đất (Trừ đi 5 block từ vị trí hiện tại)
+        fixedY = hrp.Position.Y - offset
+        
+        -- 1. Tạo khối định vị Camera ngay tại mặt đất gốc
+        handle = Instance.new("Part", workspace)
+        handle.Name = "Handle"
+        handle.Transparency = 1
+        handle.CanCollide = false
+        handle.Size = Vector3.new(2, 1, 1)
+        
+        weld = Instance.new("Weld", handle)
+        weld.Part0 = handle
+        weld.Part1 = hrp
+        weld.C0 = CFrame.new(0, -offset - 1.5, 0) -- Đã đảo công thức để giữ camera trên mặt đất
+        
+        setDisplayDistance(100)
+        workspace.CurrentCamera.CameraSubject = handle
+        
+        -- 2. Tạo sàn bảo vệ chống chìm sâu dưới lòng đất
+        localFloor = Instance.new("Part")
+        localFloor.Name = "LocalAntiSinkFloor"
+        localFloor.Size = Vector3.new(25, 1, 25)
+        localFloor.Transparency = 1
+        localFloor.Anchored = true
+        localFloor.CanCollide = true
+        localFloor.Parent = workspace
+        
+        -- 3. TẠO HITBOX ĐẨY NGƯỢC LÊN MẶT ĐẤT (Để chém người và nhặt đồ)
+        interactionHitbox = Instance.new("Part")
+        interactionHitbox.Name = "InteractionHitbox_FE"
+        interactionHitbox.Size = Vector3.new(4, 6, 4)
+        interactionHitbox.Transparency = 0.8 -- Độ mờ của khối cam tương tác (Muốn ẩn hẳn thì chỉnh thành 1)
+        interactionHitbox.BrickColor = BrickColor.new("Neon orange")
+        interactionHitbox.CanCollide = false
+        interactionHitbox.Massless = true
+        interactionHitbox.Parent = Character
+        
+        local hitboxWeld = Instance.new("Weld", interactionHitbox)
+        hitboxWeld.Part0 = hrp
+        hitboxWeld.Part1 = interactionHitbox
+        -- Đổi thành dấu cộng để đưa Hitbox từ dưới đất trồi ngược lên lại mặt đất
+        hitboxWeld.C0 = CFrame.new(0, offset, 0)
+        
+        -- Đưa nhân vật lặn xuống lòng đất 5 block
+        hrp.CFrame = CFrame.new(hrp.Position.X, fixedY, hrp.Position.Z) * CFrame.Angles(0, math.rad(hrp.Orientation.Y), 0)
+        
+        -- 4. Vòng lặp đồng bộ vật lý dưới lòng đất
+        loopConnection = RunService.PreRender:Connect(function()
+            if not Character.Parent or not hrp.Parent or not localFloor then
+                if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+                return
+            end
+            -- Khóa cứng sàn đỡ dưới chân bạn 3 block dưới lòng đất
+            localFloor.CFrame = CFrame.new(hrp.Position.X, fixedY - 3, hrp.Position.Z)
+            hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+        end)
+        
+        for _, child in pairs(Player.Backpack:GetChildren()) do
+            if child:IsA("Tool") then
+                grips[child] = child.Grip
+            end
+        end
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Invisible FE",
+            Text = "Đã LẶN XUỐNG ĐẤT 5 BLOCK (Đã đồng bộ tầm đánh)",
+            Duration = 2
+        })
+        
+    else
+        invisible = false
+        if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+        if handle then handle:Destroy() end
+        if weld then weld:Destroy() end
+        if localFloor then localFloor:Destroy() end
+        if interactionHitbox then interactionHitbox:Destroy() end
+        
+        for _, child in pairs(Character:GetChildren()) do
+            if child:IsA("Tool") then
+                child.Parent = Player.Backpack
+            end
+        end
+        
+        for tool, grip in pairs(grips) do
+            if tool then
+                tool.Grip = grip
+            end
+        end
+        
+        heldTool = nil
+        setDisplayDistance(100)
+        
+        workspace.CurrentCamera.CameraSubject = humanoid
+        -- Đưa nhân vật trồi lên lại mặt đất cũ
+        hrp.CFrame = hrp.CFrame * CFrame.new(0, offset, 0)
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Invisible FE",
+            Text = "Đã TRỒI LÊN mặt đất bình thường.",
+            Duration = 2
+        })
+    end
+end
+
+-- Lắng nghe phím V để kích hoạt
+UIS.InputBegan:Connect(function(input, chat)
+    if chat then return end
+    if input.KeyCode == Enum.KeyCode.V then
+        toggleInvisibility()
+    end
+end)
+
+-- Bẻ hướng tầm với của Tool từ dưới lòng đất hướng ngược lên trên để nhặt đồ
+Player.Character.ChildAdded:Connect(function(child)
+    wait()
+    if invisible and child:IsA("Tool") and child ~= heldTool then
+        heldTool = child
+        local lastGrip = heldTool.Grip
+        if not grips[heldTool] then
+            grips[heldTool] = lastGrip
+        end
+        
+        for _, track in pairs(Player.Character.Humanoid:GetPlayingAnimationTracks()) do
+            track:Stop()
+        end
+        if Player.Character:FindFirstChild("Animate") then
+            Player.Character.Animate.Disabled = true
+        end
+        
+        -- Đã sửa: Đảo ngược trục CFrame từ dấu cộng sang trừ để đưa Tool từ lòng đất trồi lên tầm tay nhặt đồ
+        heldTool.Grip = heldTool.Grip * (CFrame.new(0, -offset - 1.5, 1.5) * CFrame.Angles(math.rad(-90), 0, 0))
+        heldTool.Parent = Player.Backpack
+        heldTool.Parent = Player.Character
+        
+        if gripChanged then gripChanged:Disconnect() end
+        gripChanged = heldTool:GetPropertyChangedSignal("Grip"):Connect(function()
+            wait()
+            if not invisible then
+                gripChanged:Disconnect()
+            end
+            if heldTool.Grip ~= lastGrip then
+                lastGrip = heldTool.Grip * (CFrame.new(0, -offset - 1.5, 1.5) * CFrame.Angles(math.rad(-90), 0, 0))
+                heldTool.Grip = lastGrip
+                heldTool.Parent = Player.Backpack
+                heldTool.Parent = Player.Character
+            end
+        end)
+    end
+end)
+
+Player.CharacterAdded:Connect(function()
+    invisible = false
+    if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+    if gripChanged then gripChanged:Disconnect() gripChanged = nil end
+    if localFloor then localFloor:Destroy() end
+    if interactionHitbox then interactionHitbox:Destroy() end
+end)
