@@ -1,0 +1,179 @@
+local offset = 1100
+local Player = game.Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local invisible = false
+local grips = {}
+local heldTool
+local gripChanged
+local handle
+local weld
+local localFloor
+local loopConnection = nil
+local fixedY = 0 -- Biến lưu trữ độ cao cố định để chống trôi
+
+function setDisplayDistance(distance)
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player.Character and player.Character:FindFirstChildWhichIsA("Humanoid") then
+            player.Character:FindFirstChildWhichIsA("Humanoid").NameDisplayDistance = distance
+            player.Character:FindFirstChildWhichIsA("Humanoid").HealthDisplayDistance = distance
+        end
+    end
+end
+
+local function toggleInvisibility()
+    local Character = Player.Character
+    if not Character or not Character:FindFirstChild("HumanoidRootPart") or not Character:FindFirstChildOfClass("Humanoid") then return end
+    
+    local hrp = Character.HumanoidRootPart
+    local humanoid = Character:FindFirstChildOfClass("Humanoid")
+
+    if not invisible then
+        invisible = true
+        
+        if handle then handle:Destroy() end
+        if weld then weld:Destroy() end
+        if localFloor then localFloor:Destroy() end
+        if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+        
+        -- 1. Tính toán và lưu lại cao độ cố định trên trời
+        -- Lấy vị trí Y hiện tại của bạn cộng thẳng với offset, khóa cứng giá trị này lại
+        fixedY = hrp.Position.Y + offset
+        
+        -- 2. Tạo khối neo giữ camera và tương tác dưới mặt đất
+        handle = Instance.new("Part", workspace)
+        handle.Name = "Handle"
+        handle.Transparency = 1
+        handle.CanCollide = false
+        handle.Size = Vector3.new(2, 1, 1)
+        
+        weld = Instance.new("Weld", handle)
+        weld.Part0 = handle
+        weld.Part1 = hrp
+        weld.C0 = CFrame.new(0, offset - 1.5, 0)
+        
+        setDisplayDistance(offset + 100)
+        workspace.CurrentCamera.CameraSubject = handle
+        
+        -- 3. Tạo tấm ván cục bộ đỡ chân
+        localFloor = Instance.new("Part")
+        localFloor.Name = "LocalAntiSinkFloor"
+        localFloor.Size = Vector3.new(20, 1, 20)
+        localFloor.Transparency = 1 -- Vô hình
+        localFloor.Anchored = true
+        localFloor.CanCollide = true
+        localFloor.Parent = workspace
+        
+        -- Đẩy nhân vật lên trời đúng vị trí cao độ đã tính toán
+        hrp.CFrame = CFrame.new(hrp.Position.X, fixedY, hrp.Position.Z) * CFrame.Angles(0, math.rad(hrp.Orientation.Y), 0)
+        
+        -- 4. FIX LỖI TRÔI TRỜI: Khóa cứng trục Y của sàn
+        loopConnection = RunService.PreRender:Connect(function()
+            if not Character.Parent or not hrp.Parent or not localFloor then
+                if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+                return
+            end
+            -- S sàn luôn ở độ cao cố định (fixedY - 3), chỉ chạy theo X và Z của bạn
+            localFloor.CFrame = CFrame.new(hrp.Position.X, fixedY - 3, hrp.Position.Z)
+            
+            -- Ép vận tốc Y về 0 liên tục để triệt tiêu mọi lực đẩy vật lý ngoài ý muốn
+            hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+        end)
+        
+        for _, child in pairs(Player.Backpack:GetChildren()) do
+            if child:IsA("Tool") then
+                grips[child] = child.Grip
+            end
+        end
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Invisible FE",
+            Text = "Đã BẬT (Đã khóa cao độ, chống trôi trần)",
+            Duration = 2
+        })
+        
+    else
+        invisible = false
+        if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+        if handle then handle:Destroy() end
+        if weld then weld:Destroy() end
+        if localFloor then localFloor:Destroy() end
+        
+        for _, child in pairs(Character:GetChildren()) do
+            if child:IsA("Tool") then
+                child.Parent = Player.Backpack
+            end
+        end
+        
+        for tool, grip in pairs(grips) do
+            if tool then
+                tool.Grip = grip
+            end
+        end
+        
+        heldTool = nil
+        setDisplayDistance(100)
+        
+        workspace.CurrentCamera.CameraSubject = humanoid
+        hrp.CFrame = hrp.CFrame * CFrame.new(0, -offset, 0)
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Invisible FE",
+            Text = "Đã TẮT tàng hình.",
+            Duration = 2
+        })
+    end
+end
+
+-- Lắng nghe phím V
+UIS.InputBegan:Connect(function(input, chat)
+    if chat then return end
+    if input.KeyCode == Enum.KeyCode.B then
+        toggleInvisibility()
+    end
+end)
+
+-- Bẻ góc Tool kéo từ trên trời xuống đất để tương tác nhặt đồ
+Player.Character.ChildAdded:Connect(function(child)
+    wait()
+    if invisible and child:IsA("Tool") and child ~= heldTool then
+        heldTool = child
+        local lastGrip = heldTool.Grip
+        if not grips[heldTool] then
+            grips[heldTool] = lastGrip
+        end
+        
+        for _, track in pairs(Player.Character.Humanoid:GetPlayingAnimationTracks()) do
+            track:Stop()
+        end
+        if Player.Character:FindFirstChild("Animate") then
+            Player.Character.Animate.Disabled = true
+        end
+        
+        heldTool.Grip = heldTool.Grip * (CFrame.new(0, offset - 1.5, 1.5) * CFrame.Angles(math.rad(-90), 0, 0))
+        heldTool.Parent = Player.Backpack
+        heldTool.Parent = Player.Character
+        
+        if gripChanged then gripChanged:Disconnect() end
+        gripChanged = heldTool:GetPropertyChangedSignal("Grip"):Connect(function()
+            wait()
+            if not invisible then
+                gripChanged:Disconnect()
+            end
+            if heldTool.Grip ~= lastGrip then
+                lastGrip = heldTool.Grip * (CFrame.new(0, offset - 1.5, 1.5) * CFrame.Angles(math.rad(-90), 0, 0))
+                heldTool.Grip = lastGrip
+                heldTool.Parent = Player.Backpack
+                heldTool.Parent = Player.Character
+            end
+        end)
+    end
+end)
+
+Player.CharacterAdded:Connect(function()
+    invisible = false
+    if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+    if gripChanged then gripChanged:Disconnect() gripChanged = nil end
+    if localFloor then localFloor:Destroy() end
+end)
