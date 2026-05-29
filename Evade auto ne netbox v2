@@ -1,0 +1,131 @@
+--// SELF-REPULSOR: AUTO-EVADE NEXTBOTS (ANTI-MAP-CLIP & FALL)
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local client = Players.LocalPlayer
+
+local active = false
+local ZONE_RADIUS = 13 -- Bán kính vòng bảo vệ
+local BEHIND_DISTANCE = 9 -- Khoảng cách muốn xuất hiện phía sau Nextbot
+local TARGET_PATH = workspace:WaitForChild("Game"):WaitForChild("Players")
+
+local isCooldown = false
+local COOLDOWN_TIME = 0.5
+
+-- Vòng quét Hitbox tàng hình
+local detectionZone = Instance.new("Part")
+detectionZone.Shape = Enum.PartType.Ball
+detectionZone.Size = Vector3.new(ZONE_RADIUS * 2, ZONE_RADIUS * 2, ZONE_RADIUS * 2)
+detectionZone.Transparency = 1
+detectionZone.CanCollide = false
+detectionZone.Anchored = true
+detectionZone.Parent = workspace
+
+local overlapParams = OverlapParams.new()
+overlapParams.FilterType = Enum.RaycastFilterType.Include
+overlapParams.FilterDescendantsInstances = {TARGET_PATH}
+
+-- Bật/Tắt bằng phím X
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.X then
+        active = not active
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "AUTO EVADE v6",
+            Text = active and "CHỐNG BAY KHỎI MAP: BẬT 🗺️" or "CHỐNG BAY KHỎI MAP: TẮT 🔴",
+            Duration = 2
+        })
+    end
+end)
+
+-- Hàm kiểm tra xem vị trí chuẩn bị dịch chuyển tới có an toàn không
+local function checkSafePosition(startPos, targetPos)
+    -- 1. Kiểm tra xem có bị đập mặt vào tường/vách núi không
+    local rayParam = RaycastParams.new()
+    rayParam.FilterType = Enum.RaycastFilterType.Exclude
+    rayParam.FilterDescendantsInstances = {client.Character, TARGET_PATH} -- Bỏ qua bản thân và bot
+    
+    local wallCheck = workspace:Raycast(startPos, targetPos - startPos, rayParam)
+    if wallCheck then
+        -- Nếu vướng tường, trả về vị trí va chạm lùi lại 2 studs cho an toàn
+        return wallCheck.Position + (wallCheck.Normal * 2)
+    end
+    
+    -- 2. Kiểm tra dưới chân vị trí mới có sàn nhà (đất) không, tránh rớt xuống vực
+    -- Bắn một tia từ trên trời (vị trí mới + 5 block) thẳng xuống dưới đất (30 block)
+    local floorCheck = workspace:Raycast(targetPos + Vector3.new(0, 5, 0), Vector3.new(0, -35, 0), rayParam)
+    if not floorCheck then
+        -- Nếu dưới chân là hư vô (vực thẳm), KHÔNG cho dịch chuyển ra sau nữa
+        return nil 
+    end
+    
+    -- Nếu tất cả đều ổn, giữ nguyên vị trí đất phẳng
+    return Vector3.new(targetPos.X, floorCheck.Position.Y + 3, targetPos.Z)
+end
+
+RunService.Heartbeat:Connect(function()
+    local char = client.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    
+    if not hrp or not humanoid or humanoid.Health <= 0 then 
+        detectionZone.CFrame = CFrame.new(0, -999, 0)
+        return 
+    end
+
+    detectionZone.CFrame = hrp.CFrame
+    if not active or isCooldown then return end
+
+    local partsInZone = workspace:GetPartsInPart(detectionZone, overlapParams)
+    
+    if #partsInZone > 0 then
+        for _, part in pairs(partsInZone) do
+            local botModel = part:FindFirstAncestorOfClass("Model") or part.Parent
+            
+            if botModel and botModel ~= char and botModel:IsDescendantOf(TARGET_PATH) and not Players:GetPlayerFromCharacter(botModel) then
+                local botRoot = botModel:FindFirstChild("HumanoidRootPart") or botModel:FindFirstChildWhichIsA("BasePart")
+                
+                if botRoot then
+                    local botLookDirection = botRoot.CFrame.LookVector
+                    
+                    -- Vị trí dự tính ban đầu (sau lưng bot)
+                    local rawTargetPos = botRoot.Position - (botLookDirection * BEHIND_DISTANCE)
+                    
+                    -- Chạy bộ lọc kiểm tra map an toàn
+                    local safePosition = checkSafePosition(botRoot.Position, rawTargetPos)
+                    
+                    -- Nếu vị trí sau lưng an toàn (có sàn, không xuyên tường)
+                    if safePosition then
+                        isCooldown = true
+                        
+                        local lookTarget = safePosition + botLookDirection
+                        hrp.CFrame = CFrame.lookAt(safePosition, Vector3.new(lookTarget.X, safePosition.Y, lookTarget.Z))
+                        
+                        local moveSpeed = humanoid.WalkSpeed > 0 and humanoid.WalkSpeed or 16
+                        hrp.Velocity = botLookDirection * (moveSpeed * 2.5)
+                        humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                        
+                        task.delay(COOLDOWN_TIME, function() isCooldown = false end)
+                        break
+                    else
+                        -- PHƯƠNG ÁN PHỤ: Nếu sau lưng là vực/tường, script sẽ ĐẨY BẠN SANG BÊN CẠNH hoặc DẠT RA XA để không bị chết
+                        isCooldown = true
+                        
+                        -- Tính hướng né sang ngang (RightVector) thay vì lùi sau
+                        local escapeDirection = botRoot.CFrame.RightVector
+                        local backupTarget = hrp.Position + (escapeDirection * 12)
+                        
+                        local secondaryCheck = checkSafePosition(hrp.Position, backupTarget)
+                        local finalPos = secondaryCheck or (hrp.Position + Vector3.new(0, 2, 0)) -- Đường cùng thì giữ nguyên vị trí nhảy lên nhẹ
+                        
+                        hrp.CFrame = CFrame.lookAt(finalPos, finalPos + escapeDirection)
+                        hrp.Velocity = escapeDirection * 50
+                        humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                        
+                        task.delay(COOLDOWN_TIME, function() isCooldown = false end)
+                        break
+                    end
+                end
+            end
+        end
+    end
+end)
