@@ -1,0 +1,236 @@
+--// DINO AUTO-BITE & LOCK (v7.2 - OPTIMIZED FOR YOUR GAME)
+local Players = game:GetService("Players")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
+local client = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local autoBiteActive = false
+local BITE_DISTANCE = 5 -- Tăng nhẹ khoảng cách để quét mượt hơn
+local BITE_COOLDOWN = 0.6
+local lastBiteTime = 0
+local toggleKey = Enum.KeyCode.U
+
+-- Bảng lưu trữ những người được tích chọn (Blacklist)
+local Blacklist = {}
+
+--======================================================================
+-- THIẾT KẾ GIAO DIỆN HỆ THỐNG (GUI MENU)
+--======================================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DinoBlacklistGui"
+ScreenGui.ResetOnSpawn = false
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = client:WaitForChild("PlayerGui") end
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 250, 0, 320)
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Visible = false
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+Title.Text = "🦖 DINO BLACKLIST (NÉ)"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.SourceSansBold
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = Title
+
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(1, -10, 1, -50)
+ScrollFrame.Position = UDim2.new(0, 5, 0, 45)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.ScrollBarThickness = 4
+ScrollFrame.Parent = MainFrame
+
+local ListLayout = Instance.new("UIListLayout")
+ListLayout.Padding = UDim.new(0, 5)
+ListLayout.Parent = ScrollFrame
+
+local function updatePlayerList()
+    for _, child in pairs(ScrollFrame:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    
+    local count = 0
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= client then
+            count = count + 1
+            
+            local ItemFrame = Instance.new("Frame")
+            ItemFrame.Size = UDim2.new(1, -5, 0, 35)
+            ItemFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+            ItemFrame.BorderSizePixel = 0
+            ItemFrame.Parent = ScrollFrame
+            
+            local ItemCorner = Instance.new("UICorner")
+            ItemCorner.CornerRadius = UDim.new(0, 5)
+            ItemCorner.Parent = ItemFrame
+            
+            local NameLabel = Instance.new("TextLabel")
+            NameLabel.Size = UDim2.new(0.7, 0, 1, 0)
+            NameLabel.Position = UDim2.new(0, 8, 0, 0)
+            NameLabel.BackgroundTransparency = 1
+            NameLabel.Text = player.DisplayName .. " (@" .. player.Name .. ")"
+            NameLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+            NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            NameLabel.TextSize = 12
+            NameLabel.Font = Enum.Font.SourceSans
+            NameLabel.Parent = ItemFrame
+            
+            local CheckBtn = Instance.new("TextButton")
+            CheckBtn.Size = UDim2.new(0, 55, 0, 23)
+            CheckBtn.Position = UDim2.new(0.75, 0, 0.15, 0)
+            CheckBtn.BorderSizePixel = 0
+            CheckBtn.Font = Enum.Font.SourceSansBold
+            CheckBtn.TextSize = 11
+            CheckBtn.Parent = ItemFrame
+            
+            local BtnCorner = Instance.new("UICorner")
+            BtnCorner.CornerRadius = UDim.new(0, 4)
+            BtnCorner.Parent = CheckBtn
+            
+            local function refreshButtonState()
+                if Blacklist[player.Name] then
+                    CheckBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+                    CheckBtn.Text = "ĐANG NÉ"
+                    CheckBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                else
+                    CheckBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+                    CheckBtn.Text = "SẼ CẮN"
+                    CheckBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                end
+            end
+            
+            refreshButtonState()
+            
+            CheckBtn.MouseButton1Click:Connect(function()
+                Blacklist[player.Name] = not Blacklist[player.Name]
+                refreshButtonState()
+            end)
+        end
+    end
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, count * 40)
+end
+
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
+
+--======================================================================
+-- LOGIC TÌM MỤC TIÊU & TỰ ĐỘNG CẮN (ĐÃ ĐỒNG BỘ THEO DATA GAME)
+--======================================================================
+local function getClosestDinoBody(myHrp)
+    local closestPart = nil
+    local shortestDistance = BITE_DISTANCE
+
+    -- Quét toàn bộ người chơi trong Server thay vì b b b quét Workspace thô sơ
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= client and player.Character then
+            local obj = player.Character
+            
+            -- Kiểm tra xem người chơi này có nằm trong danh sách Né (Blacklist) không
+            if Blacklist[player.Name] then continue end
+
+            local targetHrp = obj:FindFirstChild("HumanoidRootPart")
+            local humanoid = obj:FindFirstChildOfClass("Humanoid") -- Đã đổi từ Creature thành Humanoid theo game của bạn
+
+            if targetHrp and humanoid and humanoid.Health > 0 then
+                local distance = (myHrp.Position - targetHrp.Position).Magnitude
+                if distance < shortestDistance then
+                    
+                    -- Tìm bộ phận tối ưu nhất để cắn trong game của bạn (Chest hoặc FakeHead)
+                    local targetPart = obj:FindFirstChild("Chest") or obj:FindFirstChild("FakeHead") or obj:FindFirstChild("HumanoidRootPart")
+                    
+                    if targetPart and targetPart:IsA("BasePart") then
+                        shortestDistance = distance
+                        closestPart = targetPart
+                    end
+                end
+            end
+        end
+    end
+    return closestPart
+end
+
+-- Vòng lặp quét cắn liên tục (Chỉ chạy khi bật)
+RunService.Heartbeat:Connect(function()
+    if not autoBiteActive then return end
+    
+    local char = client.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid") -- Thay đổi từ "Creature" sang Humanoid gốc của game
+    
+    if not hrp or not humanoid or humanoid.Health <= 0 then return end
+    if os.clock() - lastBiteTime < BITE_COOLDOWN then return end
+    
+    local targetPart = getClosestDinoBody(hrp)
+    
+    if targetPart then
+        lastBiteTime = os.clock()
+        
+        local targetPos = targetPart.Position
+        -- Khóa góc nhìn nhân vật và Camera thẳng về phía mục tiêu
+        hrp.CFrame = CFrame.lookAt(Vector3.new(hrp.Position.X, targetPos.Y, hrp.Position.Z), Vector3.new(targetPos.X, targetPos.Y, targetPos.Z))
+        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
+        
+        task.spawn(function()
+            -- Tự động kích hoạt công cụ (Tool) nếu nhân vật đang cầm trên tay
+            local tool = char:FindFirstChildOfClass("Tool")
+            if tool then tool:Activate() end
+            
+            -- Thực hiện giả lập Click chuột trái để ra đòn cắn
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1) -- Nhấn chuột trái
+            task.wait(0.08)
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1) -- Thả chuột trái
+        end)
+    end
+end)
+
+--======================================================================
+-- LẮNG NGHE PHÍM K ĐỂ BẬT/TẮT AUTO + ẨN/HIỆN MENU GUI
+--======================================================================
+UIS.InputBegan:Connect(function(input, chat)
+    if chat then return end
+    
+    if input.KeyCode == toggleKey then
+        autoBiteActive = not autoBiteActive
+        MainFrame.Visible = autoBiteActive
+        
+        if autoBiteActive then
+            updatePlayerList()
+        end
+        
+        local statusText = autoBiteActive and "ĐÃ BẬT (ON) 🦖⚔️" or "ĐÃ TẮT (OFF) 💤"
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "AUTO BITE STATUS",
+            Text = "Trạng thái cắn Chuột Trái: " .. statusText,
+            Duration = 3
+        })
+    end
+end)
+
+-- Thông báo kích hoạt thành công lần đầu
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "DINO ASSISTANT v7.2",
+    Text = "Ấn phím K để Bật/Tắt Auto Cắn (Chuột Trái) & Mở Menu! 🦖",
+    Duration = 4
+})
