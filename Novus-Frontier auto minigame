@@ -1,0 +1,64 @@
+--// AUTO MINIGAME SOLVER (CHỈ BẤM KHI VÀO GIỮA)
+local Players = game:GetService("Players")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+
+local client = Players.LocalPlayer
+local PlayerGui = client:WaitForChild("PlayerGui")
+
+-- Bật/Tắt tính năng Auto Minigame
+local autoMinigame = true 
+
+-- Hàm giả lập click chuột trái cực nhanh
+local function automaticClick()
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+    task.wait(0.02)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+end
+
+-- Vòng lặp quét UI của Minigame
+RunService.Heartbeat:Connect(function()
+    if not autoMinigame then return end
+    
+    for _, gui in pairs(PlayerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled then
+            local minigameFrame = gui:FindFirstChild("Minigame", true) or gui:FindFirstChild("QTE", true) or gui:FindFirstChild("Bar", true)
+            
+            if minigameFrame and minigameFrame.Visible then
+                local targetZone = minigameFrame:FindFirstChild("Zone", true) or minigameFrame:FindFirstChild("Target", true) or minigameFrame:FindFirstChild("Yellow", true) or minigameFrame:FindFirstChild("Green", true)
+                local sliderBar = minigameFrame:FindFirstChild("Slider", true) or minigameFrame:FindFirstChild("Indicator", true) or minigameFrame:FindFirstChild("Pointer", true)
+                
+                if targetZone and sliderBar then
+                    -- Lấy tọa độ gốc bên trái và độ rộng của vùng màu xanh/vàng
+                    local zoneLeft = targetZone.AbsolutePosition.X
+                    local zoneWidth = targetZone.AbsoluteSize.X
+                    
+                    -- TÌM TỌA ĐỘ CHÍNH GIỮA (TÂM) CỦA VÙNG MÀU
+                    local zoneCenter = zoneLeft + (zoneWidth / 2)
+                    
+                    -- Lấy tọa độ tâm của thanh trượt đang chạy
+                    local sliderPos = sliderBar.AbsolutePosition.X + (sliderBar.AbsoluteSize.X / 2)
+                    
+                    -- ĐỊNH NGHĨA KHOẢNG AN TOÀN Ở GIỮA (Sai số cho phép)
+                    -- Độ rộng vùng càng nhỏ thì căn càng chính xác giữa. 10-15 pixel là khoảng hoàn hảo cho tâm.
+                    local safeMargin = 12 
+                    local perfectLeft = zoneCenter - safeMargin
+                    local perfectRight = zoneCenter + safeMargin
+                    
+                    -- CHỈ BẤM KHI THANH TRƯỢT ĐÃ ĐI VÀO ĐÚNG VÙNG GIỮA
+                    if sliderPos >= perfectLeft and sliderPos <= perfectRight then
+                        automaticClick()
+                        task.wait(0.5) -- Nghỉ 0.5 giây để tránh việc click liên tục khi thanh trượt chưa đi qua hết
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Thông báo hệ thống đã chạy
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "MINIGAME SOLVER",
+    Text = "Chế độ Auto Căn Giữa Minigame đã bật! 🎯",
+    Duration = 3
+})
