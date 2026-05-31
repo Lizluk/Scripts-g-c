@@ -1,0 +1,138 @@
+--// DINO ALL SAVES NUTRIENT LOCKER SYSTEM
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+local client = Players.LocalPlayer
+
+-- Cấu hình mặc định
+local targetA = 100
+local targetB = 100
+local targetC = 100
+local isLocking = false
+
+--======================================================================
+-- THIẾT KẾ GIAO DIỆN GUI (NHẬP SỐ & BẬT KHÓA)
+--======================================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "NutrientLockGui"
+ScreenGui.ResetOnSpawn = false
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = client:WaitForChild("PlayerGui") end
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 220, 0, 250)
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+Title.Text = "🧪 DINO NUTRIENT ALL-SAVES"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.SourceSansBold
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = Title
+
+-- Hàm tạo ô nhập dữ liệu
+local function createInput(name, placeholder, posY)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 80, 0, 30)
+    label.Position = UDim2.new(0, 15, 0, posY)
+    label.BackgroundTransparency = 1
+    label.Text = name .. ":"
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.TextSize = 14
+    label.Font = Enum.Font.SourceSansBold
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = MainFrame
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0, 100, 0, 30)
+    box.Position = UDim2.new(0, 105, 0, posY)
+    box.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    box.BorderSizePixel = 0
+    box.Text = placeholder
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.TextSize = 14
+    box.Font = Enum.Font.SourceSans
+    box.Parent = MainFrame
+    
+    local boxCorner = Instance.new("UICorner")
+    boxCorner.CornerRadius = UDim.new(0, 4)
+    boxCorner.Parent = box
+    
+    return box
+end
+
+local InputA = createInput("Nutrient A", "100", 55)
+local InputB = createInput("Nutrient B", "100", 100)
+local InputC = createInput("Nutrient C", "100", 145)
+
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(1, -30, 0, 35)
+ToggleBtn.Position = UDim2.new(0, 15, 0, 195)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ToggleBtn.Text = "CHƯA KHÓA (OFF)"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.TextSize = 14
+ToggleBtn.Parent = MainFrame
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 5)
+BtnCorner.Parent = ToggleBtn
+
+--======================================================================
+-- LOGIC QUÉT TOÀN BỘ DANH SÁCH SAVES ĐỂ KHÓA CHỈ SỐ
+--======================================================================
+ToggleBtn.MouseButton1Click:Connect(function()
+    isLocking = not isLocking
+    
+    if isLocking then
+        targetA = tonumber(InputA.Text) or 100
+        targetB = tonumber(InputB.Text) or 100
+        targetC = tonumber(InputC.Text) or 100
+        
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        ToggleBtn.Text = "ĐANG KHÓA TẤT CẢ (ON) 🔒"
+    else
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+        ToggleBtn.Text = "CHƯA KHÓA (OFF)"
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not isLocking then return end
+    
+    local dataFolder = client:FindFirstChild("PlayerData")
+    local savesFolder = dataFolder and dataFolder:FindFirstChild("Saves")
+    
+    if savesFolder then
+        -- Vòng lặp quét xuyên suốt qua từng Save con bên trong thư mục
+        for _, singleSave in pairs(savesFolder:GetChildren()) do
+            -- Kiểm tra xem Save này có chứa các thuộc tính Nutrient cần tìm hay không
+            if singleSave:GetAttribute("NutrientA") ~= nil then
+                singleSave:SetAttribute("NutrientA", targetA)
+            end
+            if singleSave:GetAttribute("NutrientB") ~= nil then
+                singleSave:SetAttribute("NutrientB", targetB)
+            end
+            if singleSave:GetAttribute("NutrientC") ~= nil then
+                singleSave:SetAttribute("NutrientC", targetC)
+            end
+        end
+    end
+end)
