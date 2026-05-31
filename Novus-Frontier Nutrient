@@ -1,0 +1,135 @@
+--// DINO NUTRIENT LOCK GUI SYSTEM
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+local client = Players.LocalPlayer
+
+-- Cấu hình giá trị mặc định khi chưa nhập
+local targetA = 100
+local targetB = 100
+local targetC = 100
+local isLocking = false
+
+--======================================================================
+-- THIẾT KẾ GIAO DIỆN GUI (NHẬP SỐ & BẬT KHÓA)
+--======================================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "NutrientLockGui"
+ScreenGui.ResetOnSpawn = false
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = client:WaitForChild("PlayerGui") end
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 220, 0, 250)
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+Title.Text = "🧪 NUTRIENT LOCKER"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.SourceSansBold
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = Title
+
+-- Hàm tạo ô nhập dữ liệu (TextBox) nhanh
+local function createInput(name, placeholder, posY)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 80, 0, 30)
+    label.Position = UDim2.new(0, 15, 0, posY)
+    label.BackgroundTransparency = 1
+    label.Text = name .. ":"
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.TextSize = 14
+    label.Font = Enum.Font.SourceSansBold
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = MainFrame
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0, 100, 0, 30)
+    box.Position = UDim2.new(0, 105, 0, posY)
+    box.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    box.BorderSizePixel = 0
+    box.Text = placeholder
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.TextSize = 14
+    box.Font = Enum.Font.SourceSans
+    box.Parent = MainFrame
+    
+    local boxCorner = Instance.new("UICorner")
+    boxCorner.CornerRadius = UDim.new(0, 4)
+    boxCorner.Parent = box
+    
+    return box
+end
+
+local InputA = createInput("Nutrient A", "100", 55)
+local InputB = createInput("Nutrient B", "100", 100)
+local InputC = createInput("Nutrient C", "100", 145)
+
+-- Nút bấm Kích hoạt / Hủy kích hoạt
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(1, -30, 0, 35)
+ToggleBtn.Position = UDim2.new(0, 15, 0, 195)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ToggleBtn.Text = "CHƯA KHÓA (OFF)"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.TextSize = 14
+ToggleBtn.Parent = MainFrame
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 5)
+BtnCorner.Parent = ToggleBtn
+
+--======================================================================
+-- LOGIC ĐỌC VÀ KHÓA CHẶT ATTRIBUTES THEO THỜI GIAN THỰC
+--======================================================================
+ToggleBtn.MouseButton1Click:Connect(function()
+    isLocking = not isLocking
+    
+    if isLocking then
+        -- Cập nhật số lượng người dùng điền vào ô (Nếu trống thì mặc định là 100)
+        targetA = tonumber(InputA.Text) or 100
+        targetB = tonumber(InputB.Text) or 100
+        targetC = tonumber(InputC.Text) or 100
+        
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        ToggleBtn.Text = "ĐANG KHÓA CHẶT (ON) 🔒"
+    else
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+        ToggleBtn.Text = "CHƯA KHÓA (OFF)"
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not isLocking then return end
+    
+    -- Trỏ trực tiếp vào Folder Saves thứ 4 theo Dex của bạn
+    local dataFolder = client:FindFirstChild("PlayerData")
+    local savesFolder = dataFolder and dataFolder:FindFirstChild("Saves")
+    
+    if savesFolder then
+        local targetSave = savesFolder:GetChildren()[4]
+        if targetSave then
+            -- Ép số liên tục, không cho tụt xuống
+            targetSave:SetAttribute("NutrientA", targetA)
+            targetSave:SetAttribute("NutrientB", targetB)
+            targetSave:SetAttribute("NutrientC", targetC)
+        end
+    end
+end)
