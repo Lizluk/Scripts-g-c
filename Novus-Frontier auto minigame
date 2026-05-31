@@ -1,64 +1,112 @@
---// AUTO MINIGAME SOLVER (CHỈ BẤM KHI VÀO GIỮA)
-local Players = game:GetService("Players")
-local VirtualInputManager = game:GetService("VirtualInputManager")
+--[[
+    AUTO QUICKTIME MINIGAME - Dino Survival
+    GUI: QuickTimeGUI > Main > Bar > CanvasGroup
+    
+    Cách hoạt động:
+    - Tìm đúng frame "Indicator" (kim trượt)
+    - Tìm các frame "Target" (vùng vàng + xanh)
+    - Bấm khi kim nằm trong bất kỳ vùng Target nào
+    
+    [P] = Bật/Tắt
+]]
+
+local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UIS        = game:GetService("UserInputService")
+local lp         = Players.LocalPlayer
+local PlayerGui  = lp:WaitForChild("PlayerGui")
 
-local client = Players.LocalPlayer
-local PlayerGui = client:WaitForChild("PlayerGui")
+local ENABLED  = true
+local COOLDOWN = 0.6   -- giây chờ sau click
+local cooling  = false
 
--- Bật/Tắt tính năng Auto Minigame
-local autoMinigame = true 
-
--- Hàm giả lập click chuột trái cực nhanh
-local function automaticClick()
-    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+-- ── Click tại tọa độ thực ──────────────────────────────────────
+local function clickAt(x, y)
+    if cooling then return end
+    cooling = true
+    pcall(mousemoveabs, x, y)
     task.wait(0.02)
-    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+    pcall(mouse1click)
+    print(string.format("[QTE] ✅ Click! X=%.0f Y=%.0f", x, y))
+    task.delay(COOLDOWN, function() cooling = false end)
 end
 
--- Vòng lặp quét UI của Minigame
+-- ── MAIN LOOP ──────────────────────────────────────────────────
 RunService.Heartbeat:Connect(function()
-    if not autoMinigame then return end
+    if not ENABLED or cooling then return end
+
+    -- Tìm đúng GUI tên "QuickTimeGUI"
+    local qteGui = PlayerGui:FindFirstChild("QuickTimeGUI")
+    if not qteGui or not qteGui.Enabled then return end
+
+    local main = qteGui:FindFirstChild("Main")
+    if not main or not main.Visible then return end
+
+    local bar = main:FindFirstChild("Bar")
+    if not bar or not bar.Visible then return end
+
+    local canvas = bar:FindFirstChild("CanvasGroup")
+    if not canvas then return end
+
+    -- Lấy Indicator (kim trượt) — chứa 2 mũi tên
+    local indicator = bar:FindFirstChild("Indicator")
+    if not indicator or not indicator.Visible then return end
+
+    -- Vị trí X hiện tại của kim (dùng arrow trên làm chuẩn)
+    local arrow = indicator:FindFirstChild("arrow_drop_down")
+        or indicator:FindFirstChildOfClass("ImageLabel")
+        or indicator:FindFirstChildOfClass("Frame")
     
-    for _, gui in pairs(PlayerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Enabled then
-            local minigameFrame = gui:FindFirstChild("Minigame", true) or gui:FindFirstChild("QTE", true) or gui:FindFirstChild("Bar", true)
-            
-            if minigameFrame and minigameFrame.Visible then
-                local targetZone = minigameFrame:FindFirstChild("Zone", true) or minigameFrame:FindFirstChild("Target", true) or minigameFrame:FindFirstChild("Yellow", true) or minigameFrame:FindFirstChild("Green", true)
-                local sliderBar = minigameFrame:FindFirstChild("Slider", true) or minigameFrame:FindFirstChild("Indicator", true) or minigameFrame:FindFirstChild("Pointer", true)
-                
-                if targetZone and sliderBar then
-                    -- Lấy tọa độ gốc bên trái và độ rộng của vùng màu xanh/vàng
-                    local zoneLeft = targetZone.AbsolutePosition.X
-                    local zoneWidth = targetZone.AbsoluteSize.X
-                    
-                    -- TÌM TỌA ĐỘ CHÍNH GIỮA (TÂM) CỦA VÙNG MÀU
-                    local zoneCenter = zoneLeft + (zoneWidth / 2)
-                    
-                    -- Lấy tọa độ tâm của thanh trượt đang chạy
-                    local sliderPos = sliderBar.AbsolutePosition.X + (sliderBar.AbsoluteSize.X / 2)
-                    
-                    -- ĐỊNH NGHĨA KHOẢNG AN TOÀN Ở GIỮA (Sai số cho phép)
-                    -- Độ rộng vùng càng nhỏ thì căn càng chính xác giữa. 10-15 pixel là khoảng hoàn hảo cho tâm.
-                    local safeMargin = 12 
-                    local perfectLeft = zoneCenter - safeMargin
-                    local perfectRight = zoneCenter + safeMargin
-                    
-                    -- CHỈ BẤM KHI THANH TRƯỢT ĐÃ ĐI VÀO ĐÚNG VÙNG GIỮA
-                    if sliderPos >= perfectLeft and sliderPos <= perfectRight then
-                        automaticClick()
-                        task.wait(0.5) -- Nghỉ 0.5 giây để tránh việc click liên tục khi thanh trượt chưa đi qua hết
-                    end
-                end
-            end
+    local ptrX
+    if arrow then
+        ptrX = arrow.AbsolutePosition.X + arrow.AbsoluteSize.X / 2
+    else
+        ptrX = indicator.AbsolutePosition.X + indicator.AbsoluteSize.X / 2
+    end
+
+    local ptrY = bar.AbsolutePosition.Y + bar.AbsoluteSize.Y / 2
+
+    -- Lấy tất cả frame "Target" trong CanvasGroup
+    for _, target in pairs(canvas:GetChildren()) do
+        if target.Name ~= "Target" then continue end
+        if not target.Visible then continue end
+
+        local tLeft  = target.AbsolutePosition.X
+        local tRight = tLeft + target.AbsoluteSize.X
+        local tCenterX = tLeft + target.AbsoluteSize.X / 2
+
+        -- Kim đang nằm trong vùng Target → BẤM!
+        if ptrX >= tLeft and ptrX <= tRight then
+            clickAt(tCenterX, ptrY)
+            return
         end
     end
 end)
 
--- Thông báo hệ thống đã chạy
-game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "MINIGAME SOLVER",
-    Text = "Chế độ Auto Căn Giữa Minigame đã bật! 🎯",
-    Duration = 3
-})
+-- ── PHÍM TẮT ───────────────────────────────────────────────────
+UIS.InputBegan:Connect(function(inp, gp)
+    if gp then return end
+    if inp.KeyCode == Enum.KeyCode.P then
+        ENABLED = not ENABLED
+        local msg = ENABLED and "✅ BẬT" or "❌ TẮT"
+        print("[QTE] " .. msg)
+        pcall(function()
+            game:GetService("StarterGui"):SetCore("SendNotification",
+                {Title = "Auto QTE", Text = msg, Duration = 2})
+        end)
+    end
+end)
+
+-- ── KHỞI ĐỘNG ──────────────────────────────────────────────────
+print("=========================================")
+print(" AUTO QUICKTIME - Dino Survival")
+print(" Chờ con báo vồ... tự động bấm!")
+print(" [P] = Bật / Tắt")
+print("=========================================")
+pcall(function()
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title    = "Auto QTE ✅ Đang chạy",
+        Text     = "Chờ con báo vồ... [P] để tắt/bật",
+        Duration = 4,
+    })
+end)
