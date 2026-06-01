@@ -1,4 +1,4 @@
-local key = Enum.KeyCode.H -- Phím bấm kích hoạt (Có thể đổi tùy ý)
+local key = Enum.KeyCode.F1 -- Phím bấm kích hoạt (Có thể đổi tùy ý)
 local player = game.Players.LocalPlayer
 local runService = game:GetService("RunService")
 local userInputService = game:GetService("UserInputService")
