@@ -1,0 +1,62 @@
+local key = Enum.KeyCode.L -- Phím bấm kích hoạt (Có thể đổi tùy ý)
+local player = game.Players.LocalPlayer
+local runService = game:GetService("RunService")
+local userInputService = game:GetService("UserInputService")
+
+local noclipConnection = nil
+
+-- Hàm thực hiện làm lag rớt map
+local function doFreeFall()
+    local character = player.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    
+    if hrp and humanoid and humanoid.Health > 0 then
+        -- Thông báo
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Hệ thống rơi tự do";
+            Duration = 1.5;
+            Text = "Đang thực hiện lag rớt sàn...";
+        })
+        
+        -- Bước 1: Ép trạng thái rơi để đánh lừa Server game
+        humanoid:ChangeState(Enum.HumanoidStateType.FallingDown)
+        
+        -- Bước 2: Đẩy nhẹ nhân vật xuống dưới sàn đất hiện tại để tránh kẹt sàn trên
+        hrp.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y - 15, hrp.Position.Z)
+        task.wait(0.05)
+        
+        -- Bước 3: Bật Noclip vĩnh viễn cho mạng này bằng Stepped (Ép tắt va chạm liên tục)
+        if nclipConnection then noclipConnection:Disconnect() end
+        noclipConnection = runService.Stepped:Connect(function()
+            if character and character:Parent() then
+                for _, part in ipairs(character:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            else
+                if noclipConnection then noclipConnection:Disconnect() end
+            end
+        end)
+        
+        -- Bước 4: Tăng tốc độ rơi tự do hướng xuống dưới đáy map (-1000)
+        hrp.Velocity = Vector3.new(0, -2000, 0)
+    end
+end
+
+-- Bộ lắng nghe phím bấm vĩnh viễn (Không bao giờ bị hủy khi chết)
+userInputService.InputBegan:Connect(function(input, chat)
+    if chat then return end
+    if input.KeyCode == key then
+        doFreeFall()
+    end
+end)
+
+-- TỰ ĐỘNG RESET: Mỗi khi bạn hồi sinh mạng mới, script tự động dọn dẹp để sẵn sàng cho lần bấm tiếp theo
+player.CharacterAdded:Connect(function()
+    if noclipConnection then 
+        noclipConnection:Disconnect() 
+        noclipConnection = nil
+    end
+end)
