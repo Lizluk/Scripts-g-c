@@ -1,15 +1,4 @@
---[[
-    AUTO QUICKTIME MINIGAME - Dino Survival
-    GUI: QuickTimeGUI > Main > Bar > CanvasGroup
-    
-    Cách hoạt động:
-    - Tìm đúng frame "Indicator" (kim trượt)
-    - Tìm các frame "Target" (vùng vàng + xanh)
-    - Bấm khi kim nằm trong bất kỳ vùng Target nào
-    
-    [P] = Bật/Tắt
-]]
-
+--// AUTO QUICKTIME MINIGAME - ANTI-DOUBLE CLICK & PERFECT YELLOW (v9.5)
 local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS        = game:GetService("UserInputService")
@@ -17,27 +6,34 @@ local lp         = Players.LocalPlayer
 local PlayerGui  = lp:WaitForChild("PlayerGui")
 
 local ENABLED  = true
-local COOLDOWN = 0.6   -- giây chờ sau click
-local cooling  = false
+local TARGET_YELLOW_COLOR = Color3.fromRGB(255, 245, 102)
 
--- ── Click tại tọa độ thực ──────────────────────────────────────
+-- Biến kiểm soát trạng thái QTE để chống click trùng
+local lastTargetObj = nil
+local hasClickedThisTurn = false
+
+-- ── SYSTEM CLICK SIÊU TỐC TỨC THỜI ──────────────────────────
 local function clickAt(x, y)
-    if cooling then return end
-    cooling = true
+    hasClickedThisTurn = true -- Khóa ngay lập tức sau khi click
+    
     pcall(mousemoveabs, x, y)
-    task.wait(0.02)
     pcall(mouse1click)
-    print(string.format("[QTE] ✅ Click! X=%.0f Y=%.0f", x, y))
-    task.delay(COOLDOWN, function() cooling = false end)
+    
+    print(string.format("[QTE] 🎯 HIT PERFECT! X=%.0f Y=%.0f (Đã khóa chống double-click)", x, y))
 end
 
--- ── MAIN LOOP ──────────────────────────────────────────────────
+-- ── MAIN LOOP QUÉT KHÔNG TRỄ ──────────────────────────────────
 RunService.Heartbeat:Connect(function()
-    if not ENABLED or cooling then return end
+    if not ENABLED then return end
 
-    -- Tìm đúng GUI tên "QuickTimeGUI"
+    -- Kiểm tra UI
     local qteGui = PlayerGui:FindFirstChild("QuickTimeGUI")
-    if not qteGui or not qteGui.Enabled then return end
+    if not qteGui or not qteGui.Enabled then 
+        -- Reset trạng thái khi tắt minigame
+        lastTargetObj = nil
+        hasClickedThisTurn = false
+        return 
+    end
 
     local main = qteGui:FindFirstChild("Main")
     if not main or not main.Visible then return end
@@ -48,14 +44,13 @@ RunService.Heartbeat:Connect(function()
     local canvas = bar:FindFirstChild("CanvasGroup")
     if not canvas then return end
 
-    -- Lấy Indicator (kim trượt) — chứa 2 mũi tên
     local indicator = bar:FindFirstChild("Indicator")
     if not indicator or not indicator.Visible then return end
 
-    -- Vị trí X hiện tại của kim (dùng arrow trên làm chuẩn)
-    local arrow = indicator:FindFirstChild("arrow_drop_down")
+    -- Xác định tọa độ kim trượt (ptrX)
+    local arrow = indicator:FindFirstChild("arrow_drop_down") 
+        or indicator:FindFirstChild("arrow_drop_down2")
         or indicator:FindFirstChildOfClass("ImageLabel")
-        or indicator:FindFirstChildOfClass("Frame")
     
     local ptrX
     if arrow then
@@ -66,47 +61,65 @@ RunService.Heartbeat:Connect(function()
 
     local ptrY = bar.AbsolutePosition.Y + bar.AbsoluteSize.Y / 2
 
-    -- Lấy tất cả frame "Target" trong CanvasGroup
+    -- Tìm vùng màu vàng
+    local yellowTarget = nil
     for _, target in pairs(canvas:GetChildren()) do
-        if target.Name ~= "Target" then continue end
-        if not target.Visible then continue end
+        if target.Name == "Target" and target.Visible and target.BackgroundColor3 == TARGET_YELLOW_COLOR then
+            yellowTarget = target
+            break
+        end
+    end
 
-        local tLeft  = target.AbsolutePosition.X
-        local tRight = tLeft + target.AbsoluteSize.X
-        local tCenterX = tLeft + target.AbsoluteSize.X / 2
+    -- Nếu không có vùng vàng nào hiển thị trên màn hình
+    if not yellowTarget then
+        lastTargetObj = nil
+        hasClickedThisTurn = false
+        return
+    end
 
-        -- Kim đang nằm trong vùng Target → BẤM!
+    -- KIỂM TRA ĐỔI LƯỢT QTE: Nếu xuất hiện thanh vàng mới (hoặc thanh cũ đổi vị trí/kích thước)
+    if yellowTarget ~= lastTargetObj then
+        lastTargetObj = yellowTarget
+        hasClickedThisTurn = false -- Mở khóa sẵn sàng cho lượt bấm mới
+    end
+
+    -- Nếu lượt này đã bấm trúng rồi thì bỏ qua không quét nữa (Chống hụt do Double Click)
+    if hasClickedThisTurn then return end
+
+    -- Tính toán tọa độ thanh vàng
+    local tLeft  = yellowTarget.AbsolutePosition.X
+    local tRight = tLeft + yellowTarget.AbsoluteSize.X
+    local tWidth = yellowTarget.AbsoluteSize.X
+    local tCenterX = tLeft + tWidth / 2
+
+    -- THUẬT TOÁN KÍCH HOẠT THEO KÍCH THƯỚC (Không dùng khoảng đệm lấn ra ngoài)
+    if tWidth <= 22 then
+        -- Khi thanh vàng siêu nhỏ (Dưới 22 pixel): Nhấp ngay khi kim vừa chạm rìa sát nút
         if ptrX >= tLeft and ptrX <= tRight then
             clickAt(tCenterX, ptrY)
-            return
+        end
+    else
+        -- Khi thanh vàng còn lớn: Chờ kim vào sâu trong lòng thanh vàng khoảng 10% rồi mới nhấp để an toàn nhất
+        local safeMargin = tWidth * 0.10
+        if ptrX >= (tLeft + safeMargin) and ptrX <= (tRight - safeMargin) then
+            clickAt(tCenterX, ptrY)
         end
     end
 end)
 
--- ── PHÍM TẮT ───────────────────────────────────────────────────
+-- ── PHÍM TẮT BẬT / TẮT [P] ───────────────────────────────────────
 UIS.InputBegan:Connect(function(inp, gp)
     if gp then return end
     if inp.KeyCode == Enum.KeyCode.P then
         ENABLED = not ENABLED
-        local msg = ENABLED and "✅ BẬT" or "❌ TẮT"
-        print("[QTE] " .. msg)
+        local msg = ENABLED and "✅ AUTO QTE v9.5: ON" or "❌ ĐÃ TẮT"
+        
         pcall(function()
-            game:GetService("StarterGui"):SetCore("SendNotification",
-                {Title = "Auto QTE", Text = msg, Duration = 2})
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "Auto QTE v9.5",
+                Text = msg,
+                Duration = 2
+            })
         end)
     end
-end)
-
--- ── KHỞI ĐỘNG ──────────────────────────────────────────────────
-print("=========================================")
-print(" AUTO QUICKTIME - Dino Survival")
-print(" Chờ con báo vồ... tự động bấm!")
-print(" [P] = Bật / Tắt")
-print("=========================================")
-pcall(function()
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title    = "Auto QTE ✅ Đang chạy",
-        Text     = "Chờ con báo vồ... [P] để tắt/bật",
-        Duration = 4,
-    })
 end)
