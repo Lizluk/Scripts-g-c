@@ -1,0 +1,289 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local LP = Players.LocalPlayer
+
+-- =============================================
+-- CONFIG
+-- =============================================
+local CFG = {
+    espEnabled   = true,
+    hpEnabled    = true,
+    boxColor     = Color3.fromRGB(255, 50, 50),
+    selfColor    = Color3.fromRGB(50, 200, 255),
+    hpHigh       = Color3.fromRGB(50, 220, 80),
+    hpMid        = Color3.fromRGB(248, 195, 55),
+    hpLow        = Color3.fromRGB(220, 50, 50),
+    maxDist      = 1000,
+}
+
+-- =============================================
+-- GUI TOGGLE
+-- =============================================
+local SG = Instance.new("ScreenGui")
+SG.Name = "ESP_HP"
+SG.ResetOnSpawn = false
+SG.IgnoreGuiInset = true
+SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+SG.DisplayOrder = 999
+SG.Parent = LP.PlayerGui
+
+local function mkCorner(p, r) local c=Instance.new("UICorner",p); c.CornerRadius=UDim.new(0,r or 6); return c end
+local function mkStroke(p, col, thick) local s=Instance.new("UIStroke",p); s.Color=col; s.Thickness=thick or 1; return s end
+
+-- Toggle Panel
+local Panel = Instance.new("Frame", SG)
+Panel.Size = UDim2.new(0, 160, 0, 90)
+Panel.Position = UDim2.new(0, 10, 0, 10)
+Panel.BackgroundColor3 = Color3.fromRGB(16, 18, 26)
+Panel.BorderSizePixel = 0; Panel.ZIndex = 500
+Panel.Active = true; Panel.Draggable = true
+mkCorner(Panel, 8)
+mkStroke(Panel, Color3.fromRGB(60, 80, 140), 1.5)
+
+local titleL = Instance.new("TextLabel", Panel)
+titleL.Size = UDim2.new(1, 0, 0, 26)
+titleL.BackgroundColor3 = Color3.fromRGB(12, 14, 22)
+titleL.BorderSizePixel = 0
+titleL.Text = "🎯 ESP & HP Bar"
+titleL.TextColor3 = Color3.fromRGB(212, 222, 242)
+titleL.TextSize = 12; titleL.Font = Enum.Font.GothamBold
+titleL.ZIndex = 501
+mkCorner(titleL, 8)
+
+local function mkToggleBtn(parent, text, yPos)
+    local row = Instance.new("Frame", parent)
+    row.Size = UDim2.new(1, -12, 0, 24)
+    row.Position = UDim2.new(0, 6, 0, yPos)
+    row.BackgroundTransparency = 1; row.ZIndex = 501
+
+    local lbl = Instance.new("TextLabel", row)
+    lbl.Size = UDim2.new(1, -50, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text; lbl.TextColor3 = Color3.fromRGB(180, 190, 210)
+    lbl.TextSize = 11; lbl.Font = Enum.Font.Gotham
+    lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.ZIndex = 502
+
+    local btn = Instance.new("TextButton", row)
+    btn.Size = UDim2.new(0, 44, 0, 20)
+    btn.Position = UDim2.new(1, -44, 0.5, -10)
+    btn.BackgroundColor3 = Color3.fromRGB(35, 120, 65)
+    btn.Text = "ON"; btn.TextColor3 = Color3.new(1,1,1)
+    btn.TextSize = 10; btn.Font = Enum.Font.GothamBold
+    btn.BorderSizePixel = 0; btn.ZIndex = 502
+    mkCorner(btn, 10)
+
+    return btn
+end
+
+local espBtn = mkToggleBtn(Panel, "ESP Box", 30)
+local hpBtn  = mkToggleBtn(Panel, "HP Bar", 58)
+
+espBtn.MouseButton1Click:Connect(function()
+    CFG.espEnabled = not CFG.espEnabled
+    espBtn.Text = CFG.espEnabled and "ON" or "OFF"
+    espBtn.BackgroundColor3 = CFG.espEnabled and Color3.fromRGB(35,120,65) or Color3.fromRGB(100,35,35)
+end)
+
+hpBtn.MouseButton1Click:Connect(function()
+    CFG.hpEnabled = not CFG.hpEnabled
+    hpBtn.Text = CFG.hpEnabled and "ON" or "OFF"
+    hpBtn.BackgroundColor3 = CFG.hpEnabled and Color3.fromRGB(35,120,65) or Color3.fromRGB(100,35,35)
+end)
+
+-- =============================================
+-- ESP STORAGE
+-- =============================================
+local espData = {} -- [player] = { highlight, billboardGui }
+
+local function getHPColor(pct)
+    if pct > 0.6 then return CFG.hpHigh
+    elseif pct > 0.3 then return CFG.hpMid
+    else return CFG.hpLow end
+end
+
+local function createESP(player)
+    if espData[player] then return end
+    local isSelf = (player == LP)
+    local color = isSelf and CFG.selfColor or CFG.boxColor
+
+    -- Highlight (ESP box)
+    local hl = Instance.new("Highlight")
+    hl.Name = "ESP_Highlight"
+    hl.FillTransparency = 0.85
+    hl.OutlineTransparency = 0
+    hl.FillColor = color
+    hl.OutlineColor = color
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+
+    -- BillboardGui (HP bar + text trên đầu)
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "ESP_Billboard"
+    bb.Size = UDim2.new(0, 120, 0, 50)
+    bb.StudsOffset = Vector3.new(0, 3.5, 0)
+    bb.AlwaysOnTop = true
+    bb.ResetOnSpawn = false
+    bb.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+    -- Tên player
+    local nameLbl = Instance.new("TextLabel", bb)
+    nameLbl.Name = "NameLbl"
+    nameLbl.Size = UDim2.new(1, 0, 0, 16)
+    nameLbl.Position = UDim2.new(0, 0, 0, 0)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Text = player.Name
+    nameLbl.TextColor3 = isSelf and CFG.selfColor or Color3.new(1,1,1)
+    nameLbl.TextSize = 12; nameLbl.Font = Enum.Font.GothamBold
+    nameLbl.TextStrokeTransparency = 0.5
+    nameLbl.TextStrokeColor3 = Color3.new(0,0,0)
+
+    -- HP text
+    local hpText = Instance.new("TextLabel", bb)
+    hpText.Name = "HPText"
+    hpText.Size = UDim2.new(1, 0, 0, 14)
+    hpText.Position = UDim2.new(0, 0, 0, 16)
+    hpText.BackgroundTransparency = 1
+    hpText.Text = "❤️ 100/100"
+    hpText.TextColor3 = CFG.hpHigh
+    hpText.TextSize = 10; hpText.Font = Enum.Font.GothamBold
+    hpText.TextStrokeTransparency = 0.5
+    hpText.TextStrokeColor3 = Color3.new(0,0,0)
+
+    -- HP Bar background
+    local barBG = Instance.new("Frame", bb)
+    barBG.Name = "BarBG"
+    barBG.Size = UDim2.new(1, 0, 0, 8)
+    barBG.Position = UDim2.new(0, 0, 0, 32)
+    barBG.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    barBG.BorderSizePixel = 0
+    mkCorner(barBG, 3)
+
+    -- HP Bar fill
+    local barFill = Instance.new("Frame", barBG)
+    barFill.Name = "BarFill"
+    barFill.Size = UDim2.new(1, 0, 1, 0)
+    barFill.Position = UDim2.new(0, 0, 0, 0)
+    barFill.BackgroundColor3 = CFG.hpHigh
+    barFill.BorderSizePixel = 0
+    mkCorner(barFill, 3)
+
+    espData[player] = {
+        highlight = hl,
+        billboard = bb,
+        barFill   = barFill,
+        hpText    = hpText,
+    }
+end
+
+local function removeESP(player)
+    local data = espData[player]
+    if not data then return end
+    if data.highlight then data.highlight:Destroy() end
+    if data.billboard then data.billboard:Destroy() end
+    espData[player] = nil
+end
+
+local function attachESP(player)
+    local char = player.Character
+    if not char then return end
+    local data = espData[player]
+    if not data then return end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+        or char:FindFirstChild("Torso")
+        or char:FindFirstChild("UpperTorso")
+    local head = char:FindFirstChild("Head")
+
+    if data.highlight then
+        data.highlight.Adornee = char
+        data.highlight.Parent = char
+    end
+    if data.billboard and head then
+        data.billboard.Adornee = head
+        data.billboard.Parent = head
+    end
+end
+
+local function onCharAdded(player, char)
+    char:WaitForChild("HumanoidRootPart", 5)
+    createESP(player)
+    attachESP(player)
+end
+
+local function setupPlayer(player)
+    createESP(player)
+    if player.Character then
+        attachESP(player)
+    end
+    player.CharacterAdded:Connect(function(char)
+        task.wait(0.5)
+        onCharAdded(player, char)
+    end)
+    player.CharacterRemoving:Connect(function()
+        local data = espData[player]
+        if data then
+            if data.highlight then data.highlight.Parent = nil end
+            if data.billboard then data.billboard.Parent = nil end
+        end
+    end)
+end
+
+-- Setup tất cả player hiện tại
+for _, p in ipairs(Players:GetPlayers()) do
+    setupPlayer(p)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
+Players.PlayerRemoving:Connect(removeESP)
+
+-- =============================================
+-- UPDATE LOOP
+-- =============================================
+RunService.Heartbeat:Connect(function()
+    for player, data in pairs(espData) do
+        local char = player.Character
+        if not char then continue end
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local visible = CFG.espEnabled or CFG.hpEnabled
+
+        -- ESP Highlight
+        if data.highlight then
+            data.highlight.Enabled = CFG.espEnabled
+            if CFG.espEnabled and data.highlight.Adornee ~= char then
+                data.highlight.Adornee = char
+                data.highlight.Parent = char
+            end
+        end
+
+        -- Billboard
+        if data.billboard then
+            data.billboard.Enabled = CFG.hpEnabled
+
+            if hum and CFG.hpEnabled then
+                local hp    = math.floor(hum.Health)
+                local maxHp = math.floor(hum.MaxHealth)
+                local pct   = maxHp > 0 and (hp / maxHp) or 0
+                local col   = getHPColor(pct)
+
+                data.hpText.Text = "❤️ " .. hp .. "/" .. maxHp
+                data.hpText.TextColor3 = col
+
+                if data.barFill then
+                    data.barFill.Size = UDim2.new(math.clamp(pct, 0, 1), 0, 1, 0)
+                    data.barFill.BackgroundColor3 = col
+                end
+            end
+        end
+    end
+end)
+
+-- Insert toggle tất cả
+UIS.InputBegan:Connect(function(inp, gpe)
+    if gpe then return end
+    if inp.KeyCode == Enum.KeyCode.Insert then
+        Panel.Visible = not Panel.Visible
+    end
+end)
+
+print("🎯 ESP & HP Bar loaded | Insert = toggle panel")
