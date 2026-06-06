@@ -1,0 +1,318 @@
+-- ==========================================
+-- 1. SERVICES & VARIABLES
+-- ==========================================
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- Trạng thái Aimbot
+local IsLocking = false
+local Target = nil
+local Blacklist = {} 
+local ProcessedModels = {} -- Bộ nhớ tạm lưu các mục tiêu đã được xử lý hitbox (Chống lag)
+
+-- ==========================================
+-- 🔥 CẤU HÌNH CONFIG (TÙY CHỈNH)
+-- ==========================================
+local LOCK_KEY = Enum.KeyCode.H
+local MAX_DISTANCE = 500
+local FOV_RADIUS = 250
+local PhysicalItems = Workspace:WaitForChild("PhysicalItems")
+
+-- TÙY CHỈNH HITBOX ĐẦU TO
+local HITBOX_SIZE = Vector3.new(5, 5, 5) 
+local HITBOX_TRANSPARENCY = 0.5 
+
+-- Màu sắc ESP Mũi tên
+local ARROW_ESP_COLOR = Color3.fromRGB(0, 255, 255)
+local ARROW_OUTLINE_COLOR = Color3.fromRGB(255, 255, 255)
+
+-- ==========================================
+-- 2. TỰ ĐỘNG TẠO GIAO DIỆN (GUI) BLACKLIST
+-- ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ArrowBlacklistGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 250, 0, 300)
+MainFrame.Position = UDim2.new(0.02, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 2
+MainFrame.BorderColor3 = Color3.fromRGB(0, 255, 255)
+MainFrame.Active = true
+MainFrame.Draggable = true 
+MainFrame.Parent = ScreenGui
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Text = "  BLACKLIST TARGET"
+Title.TextColor3 = Color3.fromRGB(0, 255, 255)
+Title.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 16
+Title.Parent = MainFrame
+
+local PlayerList = Instance.new("ScrollingFrame")
+PlayerList.Name = "PlayerList"
+PlayerList.Size = UDim2.new(1, -10, 1, -40)
+PlayerList.Position = UDim2.new(0, 5, 0, 35)
+PlayerList.BackgroundTransparency = 1
+PlayerList.ScrollBarThickness = 6
+PlayerList.CanvasSize = UDim2.new(0, 0, 0, 0)
+PlayerList.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = PlayerList
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+
+-- Hàm reset lại đầu gốc
+local function ResetHeadSize(model)
+    if model and model:FindFirstChild("Head") then
+        model.Head.Size = Vector3.new(2, 1, 1) 
+        model.Head.Transparency = 0
+        model.Head.CanCollide = true
+    end
+end
+
+-- Hàm cập nhật giao diện
+local function UpdateBlacklistGUI()
+    for _, child in pairs(PlayerList:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local pFrame = Instance.new("Frame")
+            pFrame.Size = UDim2.new(1, -10, 0, 35)
+            pFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+            pFrame.Parent = PlayerList
+            
+            local pLabel = Instance.new("TextLabel")
+            pLabel.Size = UDim2.new(0.7, 0, 1, 0)
+            pLabel.Text = player.DisplayName or player.Name
+            pLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            pLabel.TextXAlignment = Enum.TextXAlignment.Left
+            pLabel.Position = UDim2.new(0, 10, 0, 0)
+            pLabel.BackgroundTransparency = 1
+            pLabel.TextSize = 14
+            pLabel.Parent = pFrame
+            
+            local checkBtn = Instance.new("TextButton")
+            checkBtn.Size = UDim2.new(0, 25, 0, 25)
+            checkBtn.Position = UDim2.new(0.75, 0, 0.15, 0)
+            checkBtn.BorderSizePixel = 1
+            checkBtn.TextSize = 14
+            checkBtn.Font = Enum.Font.SourceSansBold
+            
+            if Blacklist[player.Name] then
+                checkBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+                checkBtn.Text = "X"
+                checkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            else
+                checkBtn.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+                checkBtn.Text = ""
+            end
+            checkBtn.Parent = pFrame
+            
+            checkBtn.MouseButton1Click:Connect(function()
+                if Blacklist[player.Name] then
+                    Blacklist[player.Name] = nil
+                    checkBtn.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+                    checkBtn.Text = ""
+                    -- Kích hoạt lại hitbox to khi hủy blacklist
+                    if player.Character then ProcessedModels[player.Character] = nil end
+                else
+                    Blacklist[player.Name] = true
+                    checkBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+                    checkBtn.Text = "X"
+                    checkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    
+                    if player.Character then 
+                        ResetHeadSize(player.Character) 
+                        ProcessedModels[player.Character] = true -- Đánh dấu không xử lý nữa
+                    end
+                    if Target and Players:GetPlayerFromCharacter(Target) == player then
+                        Target = nil
+                    end
+                end
+            end)
+        end
+    end
+    PlayerList.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
+end
+
+Players.PlayerAdded:Connect(UpdateBlacklistGUI)
+Players.PlayerRemoving:Connect(UpdateBlacklistGUI)
+UpdateBlacklistGUI()
+
+-- ==========================================
+-- 3. HỆ THỐNG XỬ LÝ HITBOX ĐẦU TO - SIÊU TỐI ƯU (CHỐNG LAG)
+-- ==========================================
+local function ApplyHitbox(model)
+    if not model:IsA("Model") or ProcessedModels[model] then return end
+    
+    -- Chờ nhân vật / quái vật tải đủ bộ phận cơ bản
+    local head = model:WaitForChild("Head", 2)
+    local humanoid = model:WaitForChild("Humanoid", 2)
+    if not head or not humanoid then return end
+    
+    local player = Players:GetPlayerFromCharacter(model)
+    
+    -- Nếu bị blacklist thì bỏ qua không làm to đầu
+    if player and Blacklist[player.Name] then 
+        ProcessedModels[model] = true
+        return 
+    end
+    
+    -- Đánh dấu đã xử lý để không lặp lại gây lag
+    ProcessedModels[model] = true
+    
+    -- Chỉ thay đổi kích thước một lần duy nhất
+    head.Size = HITBOX_SIZE
+    head.Transparency = HITBOX_TRANSPARENCY
+    head.CanCollide = false
+    
+    -- Lắng nghe khi máu về 0 (chết) hoặc bị xóa khỏi game thì dọn dẹp bộ nhớ tạm
+    local deathConn
+    deathConn = humanoid.Died:Connect(function()
+        ProcessedModels[model] = nil
+        if deathConn then deathConn:Disconnect() end
+    end)
+end
+
+-- Tối ưu hóa: Thay vì quét toàn bộ map, chỉ quét trực tiếp trong Workspace khi có thứ gì mới xuất hiện
+Workspace.ChildAdded:Connect(function(child)
+    -- Chờ 0.1 giây để game định hình đối tượng
+    task.wait(0.1)
+    if child:IsA("Model") and child:FindFirstChild("Humanoid") then
+        local player = Players:GetPlayerFromCharacter(child)
+        if player and player ~= LocalPlayer then
+            ApplyHitbox(child)
+        elseif not player then
+            -- Là Quái vật / Động vật (NPC)
+            ApplyHitbox(child)
+        end
+    end
+end)
+
+-- Xử lý nhanh cho những mục tiêu đã đứng sẵn trong game khi mới bật script
+task.spawn(function()
+    for _, child in pairs(Workspace:GetChildren()) do
+        if child:IsA("Model") and child:FindFirstChild("Humanoid") then
+            local player = Players:GetPlayerFromCharacter(child)
+            if player and player ~= LocalPlayer then
+                ApplyHitbox(child)
+            elseif not player then
+                ApplyHitbox(child)
+            end
+        end
+    end
+end)
+
+-- ==========================================
+-- 4. LOGIC AIMBOT (KHÓA TÂM PHÍM H)
+-- ==========================================
+local function IsValidTarget(model)
+    if not model or not model:FindFirstChild("HumanoidRootPart") or not model:FindFirstChild("Humanoid") then
+        return false
+    end
+    
+    local player = Players:GetPlayerFromCharacter(model)
+    if player then
+        if player == LocalPlayer or model.Humanoid.Health <= 0 or Blacklist[player.Name] then
+            return false
+        end
+        return true
+    end
+    
+    if model.Humanoid.Health > 0 then
+        return true
+    end
+    
+    return false
+end
+
+local function GetClosestTargetToMouse()
+    local ClosestTarget = nil
+    local MaxMouseDistance = FOV_RADIUS
+    local ScreenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    for _, obj in pairs(Workspace:GetChildren()) do -- Đã tối ưu: Chỉ quét GetChildren thay vì GetDescendants
+        if obj:IsA("Model") and IsValidTarget(obj) then
+            local rootPart = obj.HumanoidRootPart
+            local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+            
+            if onScreen then
+                local mouseDistance = (Vector2.new(screenPos.X, screenPos.Y) - ScreenCenter).Magnitude
+                local myChar = LocalPlayer.Character
+                
+                if myChar and myChar:FindFirstChild("HumanoidRootPart") then
+                    local playerDistance = (rootPart.Position - myChar.HumanoidRootPart.Position).Magnitude
+                    if mouseDistance < MaxMouseDistance and playerDistance < MAX_DISTANCE then
+                        MaxMouseDistance = mouseDistance
+                        ClosestTarget = obj
+                    end
+                end
+            end
+        end
+    end
+    return ClosestTarget
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if input.KeyCode == LOCK_KEY then
+        IsLocking = not IsLocking
+        if IsLocking then
+            Target = GetClosestTargetToMouse()
+            if not Target then IsLocking = false end
+        else
+            Target = nil
+        end
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if IsLocking and Target and IsValidTarget(Target) then
+        local lockPosition = Target.Head.Position
+        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, lockPosition)
+    elseif IsLocking and (not Target or not IsValidTarget(Target)) then
+        Target = GetClosestTargetToMouse()
+        if not Target then IsLocking = false end
+    end
+end)
+
+-- ==========================================
+-- 5. LOGIC ESP MŨI TÊN (ARROW ESP)
+-- ==========================================
+local function CreateArrowESP(arrowModel)
+    if arrowModel:IsA("Model") and arrowModel.Name == "Arrow" and not arrowModel:FindFirstChild("ArrowESP") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ArrowESP"
+        highlight.FillColor = ARROW_ESP_COLOR
+        highlight.FillTransparency = 0.4
+        highlight.OutlineColor = ARROW_OUTLINE_COLOR
+        highlight.OutlineTransparency = 0
+        highlight.Adornee = arrowModel
+        highlight.Parent = arrowModel
+    end
+end
+
+if PhysicalItems then
+    for _, item in pairs(PhysicalItems:GetChildren()) do
+        CreateArrowESP(item)
+    end
+
+    PhysicalItems.ChildAdded:Connect(function(newItem)
+        task.wait(0.1)
+        CreateArrowESP(newItem)
+    end)
+end
