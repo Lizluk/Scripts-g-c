@@ -12,7 +12,7 @@ local UIS = game:GetService("UserInputService")
 local client = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
-local autoBiteActive = false -- Mặc định tắt để an toàn, ấn R để bật
+local autoBiteActive = false -- Mặc định tắt để an toàn, ấn J để bật
 local BITE_DISTANCE = 12 
 local BITE_COOLDOWN = 0.5 
 
