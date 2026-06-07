@@ -1,0 +1,279 @@
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local lp = Players.LocalPlayer
+local resourcesFolder = Workspace:FindFirstChild("Map") and Workspace.Map:FindFirstChild("Resources")
+
+if not resourcesFolder then
+    warn("Không tìm thấy thư mục workspace.Map.Resources!")
+    return
+end
+
+-- Xóa GUI cũ để tránh trùng lặp
+if lp:WaitForChild("PlayerGui"):FindFirstChild("Lizluk_AutoFarm_GUI") then
+    lp.PlayerGui.Lizluk_AutoFarm_GUI:Destroy()
+end
+
+-- Tạo ScreenGui mới
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Lizluk_AutoFarm_GUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = lp:WaitForChild("PlayerGui")
+
+-- Khung Menu Chính (White Glow Aesthetic)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 320, 0, 420)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainUICorner = Instance.new("UICorner")
+MainUICorner.CornerRadius = UDim.new(0, 12)
+MainUICorner.Parent = MainFrame
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(255, 255, 255)
+UIStroke.Thickness = 2
+UIStroke.Parent = MainFrame
+
+-- Tiêu đề Menu
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, 0, 0, 50)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "🦋 LIZLUK FARMER 🦋"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextSize = 18
+TitleLabel.Parent = MainFrame
+
+-- Khung danh sách chứa nút cuộn
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Size = UDim2.new(1, -20, 1, -70)
+ScrollingFrame.Position = UDim2.new(0, 10, 0, 60)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.ScrollBarThickness = 4
+ScrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 255, 255)
+ScrollingFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ScrollingFrame
+UIListLayout.SortOrder = Enum.SortOrder.Name
+UIListLayout.Padding = UDim.new(0, 6)
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+local isFarming = false
+local originalPosition = nil
+
+-- Hàm giả lập bấm phím F
+local function pressF()
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+    task.wait(0.05)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+end
+
+-- Kiểm tra xem tài nguyên đó còn khả năng farm được không (Tránh kẹt khi cây đã chết)
+local function isValidTarget(target)
+    if not target or not target:IsDescendantOf(Workspace) then return false end
+    
+    -- Kiểm tra nếu cây/đá có thuộc tính máu (Health/Hp) mà đã về 0
+    local hp = target:FindFirstChild("Health") or target:FindFirstChild("HP") or target:FindFirstChild("Hitpoints")
+    if hp and hp:IsA("ValueBase") and hp.Value <= 0 then return false end
+    
+    -- Kiểm tra nếu trong Model có ProximityPrompt mà bị tắt đi
+    local prompt = target:FindFirstChildOfClass("ProximityPrompt") or target:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt and not prompt.Enabled then return false end
+
+    -- Kiểm tra nếu vật thể bị ẩn đi hoàn toàn (Transparency = 1)
+    if target:IsA("BasePart") and target.Transparency >= 0.9 then return false end
+    local mainPart = target:FindFirstChild("Main") or target:FindFirstChildOfClass("BasePart")
+    if mainPart and mainPart:IsA("BasePart") and mainPart.Transparency >= 0.9 then return false end
+
+    return true
+end
+
+-- Tìm tài nguyên gần nhất và đang SỐNG (hợp lệ để farm)
+local function findNearestValidTarget(name)
+    local character = lp.Character or lp.CharacterAdded:Wait()
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    
+    local nearestObj = nil
+    local minDistance = math.huge
+    
+    for _, obj in pairs(resourcesFolder:GetDescendants()) do
+        if obj.Name == name and (obj:IsA("Model") or obj:IsA("BasePart")) then
+            if isValidTarget(obj) then -- Chỉ chọn những mục tiêu còn farm được
+                local pos = nil
+                if obj:IsA("Model") and obj.PrimaryPart then
+                    pos = obj.PrimaryPart.Position
+                elseif obj:IsA("BasePart") then
+                    pos = obj.Position
+                elseif obj:IsA("Model") then
+                    local p = obj:FindFirstChildOfClass("BasePart")
+                    if p then pos = p.Position end
+                end
+                
+                if pos then
+                    local dist = (rootPart.Position - pos).Magnitude
+                    if dist < minDistance then
+                        minDistance = dist
+                        nearestObj = obj
+                    end
+                end
+            end
+        end
+    end
+    return nearestObj
+end
+
+-- Hàm thực hiện di chuyển và nhặt đồ
+local function startFarm(itemName)
+    if isFarming then return end
+    
+    local target = findNearestValidTarget(itemName)
+    if not target then 
+        warn("Không tìm thấy vật phẩm hợp lệ nào tên: " .. itemName)
+        return 
+    end
+    
+    isFarming = true
+    local character = lp.Character or lp.CharacterAdded:Wait()
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then isFarming = false return end
+    
+    -- Lưu vị trí đứng ban đầu của bạn
+    originalPosition = rootPart.CFrame
+    
+    print("Bắt đầu farm: " .. itemName)
+    
+    local startTime = tick()
+    
+    -- Vòng lặp farm liên tục
+    while isFarming do
+        -- Kiểm tra điều kiện: Nếu vật thể biến mất, hoặc không còn hợp lệ (hết máu/ẩn đi) thì dừng ngay
+        if not isValidTarget(target) then
+            print("Vật phẩm đã được farm xong hoặc không còn hợp lệ!")
+            break
+        end
+        
+        -- Chống kẹt thời gian (Nếu đứng quá 15 giây ở 1 vị trí mà không xong thì tự nhả ra)
+        if tick() - startTime > 15 then
+            print("Quá thời gian farm an toàn, tự động reset vị trí!")
+            break
+        end
+
+        rootPart.Velocity = Vector3.new(0, 0, 0)
+        
+        -- Xác định tọa độ đứng farm
+        local currentCFrame = nil
+        if target:IsA("Model") then
+            currentCFrame = target.PrimaryPart and target.PrimaryPart.CFrame or (target:FindFirstChildOfClass("BasePart") and target:FindFirstChildOfClass("BasePart").CFrame)
+        else
+            currentCFrame = target.CFrame
+        end
+        
+        if currentCFrame then
+            -- Dịch chuyển nhân vật đến sát vật phẩm
+            rootPart.CFrame = currentCFrame * CFrame.new(0, 1.5, 0)
+            pressF()
+        else
+            break
+        end
+        task.wait(0.15) -- Tốc độ spam nút F công cụ nhặt
+    end
+    
+    -- Trả nhân vật về đúng vị trí đứng ban đầu
+    if originalPosition then
+        task.wait(0.1)
+        rootPart.CFrame = originalPosition
+        print("Đã quay về vị trí ban đầu thành công!")
+    end
+    
+    isFarming = false
+end
+
+-- Hàm làm mới giao diện chữ menu
+local function refreshResourceMenu()
+    for _, child in pairs(ScrollingFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    
+    local addedNames = {}
+    
+    for _, obj in pairs(resourcesFolder:GetDescendants()) do
+        if (obj:IsA("Model") or obj:IsA("BasePart")) and (obj.Parent == resourcesFolder or (obj.Parent and obj.Parent.Parent == resourcesFolder)) then
+            local name = obj.Name
+            
+            if name ~= "Part" and name ~= "MeshPart" and name ~= "Model" and not addedNames[name] then
+                addedNames[name] = true
+                
+                local itemButton = Instance.new("TextButton")
+                itemButton.Name = name
+                itemButton.Size = UDim2.new(1, -10, 0, 38)
+                itemButton.BackgroundTransparency = 0.92
+                itemButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                itemButton.Text = "   📍 " .. name
+                itemButton.TextColor3 = Color3.fromRGB(220, 220, 220)
+                itemButton.Font = Enum.Font.GothamMedium
+                itemButton.TextSize = 14
+                itemButton.TextXAlignment = Enum.TextXAlignment.Left
+                itemButton.Parent = ScrollingFrame
+                
+                local btnCorner = Instance.new("UICorner")
+                btnCorner.CornerRadius = UDim.new(0, 6)
+                btnCorner.Parent = itemButton
+                
+                -- Hiệu ứng Hover chuột
+                itemButton.MouseEnter:Connect(function()
+                    TweenService:Create(itemButton, TweenInfo.new(0.15), {TextColor3 = Color3.fromRGB(255, 255, 255), BackgroundTransparency = 0.8}):Play()
+                end)
+                itemButton.MouseLeave:Connect(function()
+                    TweenService:Create(itemButton, TweenInfo.new(0.15), {TextColor3 = Color3.fromRGB(220, 220, 220), BackgroundTransparency = 0.92}):Play()
+                end)
+                
+                -- Sự kiện Click chọn chữ để đi farm
+                itemButton.MouseButton1Click:Connect(function()
+                    if not isFarming then
+                        itemButton.TextColor3 = Color3.fromRGB(0, 255, 127)
+                        startFarm(name)
+                        itemButton.TextColor3 = Color3.fromRGB(220, 220, 220)
+                    else
+                        warn("Đang farm dở vật phẩm khác, vui lòng đợi!")
+                    end
+                end)
+            end
+        end
+    end
+end
+
+-- Tự động cập nhật menu khi danh sách thay đổi
+resourcesFolder.DescendantAdded:Connect(function()
+    task.wait(0.5)
+    refreshResourceMenu()
+end)
+resourcesFolder.DescendantRemoving:Connect(refreshResourceMenu)
+
+-- Bật Menu lần đầu
+refreshResourceMenu()
+
+-- Phím tắt K Ẩn / Hiện GUI
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.K then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
+
+print("Lizluk Auto-Farm FIX Kẹt Teleport thành công! Bấm 'K' để Ẩn/Hiện GUI.")
