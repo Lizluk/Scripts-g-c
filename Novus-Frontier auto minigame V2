@@ -1,0 +1,153 @@
+--// AUTO QUICKTIME MINIGAME - ANTI-DOUBLE CLICK & ADAPTIVE BLUE FALLBACK (v10.5)
+local Players    = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS        = game:GetService("UserInputService")
+local lp         = Players.LocalPlayer
+local PlayerGui  = lp:WaitForChild("PlayerGui")
+
+local ENABLED = true
+
+-- Các mã màu chuẩn của UI Minigame
+local TARGET_YELLOW_COLOR = Color3.fromRGB(255, 245, 102) -- Màu vàng Perfect
+local TARGET_BLUE_COLOR   = Color3.fromRGB(130, 220, 255) -- Màu xanh Great (Dùng khi vàng quá bé)
+
+-- Biến kiểm soát trạng thái QTE để chống click trùng
+local lastTargetObj = nil
+local hasClickedThisTurn = false
+
+-- ── SYSTEM CLICK SIÊU TỐC TỨC THỜI ──────────────────────────
+local function clickAt(x, y, targetType)
+    hasClickedThisTurn = true -- Khóa ngay lập tức sau khi click
+    
+    pcall(mousemoveabs, x, y)
+    pcall(mouse1click)
+    
+    print(string.format("[QTE] 🎯 HIT SUCCESS (%s)! X=%.0f Y=%.0f (Đã khóa chống double-click)", targetType, x, y))
+end
+
+-- ── MAIN LOOP QUÉT KHÔNG TRỄ ──────────────────────────────────
+RunService.Heartbeat:Connect(function()
+    if not ENABLED then return end
+
+    -- Kiểm tra UI
+    local qteGui = PlayerGui:FindFirstChild("QuickTimeGUI")
+    if not qteGui or not qteGui.Enabled then 
+        -- Reset trạng thái khi tắt minigame
+        lastTargetObj = nil
+        hasClickedThisTurn = false
+        return 
+    end
+
+    local main = qteGui:FindFirstChild("Main")
+    if not main or not main.Visible then return end
+
+    local bar = main:FindFirstChild("Bar")
+    if not bar or not bar.Visible then return end
+
+    local canvas = bar:FindFirstChild("CanvasGroup")
+    if not canvas then return end
+
+    local indicator = bar:FindFirstChild("Indicator")
+    if not indicator or not indicator.Visible then return end
+
+    -- Xác định tọa độ kim trượt (ptrX)
+    local arrow = indicator:FindFirstChild("arrow_drop_down") 
+        or indicator:FindFirstChild("arrow_drop_down2")
+        or indicator:FindFirstChildOfClass("ImageLabel")
+    
+    local ptrX
+    if arrow then
+        ptrX = arrow.AbsolutePosition.X + arrow.AbsoluteSize.X / 2
+    else
+        ptrX = indicator.AbsolutePosition.X + indicator.AbsoluteSize.X / 2
+    end
+
+    local ptrY = bar.AbsolutePosition.Y + bar.AbsoluteSize.Y / 2
+
+    -- THUẬT TOÁN PHÂN TÍCH VÙNG MÀU THÔNG MINH
+    local yellowTarget = nil
+    local blueTarget = nil
+
+    for _, target in pairs(canvas:GetChildren()) do
+        if target.Name == "Target" and target.Visible then
+            if target.BackgroundColor3 == TARGET_YELLOW_COLOR then
+                yellowTarget = target
+            elseif target.BackgroundColor3 == TARGET_BLUE_COLOR then
+                blueTarget = target
+            end
+        end
+    end
+
+    -- LỰA CHỌN MỤC TIÊU PHÙ HỢP (ƯU TIÊN QUÉT KÍCH THƯỚC VÀNG)
+    local finalTarget = nil
+    local targetType = "YELLOW"
+
+    if yellowTarget then
+        local yellowWidth = yellowTarget.AbsoluteSize.X
+        -- KIỂM TRA ĐỘ LỚN: Nếu thanh vàng quá bé (nhỏ hơn hoặc bằng 24 pixel) hoặc không tối ưu
+        if yellowWidth <= 10 and blueTarget then
+            finalTarget = blueTarget -- Chuyển hẳn qua đớp thanh màu xanh
+            targetType = "BLUE_FALLBACK"
+        else
+            finalTarget = yellowTarget -- Đủ lớn để ăn Perfect vàng
+            targetType = "PERFECT_YELLOW"
+        end
+    elseif blueTarget then
+        -- Trường hợp không thấy thanh vàng, dùng luôn thanh xanh làm dự phòng cuối
+        finalTarget = blueTarget
+        targetType = "BLUE_ONLY"
+    end
+
+    -- Nếu không tìm thấy bất kỳ mục tiêu nào hợp lệ trên thanh bar
+    if not finalTarget then
+        lastTargetObj = nil
+        hasClickedThisTurn = false
+        return
+    end
+
+    -- KIỂM TRA ĐỔI LƯỢT QTE: Nếu xuất hiện thanh mục tiêu mới (hoặc thanh cũ đổi vị trí/kích thước)
+    if finalTarget ~= lastTargetObj then
+        lastTargetObj = finalTarget
+        hasClickedThisTurn = false -- Mở khóa sẵn sàng cho lượt bấm mới
+    end
+
+    -- Nếu lượt này đã bấm trúng rồi thì bỏ qua không quét nữa (Chống hụt do Double Click)
+    if hasClickedThisTurn then return end
+
+    -- Tính toán tọa độ vùng chọn mục tiêu cuối cùng
+    local tLeft   = finalTarget.AbsolutePosition.X
+    local tRight  = tLeft + finalTarget.AbsoluteSize.X
+    local tWidth  = finalTarget.AbsoluteSize.X
+    local tCenterX = tLeft + tWidth / 2
+
+    -- XỬ LÝ CLICK THEO BIÊN ĐỘ AN TOÀN CỦA MỤC TIÊU ĐÃ CHỌN
+    if tWidth <= 25 then
+        -- Khi thanh mục tiêu bé: Nhấp ngay lập tức khi kim lọt vào vùng bao phủ mà không giữ margin
+        if ptrX >= tLeft and ptrX <= tRight then
+            clickAt(tCenterX, ptrY, targetType)
+        end
+    else
+        -- Khi thanh mục tiêu lớn (an toàn): Chờ kim đi sâu vào lòng thanh khoảng 10% rồi mới kích hoạt
+        local safeMargin = tWidth * 0.10
+        if ptrX >= (tLeft + safeMargin) and ptrX <= (tRight - safeMargin) then
+            clickAt(tCenterX, ptrY, targetType)
+        end
+    end
+end)
+
+-- ── PHÍM TẮT BẬT / TẮT [P] ───────────────────────────────────────
+UIS.InputBegan:Connect(function(inp, gp)
+    if gp then return end
+    if inp.KeyCode == Enum.KeyCode.P then
+        ENABLED = not ENABLED
+        local msg = ENABLED and "✅ AUTO QTE v10.5: ON" or "❌ ĐÃ TẮT"
+        
+        pcall(function()
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "Auto QTE v10.5",
+                Text = msg,
+                Duration = 2
+            })
+        end)
+    end
+end)
