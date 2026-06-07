@@ -1,0 +1,156 @@
+local key = Enum.KeyCode.F1 -- Phím bấm kích hoạt chủ động (Có thể đổi tùy ý)
+local TRIGGER_HEALTH = 70 -- Mức máu để tự động kích hoạt rớt map
+
+local player = game.Players.LocalPlayer
+local runService = game:GetService("RunService")
+local userInputService = game:GetService("UserInputService")
+local playerGui = player:WaitForChild("PlayerGui")
+
+local noclipConnection = nil
+local healthConnection = nil 
+local respawnConnection = nil -- Kết nối tự động hồi sinh
+local savedPosition = nil 
+local hasAutoTriggered = false 
+
+-- 🔥 KHỞI TẠO HỆ THỐNG XUYÊN ĐỊA HÌNH CỦA ROBLOX (Physics Service)
+local PhysicsService = game:GetService("PhysicsService")
+local groupName = "GhostRfallGroup"
+
+local success, _ = pcall(function()
+    PhysicsService:RegisterCollisionGroup(groupName)
+    PhysicsService:CollisionGroupSetCollidable(groupName, "Default", false)
+end)
+
+-- Hàm thực hiện làm lag rớt map
+local function doFreeFall(reason)
+    local character = player.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    
+    if hrp and humanoid and humanoid.Health > 0 then
+        hasAutoTriggered = true
+        savedPosition = hrp.CFrame
+        
+        local message = reason == "Auto" and "Máu dưới " .. TRIGGER_HEALTH .. "! Tự động kích hoạt cứu nguy..." or "Đang lưu vị trí và thực hiện lag rớt sàn..."
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "Hệ thống rơi tự do";
+            Duration = 2;
+            Text = message;
+        })
+        
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+        humanoid:ChangeState(Enum.HumanoidStateType.FallingDown)
+        
+        hrp.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y - 15, hrp.Position.Z)
+        task.wait(0.05)
+        
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CollisionGroup = groupName
+                part.CanCollide = false
+            end
+        end
+        
+        if noclipConnection then noclipConnection:Disconnect() end
+        noclipConnection = runService.Stepped:Connect(function()
+            if character and character:Parent() then
+                for _, part in ipairs(character:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.CollisionGroup = groupName
+                        part.CanCollide = false
+                    end
+                end
+            else
+                if noclipConnection then noclipConnection:Disconnect() end
+            end
+        end)
+        
+        hrp.Velocity = Vector3.new(0, -2000, 0)
+    end
+end
+
+-- 🔥 HÀM TỰ ĐỘNG BẤM NÚT RESPAWN TRÊN MÀN HÌNH (QUÉT THEO ẢNH)
+local function startAutoRespawnChecker()
+    if respawnConnection then respawnConnection:Disconnect() end
+    
+    -- Quét liên tục mỗi khung hình để bấm nút nhanh nhất có thể
+    respawnConnection = runService.Heartbeat:Connect(function()
+        -- Tìm kiếm bảng thông báo chết dựa theo cấu trúc các từ khóa trong game
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                -- Quét tìm tất cả các TextButton hoặc ImageButton có chữ hoặc tên liên quan đến Respawn / Hồi sinh
+                for _, button in ipairs(gui:GetDescendants()) do
+                    if button:IsA("TextButton") and button.Visible and button.AbsoluteSize.X > 0 then
+                        local btnText = string.lower(button.Text)
+                        local btnName = string.lower(button.Name)
+                        
+                        -- Nhận diện nút "Hồi sinh" hoặc "Respawn" như trong ảnh bạn gửi
+                        if string.find(btnText, "hồi sinh") or string.find(btnText, "respawn") or string.find(btnName, "respawn") or string.find(btnName, "hoisinh") then
+                            -- Bỏ qua lớp bảo vệ, kích hoạt trực tiếp hàm click ngầm của nút
+                            pcall(function()
+                                    -- Giả lập nhấn nút ảo của Roblox GUI
+                                    firesignal(button.MouseButton1Click)
+                                    firesignal(button.MouseButton1Down)
+                                    button:Activated() 
+                            end)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- Hàm theo dõi máu
+local function startHealthMonitoring(character)
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    if humanoid then
+        if healthConnection then healthConnection:Disconnect() end
+        healthConnection = humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+            if humanoid.Health > 0 and humanoid.Health <= TRIGGER_HEALTH and not hasAutoTriggered then
+                doFreeFall("Auto")
+            end
+        end)
+    end
+end
+
+-- Bộ lắng nghe phím bấm chủ động F1
+userInputService.InputBegan:Connect(function(input, chat)
+    if chat then return end
+    if input.KeyCode == key then
+        doFreeFall("Manual")
+    end
+end)
+
+-- Tự động xử lý khi hồi sinh thành công
+player.CharacterAdded:Connect(function(newCharacter)
+    hasAutoTriggered = false
+    startHealthMonitoring(newCharacter)
+    
+    if noclipConnection then 
+        noclipConnection:Disconnect() 
+        noclipConnection = nil
+    end
+    
+    if savedPosition then
+        local newHrp = newCharacter:WaitForChild("HumanoidRootPart", 5)
+        if newHrp then
+            task.wait(0.1) 
+            newHrp.CFrame = savedPosition
+            
+            game.StarterGui:SetCore("SendNotification", {
+                Title = "Hệ thống dịch chuyển";
+                Duration = 1.5;
+                Text = "Đã đưa bạn quay lại vị trí cũ thành công!";
+            })
+            savedPosition = nil 
+        end
+    end
+end)
+
+-- Khởi chạy hệ thống ngầm
+if player.Character then
+    startHealthMonitoring(player.Character)
+end
+startAutoRespawnChecker() -- Bật chế độ quét và tự bấm nút hồi sinh vĩnh viễn
