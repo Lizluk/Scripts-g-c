@@ -17,7 +17,7 @@ local BITE_DISTANCE = 12
 local BITE_COOLDOWN = 0.5 
 
 local lastBiteTime = 0
-local toggleKey = Enum.KeyCode.R -- Cấu hình phím R để bật/tắt
+local toggleKey = Enum.KeyCode.J -- Cấu hình phím J để bật/tắt
 
 -- Danh sách các tên Part đại diện cho "Cổ" dựa theo cấu trúc model game của bạn
 local NECK_NAMES = {"Neck", "Neck.002", "Neck1", "LowerNeck", "UpperNeck", "Throat", "NeckJoint"}
