@@ -1,0 +1,167 @@
+-- [[ CONFIGURATION / CẤU HÌNH ]]
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local CoreGui = game:GetService("CoreGui")
+local Workspace = game:GetService("Workspace")
+
+-- Đường dẫn mục chứa item theo yêu cầu của bạn
+local TargetFolder = Workspace:FindFirstChild("Game") and Workspace.Game:FindFirstChild("DroppedItems")
+
+-- Giao Diện GUI chính
+local MainGui = Instance.new("ScreenGui")
+MainGui.Name = "LizlukBringHub"
+MainGui.ResetOnSpawn = false
+
+-- Đưa GUI vào CoreGui (nếu Solara hỗ trợ) hoặc PlayerGui
+local success, err = pcall(function() MainGui.Parent = CoreGui end)
+if not success then MainGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+local MenuFrame = Instance.new("Frame")
+MenuFrame.Size = UDim2.new(0, 240, 0, 320)
+MenuFrame.Position = UDim2.new(0.1, 0, 0.3, 0)
+MenuFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MenuFrame.Active = true
+MenuFrame.Draggable = true -- Có thể kéo menu di chuyển trên màn hình
+MenuFrame.Parent = MainGui
+
+local MenuCorner = Instance.new("UICorner")
+MenuCorner.CornerRadius = UDim.new(0, 8)
+MenuCorner.Parent = MenuFrame
+
+-- Tiêu đề Menu
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "🦋 LIZLUK BRING ITEM"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 16
+Title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+Title.Parent = MenuFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = Title
+
+-- Khu vực cuộn danh sách các món đồ
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Size = UDim2.new(1, -20, 1, -95)
+ScrollingFrame.Position = UDim2.new(0, 10, 0, 45)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.ScrollBarThickness = 4
+ScrollingFrame.Parent = MenuFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+UIListLayout.Parent = ScrollingFrame
+
+-- Nút BRING ALL (Gom tất cả mọi thứ)
+local BringAllBtn = Instance.new("TextButton")
+BringAllBtn.Size = UDim2.new(1, -20, 0, 35)
+BringAllBtn.Position = UDim2.new(0, 10, 1, -45)
+BringAllBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+BringAllBtn.Text = "⚡ BRING ALL ITEMS ⚡"
+BringAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+BringAllBtn.Font = Enum.Font.SourceSansBold
+BringAllBtn.TextSize = 14
+BringAllBtn.Parent = MenuFrame
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 6)
+BtnCorner.Parent = BringAllBtn
+
+--- [[ LOGIC XỬ LÝ BRING ]]
+
+-- Hàm đưa một vật thể cụ thể về vị trí tương đối trước mặt nhân vật
+local function BringObject(object)
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root or not object then return end
+
+    -- Thiết lập vị trí tương đối: Cách nhân vật 3 studs về phía trước để tránh bị đè nặng
+    local RelativeOffset = root.CFrame * CFrame.new(0, 0, -3)
+
+    if object:IsA("BasePart") then
+        object.CanCollide = false
+        object.CFrame = RelativeOffset
+    elseif object:IsA("Model") then
+        if object.PrimaryPart then
+            object:SetPrimaryPartCFrame(RelativeOffset)
+        else
+            local mainPart = object:FindFirstChildWhichIsA("BasePart")
+            if mainPart then mainPart.CFrame = RelativeOffset end
+        end
+    end
+end
+
+-- Hàm quét và cập nhật lại danh sách nút bấm dựa trên các món đang có trong thư mục
+local function RefreshMenu()
+    -- Xóa các nút cũ đi để cập nhật mới
+    for _, child in ipairs(ScrollingFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+
+    if not TargetFolder then
+        local ErrorTxt = Instance.new("TextLabel")
+        ErrorTxt.Size = UDim2.new(1, 0, 0, 30)
+        ErrorTxt.Text = "Không tìm thấy DroppedItems!"
+        ErrorTxt.TextColor3 = Color3.fromRGB(255, 100, 100)
+        ErrorTxt.BackgroundTransparency = 1
+        ErrorTxt.Parent = ScrollingFrame
+        return
+    end
+
+    -- Tìm các tên vật phẩm duy nhất (Unique Names) để phân loại
+    local UniqueItems = {}
+    for _, item in ipairs(TargetFolder:GetChildren()) do
+        if not UniqueItems[item.Name] then
+            UniqueItems[item.Name] = true
+        end
+    end
+
+    -- Tạo nút bấm cho từng tên món đồ độc bản
+    for itemName, _ in pairs(UniqueItems) do
+        local ItemBtn = Instance.new("TextButton")
+        ItemBtn.Size = UDim2.new(1, -5, 0, 30)
+        ItemBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        ItemBtn.Text = "Bring: " .. itemName
+        ItemBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
+        ItemBtn.Font = Enum.Font.SourceSans
+        ItemBtn.TextSize = 14
+        ItemBtn.Parent = ScrollingFrame
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 4)
+        corner.Parent = ItemBtn
+
+        -- Sự kiện khi bấm vào nút của món đồ đó
+        ItemBtn.MouseButton1Click:Connect(function()
+            for _, item in ipairs(TargetFolder:GetChildren()) do
+                if item.Name == itemName then
+                    task.spawn(BringObject, item)
+                end
+            end
+        end)
+    end
+
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end
+
+-- Sự kiện cho nút BRING ALL
+BringAllBtn.MouseButton1Click:Connect(function()
+    if TargetFolder then
+        for _, item in ipairs(TargetFolder:GetChildren()) do
+            task.spawn(BringObject, item)
+        end
+    end
+end)
+
+-- Tự động cập nhật lại danh sách nút bấm khi thư mục có thêm hoặc bớt đồ
+if TargetFolder then
+    TargetFolder.ChildAdded:Connect(RefreshMenu)
+    TargetFolder.ChildRemoved:Connect(RefreshMenu)
+end
+
+-- Khởi chạy quét lần đầu
+RefreshMenu()
+print("👉 [Lizluk Bring Item] GUI đã sẵn sàng hoạt động trên Solara!")
