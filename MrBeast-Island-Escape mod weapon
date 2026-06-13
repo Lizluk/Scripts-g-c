@@ -1,0 +1,328 @@
+-- [[ CLONE TOOLCLIENTS - XÓA CLONES, GIỮ GỐC ]]
+-- M = Mở menu
+-- Clone x10/x20/x30/x40/x50 hoặc Xóa TẤT CẢ clones (giữ 1 gốc)
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local backpack = player:WaitForChild("Backpack")
+local character = player.Character or player.CharacterAdded:Wait()
+
+-- =============================================
+-- TÌM TẤT CẢ TOOLS
+-- =============================================
+local function getAllTools()
+    local tools = {}
+    
+    for _, tool in pairs(backpack:GetChildren()) do
+        if tool:IsA("Tool") then
+            table.insert(tools, tool)
+        end
+    end
+    
+    for _, tool in pairs(character:GetChildren()) do
+        if tool:IsA("Tool") then
+            table.insert(tools, tool)
+        end
+    end
+    
+    return tools
+end
+
+-- =============================================
+-- CLONE TOOLCLIENTS
+-- =============================================
+local function cloneToolClients(multiplier)
+    local tools = getAllTools()
+    local totalCloned = 0
+    
+    print("\n" .. string.rep("=", 70))
+    print("CLONING TOOLCLIENTS - Multiplier: x" .. multiplier)
+    print(string.rep("=", 70))
+    
+    for _, tool in pairs(tools) do
+        print("\n[Tool] " .. tool.Name)
+        local scriptCount = 0
+        local clonedCount = 0
+        
+        -- Tìm tất cả ToolClients trong tool
+        local scripts = {}
+        for _, script in pairs(tool:GetDescendants()) do
+            if script:IsA("ToolClient") then -- ĐÃ ĐỔI THÀNH TOOLCLIENT
+                table.insert(scripts, script)
+                scriptCount = scriptCount + 1
+            end
+        end
+        
+        print(string.format("  Found %d ToolClient(s)", scriptCount))
+        
+        -- Clone mỗi script (multiplier - 1) lần (vì đã có 1 gốc)
+        for _, originalScript in pairs(scripts) do
+            local originalName = originalScript.Name
+            print(string.format("  → Cloning: %s", originalName))
+            
+            for i = 1, multiplier - 1 do
+                local clone = originalScript:Clone()
+                clone.Name = originalName  -- Giữ nguyên tên (để dễ xóa sau)
+                clone.Parent = originalScript.Parent
+                clonedCount = clonedCount + 1
+                totalCloned = totalCloned + 1
+            end
+            
+            print(string.format("    ✓ Created %d clones (all named '%s')", 
+                multiplier - 1, originalName))
+        end
+        
+        print(string.format("  Total cloned: %d scripts", clonedCount))
+    end
+    
+    print("\n" .. string.rep("=", 70))
+    print(string.format("Total %d ToolClients cloned!", totalCloned))
+    print(string.rep("=", 70))
+    
+    return totalCloned
+end
+
+-- =============================================
+-- XÓA CLONES - GIỮ 1 GỐC
+-- =============================================
+local function deleteClonedScripts()
+    local tools = getAllTools()
+    local totalDeleted = 0
+    
+    print("\n" .. string.rep("=", 70))
+    print("DELETING CLONED TOOLCLIENTS (Keeping 1 original per script)")
+    print(string.rep("=", 70))
+    
+    for _, tool in pairs(tools) do
+        print("\n[Tool] " .. tool.Name)
+        local deletedCount = 0
+        
+        -- Group scripts theo tên
+        local scriptsByName = {}
+        for _, script in pairs(tool:GetDescendants()) do
+            if script:IsA("ToolClient") then -- ĐÃ ĐỔI THÀNH TOOLCLIENT
+                local name = script.Name
+                if not scriptsByName[name] then
+                    scriptsByName[name] = {}
+                end
+                table.insert(scriptsByName[name], script)
+            end
+        end
+        
+        -- Với mỗi nhóm: GIỮ 1 ĐẦU TIÊN, XÓA CÒN LẠI
+        for name, scripts in pairs(scriptsByName) do
+            if #scripts > 1 then
+                print(string.format("  → Found %d x '%s'", #scripts, name))
+                
+                -- Giữ script đầu tiên (index 1), xóa từ index 2 trở đi
+                for i = 2, #scripts do
+                    scripts[i]:Destroy()
+                    deletedCount = deletedCount + 1
+                    totalDeleted = totalDeleted + 1
+                end
+                
+                print(string.format("    ✓ Deleted %d clones (kept 1 original)", #scripts - 1))
+            end
+        end
+        
+        if deletedCount == 0 then
+            print("  No duplicates found")
+        else
+            print(string.format("  Total deleted: %d scripts", deletedCount))
+        end
+    end
+    
+    print("\n" .. string.rep("=", 70))
+    print(string.format("Total %d clones deleted!", totalDeleted))
+    print("Original scripts preserved ✅")
+    print(string.rep("=", 70))
+    
+    return totalDeleted
+end
+
+-- =============================================
+-- GUI MENU
+-- =============================================
+local sg = Instance.new("ScreenGui")
+sg.Name = "CloneScriptsGui"
+sg.ResetOnSpawn = false
+sg.Parent = player:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 400, 0, 420)
+mainFrame.Position = UDim2.new(0.5, -200, 0.5, -210)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+mainFrame.BorderSizePixel = 0
+mainFrame.Visible = false
+mainFrame.Parent = sg
+
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+
+local stroke = Instance.new("UIStroke", mainFrame)
+stroke.Color = Color3.fromRGB(255, 100, 255)
+stroke.Thickness = 3
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 50)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundColor3 = Color3.fromRGB(150, 50, 150)
+title.Text = "📋 Clone ToolClients" -- Đổi chữ hiển thị
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 24
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+Instance.new("UICorner", title).CornerRadius = UDim.new(0, 12)
+
+-- Info
+local info = Instance.new("TextLabel")
+info.Size = UDim2.new(1, -20, 0, 70)
+info.Position = UDim2.new(0, 10, 0, 60)
+info.BackgroundTransparency = 1
+info.Text = "Nhân bản ToolClients trong tools\n(Giữ nguyên tên gốc)\nXóa chỉ xóa clones, giữ 1 gốc" -- Đổi chữ hiển thị
+info.TextColor3 = Color3.fromRGB(200, 200, 200)
+info.TextSize = 15
+info.Font = Enum.Font.Gotham
+info.TextWrapped = true
+info.TextYAlignment = Enum.TextYAlignment.Top
+info.Parent = mainFrame
+
+-- Clone Buttons
+local buttonY = 140
+local multipliers = {10, 20, 30, 40, 50}
+local colors = {
+    Color3.fromRGB(50, 150, 50),
+    Color3.fromRGB(50, 100, 200),
+    Color3.fromRGB(200, 150, 50),
+    Color3.fromRGB(200, 100, 50),
+    Color3.fromRGB(200, 50, 50),
+}
+
+for i, mult in pairs(multipliers) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 170, 0, 38)
+    btn.Position = UDim2.new(0.5, -85, 0, buttonY)
+    btn.BackgroundColor3 = colors[i]
+    btn.Text = string.format("📋 Clone x%d", mult)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 18
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = mainFrame
+    
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    
+    btn.MouseButton1Click:Connect(function()
+        local count = cloneToolClients(mult)
+        mainFrame.Visible = false
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "✅ ToolClients Cloned!",
+            Duration = 3,
+            Text = string.format("Created %d clones\nAll named 'ToolClient'", count),
+        })
+    end)
+    
+    buttonY = buttonY + 42
+end
+
+-- Separator
+local separator = Instance.new("Frame")
+separator.Size = UDim2.new(1, -40, 0, 2)
+separator.Position = UDim2.new(0, 20, 0, buttonY + 8)
+separator.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+separator.BorderSizePixel = 0
+separator.Parent = mainFrame
+
+-- DELETE BUTTON
+local deleteBtn = Instance.new("TextButton")
+deleteBtn.Size = UDim2.new(0, 300, 0, 50)
+deleteBtn.Position = UDim2.new(0.5, -150, 0, buttonY + 25)
+deleteBtn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
+deleteBtn.Text = "🗑️ XÓA CLONES (Giữ 1 gốc)"
+deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+deleteBtn.TextSize = 18
+deleteBtn.Font = Enum.Font.GothamBold
+deleteBtn.Parent = mainFrame
+
+Instance.new("UICorner", deleteBtn).CornerRadius = UDim.new(0, 10)
+
+local deleteStroke = Instance.new("UIStroke", deleteBtn)
+deleteStroke.Color = Color3.fromRGB(255, 100, 100)
+deleteStroke.Thickness = 3
+
+deleteBtn.MouseButton1Click:Connect(function()
+    local count = deleteClonedScripts()
+    mainFrame.Visible = false
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "🗑️ Clones Deleted!",
+        Duration = 3,
+        Text = string.format("Deleted %d clones\nKept 1 original per script ✅", count),
+    })
+end)
+
+-- Close Button
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 38, 0, 38)
+closeBtn.Position = UDim2.new(1, -43, 0, 6)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 24
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = mainFrame
+
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
+
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+end)
+
+-- Status Label
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0, 320, 0, 55)
+statusLabel.Position = UDim2.new(0, 10, 0.5, 460)
+statusLabel.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+statusLabel.BackgroundTransparency = 0.1
+statusLabel.BorderSizePixel = 0
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.TextSize = 19
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.Text = "[M] Clone/Delete ToolClients" -- Đổi chữ hiển thị trạng thái nút M
+statusLabel.Parent = sg
+
+Instance.new("UICorner", statusLabel).CornerRadius = UDim.new(0, 10)
+local statusStroke = Instance.new("UIStroke", statusLabel)
+statusStroke.Color = Color3.fromRGB(255, 100, 255)
+statusStroke.Thickness = 2
+
+-- =============================================
+-- INPUT
+-- =============================================
+UserInputService.InputBegan:Connect(function(input, chat)
+    if chat then return end
+    
+    if input.KeyCode == Enum.KeyCode.M then
+        mainFrame.Visible = not mainFrame.Visible
+    end
+end)
+
+-- Init Logs
+print("=== Clone/Delete ToolClients ===")
+print("Press [M] to open menu")
+print("\nOptions:")
+print("  • Clone x10/x20/x30/x40/x50")
+print("  • Delete all clones (keep 1 original per script)")
+print("\nHow it works:")
+print("  1. Clone: Creates duplicates of ALL ToolClients")
+print("  2. Delete: Removes ONLY clones, keeps first script of each name")
+
+game.StarterGui:SetCore("SendNotification", {
+    Title = "📋 ToolClients Ready",
+    Duration = 4,
+    Text = "[M] Open menu\nClone OR Delete ToolClients!",
+})
