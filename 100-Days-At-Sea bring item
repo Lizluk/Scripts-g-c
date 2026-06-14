@@ -1,7 +1,7 @@
--- MAGNET & BRING SYSTEM - Fixed v10 (Smart Name Filter)
+-- MAGNET & BRING SYSTEM - Fixed v12 (Ground Bring & Anti-Flop)
 -- G = Bật/Tắt chính
 -- FEATURES: Heartbeat lock, Auto-proximity scan, Vùng quét DebrisField
--- FIXED V10: Tự động xóa số ở đuôi khi Click chọn đồ, dùng bộ lọc tìm kiếm chuỗi con để gom hết vật phẩm cùng loại (không phân biệt số 1, 2, 3, 4...)
+-- FIXED V12: Hạ độ cao Bring xuống sát mặt đất (Offset = 2), triệt tiêu hoàn toàn lực văng giúp vật phẩm đứng im tại chỗ.
 
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
@@ -25,8 +25,8 @@ local AUTO_PICKUP_RADIUS = 20
 local SCAN_INTERVAL      = 1.0  
 local BP_POWER           = 5000 
 local BP_DAMPING         = 800  
-local MAGNET_OFFSET_Y    = 8    
-local BRING_OFFSET_Y     = 22   
+local MAGNET_OFFSET_Y    = 1    
+local BRING_OFFSET_Y     = 2  -- 🆕 Đã hạ xuống sát mặt đất (ngang tầm chân)
 
 -- =============================================
 -- CLAIM OWNERSHIP
@@ -126,11 +126,11 @@ Instance.new("UICorner", cfgRow).CornerRadius = UDim.new(0,5)
 
 local radiusLbl = Instance.new("TextLabel", cfgRow)
 radiusLbl.Size = UDim2.new(0.55,0,1,0); radiusLbl.Position = UDim2.new(0,6,0,0)
-radiusLbl.BackgroundTransparency=1; radiusLbl.Text="📏 Auto-pickup: "..AUTO_PICKUP_RADIUS.."s"
+radiusLbl.BackgroundTransparency=1; radiusLbl.Text="📏 Magnet Radius: "..AUTO_PICKUP_RADIUS.."s"
 radiusLbl.TextColor3=Color3.fromRGB(100,255,100); radiusLbl.TextSize=11
 radiusLbl.Font=Enum.Font.GothamBold; radiusLbl.TextXAlignment=Enum.TextXAlignment.Left
 
-local function makeSmallBtn(parent, txt, posX, posY, w, h, bg, tc)
+local radMinus = makeSmallBtn or function(parent, txt, posX, posY, w, h, bg, tc)
     local b = Instance.new("TextButton", parent)
     b.Size = UDim2.new(0,w,0,h); b.Position = UDim2.new(0,posX,0,posY)
     b.Text=txt; b.BackgroundColor3=bg; b.TextColor3=tc
@@ -138,15 +138,15 @@ local function makeSmallBtn(parent, txt, posX, posY, w, h, bg, tc)
     Instance.new("UICorner",b).CornerRadius=UDim.new(0,4)
     return b
 end
-local radMinus = makeSmallBtn(cfgRow,"-",395,4,22,20,Color3.fromRGB(60,20,20),Color3.new(1,1,1))
-local radPlus  = makeSmallBtn(cfgRow,"+",420,4,22,20,Color3.fromRGB(20,60,20),Color3.new(1,1,1))
-radMinus.MouseButton1Click:Connect(function()
+local radMinusBtn = radMinus(cfgRow,"-",395,4,22,20,Color3.fromRGB(60,20,20),Color3.new(1,1,1))
+local radPlusBtn  = radMinus(cfgRow,"+",420,4,22,20,Color3.fromRGB(20,60,20),Color3.new(1,1,1))
+radMinusBtn.MouseButton1Click:Connect(function()
     AUTO_PICKUP_RADIUS=math.max(5,AUTO_PICKUP_RADIUS-5)
-    radiusLbl.Text="📏 Auto-pickup: "..AUTO_PICKUP_RADIUS.."s"
+    radiusLbl.Text="📏 Magnet Radius: "..AUTO_PICKUP_RADIUS.."s"
 end)
-radPlus.MouseButton1Click:Connect(function()
+radPlusBtn.MouseButton1Click:Connect(function()
     AUTO_PICKUP_RADIUS=math.min(200,AUTO_PICKUP_RADIUS+5)
-    radiusLbl.Text="📏 Auto-pickup: "..AUTO_PICKUP_RADIUS.."s"
+    radiusLbl.Text="📏 Magnet Radius: "..AUTO_PICKUP_RADIUS.."s"
 end)
 
 -- Container chứa 3 cột
@@ -211,7 +211,7 @@ Instance.new("UICorner",scanAllBtn).CornerRadius=UDim.new(0,6)
 
 local infoLabel = Instance.new("TextLabel", mainFrame)
 infoLabel.Size=UDim2.new(1,-10,0,26); infoLabel.Position=UDim2.new(0,5,1,-30)
-infoLabel.Text="⚡ ANTI-DROP: Heartbeat lock | v10 Smart Name (Anti-Number)"
+infoLabel.Text="⚡ BRING MODE: Ground Teleport & Anti-Velocity Lock v12"
 infoLabel.BackgroundColor3=Color3.fromRGB(20,20,20)
 infoLabel.TextColor3=Color3.fromRGB(100,255,100)
 infoLabel.TextSize=11; infoLabel.Font=Enum.Font.GothamBold
@@ -237,11 +237,13 @@ local function updateModeUI()
         magnetModeBtn.TextColor3 = Color3.new(1, 1, 1)
         bringModeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
         bringModeBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+        radiusLbl.Text = "📏 Magnet Radius: " .. AUTO_PICKUP_RADIUS .. "s"
     else
         bringModeBtn.BackgroundColor3 = Color3.fromRGB(220, 30, 30)
         bringModeBtn.TextColor3 = Color3.new(1, 1, 1)
         magnetModeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
         magnetModeBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+        radiusLbl.Text = "📏 Bring Radius: ♾️ GLOBAL UNLIMITED"
     end
 end
 
@@ -275,18 +277,14 @@ local function getRealItemName(obj)
     return rawName
 end
 
--- 🆕 LỌC BỎ SỐ Ở ĐUÔI (Ví dụ: Fishfillet1 -> Fishfillet)
 local function cleanNameOfNumbers(name)
-    local cleaned = string.gsub(name, "%d+$", "") -- Xóa toàn bộ số ở cuối chuỗi
+    local cleaned = string.gsub(name, "%d+$", "") 
     return cleaned
 end
 
--- 🆕 LOGIC QUÉT SO SÁNH CHUỖI CON (CONTAINS)
 local function itemMatchesFilter(obj)
     if selectedItemName == "ALL" then return true end
     local realName = getRealItemName(obj)
-    
-    -- Chỉ cần tên vật phẩm chứa chuỗi Filter (Không phân biệt số đuôi)
     return string.find(realName, selectedItemName) ~= nil
 end
 
@@ -331,7 +329,7 @@ function updateItemList()
             if obj:IsA("BasePart") or obj:IsA("Model") or obj:IsA("Folder") then
                 local realName = getRealItemName(obj)
                 if realName and not string.match(realName, "^%d+$") then 
-                    local cleanName = cleanNameOfNumbers(realName) -- Hiển thị tên đã làm sạch số lên UI
+                    local cleanName = cleanNameOfNumbers(realName) 
                     foundNames[cleanName] = true 
                 end
             end
@@ -361,7 +359,7 @@ task.spawn(function()
 end)
 
 -- =============================================
--- CLICK TO SELECT ITEM LOGIC (Đã sửa đổi)
+-- CLICK TO SELECT ITEM LOGIC
 -- =============================================
 local function toggleClickToFilter()
     clickToFilterActive = not clickToFilterActive
@@ -401,9 +399,7 @@ mouse.Button1Down:Connect(function()
         if isInsideDebris and topObject then
             local realName = getRealItemName(topObject)
             if realName and not string.match(realName, "^%d+$") then
-                -- TỰ ĐỘNG LỌC BỎ SỐ KHI BẠN CLICK CHỌN
                 local finalCleanName = cleanNameOfNumbers(realName)
-                
                 selectedItemName = finalCleanName
                 releaseMismatchedItems()
                 updateItemList()
@@ -479,12 +475,12 @@ local function capturePart(part)
 
     claimOwnership(part)
 
-    -- CHẾ ĐỘ BRING: TỐC BIẾN LÊN CAO RƠI XUỐNG
+    -- 🆕 CHẾ ĐỘ BRING: TỐC BIẾN DƯỚI MẶT ĐẤT & TRIỆT TIÊU LỰC VĂNG
     if currentSystemMode == "BRING" then
         pcall(function()
-            part.Velocity = Vector3.new(0,0,0)
-            part.RotVelocity = Vector3.new(0,0,0)
             part.CFrame = CFrame.new(targetPos) 
+            part.Velocity = Vector3.new(0, 0, 0)       -- Triệt tiêu lực đẩy quán tính
+            part.RotVelocity = Vector3.new(0, 0, 0)    -- Triệt tiêu lực xoáy vật lý
         end)
         return
     end
@@ -521,13 +517,21 @@ local function scanAndCapture()
         for _, obj in ipairs(debrisField:GetChildren()) do
             if itemMatchesFilter(obj) then
                 if obj:IsA("BasePart") and not obj.Anchored then
-                    local dist = (obj.Position - myPos).Magnitude
-                    if dist <= AUTO_PICKUP_RADIUS then pcall(function() capturePart(obj) end) end
+                    if currentSystemMode == "BRING" then
+                        pcall(function() capturePart(obj) end)
+                    else
+                        local dist = (obj.Position - myPos).Magnitude
+                        if dist <= AUTO_PICKUP_RADIUS then pcall(function() capturePart(obj) end) end
+                    end
                 elseif obj:IsA("Model") or obj:IsA("Folder") then
                     for _, child in ipairs(obj:GetChildren()) do
                         if child:IsA("BasePart") and not child.Anchored then
-                            local dist = (child.Position - myPos).Magnitude
-                            if dist <= AUTO_PICKUP_RADIUS then pcall(function() capturePart(child) end) end
+                            if currentSystemMode == "BRING" then
+                                pcall(function() capturePart(child) end)
+                            else
+                                local dist = (child.Position - myPos).Magnitude
+                                if dist <= AUTO_PICKUP_RADIUS then pcall(function() capturePart(child) end) end
+                            end
                         end
                     end
                 end
@@ -589,13 +593,21 @@ if debrisField then
         
         if itemMatchesFilter(v) then
             if v:IsA("BasePart") and not v.Anchored then
-                local dist = (v.Position - rp.Position).Magnitude
-                if dist <= AUTO_PICKUP_RADIUS then capturePart(v) end
+                if currentSystemMode == "BRING" then
+                    capturePart(v)
+                else
+                    local dist = (v.Position - rp.Position).Magnitude
+                    if dist <= AUTO_PICKUP_RADIUS then capturePart(v) end
+                end
             elseif v:IsA("Model") or v:IsA("Folder") then
                 for _, child in ipairs(v:GetChildren()) do
                     if child:IsA("BasePart") and not child.Anchored then
-                        local dist = (child.Position - rp.Position).Magnitude
-                        if dist <= AUTO_PICKUP_RADIUS then capturePart(child) end
+                        if currentSystemMode == "BRING" then
+                            capturePart(child)
+                        else
+                            local dist = (child.Position - rp.Position).Magnitude
+                            if dist <= AUTO_PICKUP_RADIUS then capturePart(child) end
+                        end
                     end
                 end
             end
@@ -737,4 +749,4 @@ UserInputService.InputBegan:Connect(function(input,gpe) if not gpe and input.Key
 
 -- Init
 updateStationList(); updatePlayerList(); updateItemList(); updateModeUI()
-print("🧲 Magnet System v10 Loaded! Đã tối ưu hóa bộ lọc tên thông minh chống trùng số.")
+print("🧲 Magnet System v12 Loaded! Đã hạ độ cao Bring xuống chân chống văng thành công.")
