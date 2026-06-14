@@ -1,0 +1,191 @@
+--// LIZLUK DINO NUTRIENT LOCKER SYSTEM (UPDATED PATH)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local client = Players.LocalPlayer
+
+-- Cấu hình mặc định
+local targetA = 100
+local targetB = 100
+local targetC = 100
+local isLocking = false
+
+--======================================================================
+-- THIẾT KẾ GIAO DIỆN GUI (LIZLUK WHITE AESTHETIC STYLE)
+--======================================================================
+-- Xóa GUI cũ nếu có để tránh trùng lặp
+if client:WaitForChild("PlayerGui"):FindFirstChild("Lizluk_Nutrient_GUI") then
+    client.PlayerGui.Lizluk_Nutrient_GUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Lizluk_Nutrient_GUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = client:WaitForChild("PlayerGui")
+
+-- Khung Menu Chính
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 240, 0, 270)
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+-- Viền phát sáng trắng đặc trưng
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(255, 255, 255)
+UIStroke.Thickness = 2
+UIStroke.Parent = MainFrame
+
+-- Tiêu đề Menu
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundTransparency = 1
+Title.Text = "🦋 LIZLUK NUTRIENTS 🦋"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainFrame
+
+-- Hàm tạo ô nhập dữ liệu thẩm mỹ
+local function createInput(name, placeholder, posY)
+    local label = Instance.new("TextLabel")
+    local textWidth = (name == "Nutrient C") and 85 or 80
+    label.Size = UDim2.new(0, textWidth, 0, 30)
+    label.Position = UDim2.new(0, 15, 0, posY)
+    label.BackgroundTransparency = 1
+    label.Text = "📍 " .. name .. ":"
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.TextSize = 13
+    label.Font = Enum.Font.GothamMedium
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = MainFrame
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0, 95, 0, 30)
+    box.Position = UDim2.new(0, 125, 0, posY)
+    box.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    box.BorderSizePixel = 0
+    box.Text = placeholder
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.TextSize = 13
+    box.Font = Enum.Font.Gotham
+    box.Parent = MainFrame
+    
+    local boxCorner = Instance.new("UICorner")
+    boxCorner.CornerRadius = UDim.new(0, 6)
+    boxCorner.Parent = box
+    
+    local boxStroke = Instance.new("UIStroke")
+    boxStroke.Color = Color3.fromRGB(60, 60, 60)
+    boxStroke.Thickness = 1
+    boxStroke.Parent = box
+    
+    -- Hiệu ứng khi focus ô nhập
+    box.Focused:Connect(function()
+        boxStroke.Color = Color3.fromRGB(255, 255, 255)
+    end)
+    box.FocusLost:Connect(function()
+        boxStroke.Color = Color3.fromRGB(60, 60, 60)
+    end)
+    
+    return box
+end
+
+local InputA = createInput("Nutrient A", "100", 55)
+local InputB = createInput("Nutrient B", "100", 100)
+local InputC = createInput("Nutrient C", "100", 145)
+
+-- Nút Toggle Bật/Tắt khóa chỉ số
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(1, -30, 0, 40)
+ToggleBtn.Position = UDim2.new(0, 15, 0, 205)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.Text = "CHƯA KHÓA (OFF)"
+ToggleBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+ToggleBtn.TextSize = 13
+ToggleBtn.Parent = MainFrame
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 8)
+BtnCorner.Parent = ToggleBtn
+
+local BtnStroke = Instance.new("UIStroke")
+BtnStroke.Color = Color3.fromRGB(100, 100, 100)
+BtnStroke.Thickness = 1
+BtnStroke.Parent = ToggleBtn
+
+--======================================================================
+-- LOGIC KẾT NỐI VÀ QUÈT ĐƯỜNG DẪN MỚI ĐỂ KHÓA CHỈ SỐ
+--======================================================================
+ToggleBtn.MouseButton1Click:Connect(function()
+    isLocking = not isLocking
+    
+    if isLocking then
+        targetA = tonumber(InputA.Text) or 100
+        targetB = tonumber(InputB.Text) or 100
+        targetC = tonumber(InputC.Text) or 100
+        
+        ToggleBtn.Text = "ĐANG KHÓA (ON) 🔒"
+        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            TextColor3 = Color3.fromRGB(0, 0, 0)
+        }):Play()
+        BtnStroke.Color = Color3.fromRGB(255, 255, 255)
+    else
+        ToggleBtn.Text = "CHƯA KHÓA (OFF)"
+        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+            TextColor3 = Color3.fromRGB(200, 200, 200)
+        }):Play()
+        BtnStroke.Color = Color3.fromRGB(100, 100, 100)
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not isLocking then return end
+    
+    -- Đường dẫn mới bạn yêu cầu: PlayerGui -> ReplicationTarget -> PlayerData -> Saves
+    local playerGui = client:FindFirstChild("PlayerGui")
+    local repTarget = playerGui and playerGui:FindFirstChild("ReplicationTarget")
+    local dataFolder = repTarget and repTarget:FindFirstChild("PlayerData")
+    local savesFolder = dataFolder and dataFolder:FindFirstChild("Saves")
+    
+    if savesFolder then
+        -- Sử dụng GetDescendants() để quét sâu vào toàn bộ sinh vật nằm bên trong thư mục Saves
+        for _, creature in pairs(savesFolder:GetDescendants()) do
+            -- Kiểm tra và khóa thuộc tính Nutrient A
+            if creature:GetAttribute("NutrientA") ~= nil then
+                creature:SetAttribute("NutrientA", targetA)
+            end
+            -- Kiểm tra và khóa thuộc tính Nutrient B
+            if creature:GetAttribute("NutrientB") ~= nil then
+                creature:SetAttribute("NutrientB", targetB)
+            end
+            -- Kiểm tra và khóa thuộc tính Nutrient C
+            if creature:GetAttribute("NutrientC") ~= nil then
+                creature:SetAttribute("NutrientC", targetC)
+            end
+        end
+    end
+end)
+
+-- Phím tắt phím J dùng để Ẩn / Hiện nhanh giao diện Locker này
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.J then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
+
+print("Đã cập nhật hệ thống khóa dinh dưỡng Lizluk theo đường dẫn mới thành công! Bấm 'J' để Ẩn/Hiện.")
