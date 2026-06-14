@@ -1,7 +1,7 @@
--- MAGNET & BRING SYSTEM - Fixed v8 (Click-To-Filter Edition)
+-- MAGNET & BRING SYSTEM - Fixed v10 (Smart Name Filter)
 -- G = Bật/Tắt chính
 -- FEATURES: Heartbeat lock, Auto-proximity scan, Vùng quét DebrisField
--- FIXED V8: Thêm tính năng click chuột thẳng vào vật phẩm dưới đất để tự chọn nhanh bộ lọc (Filter)
+-- FIXED V10: Tự động xóa số ở đuôi khi Click chọn đồ, dùng bộ lọc tìm kiếm chuỗi con để gom hết vật phẩm cùng loại (không phân biệt số 1, 2, 3, 4...)
 
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
@@ -12,20 +12,21 @@ local mouse            = client:GetMouse()
 
 local FILE_NAME        = "MagnetStation_Data.json"
 local inversionEnabled = false
-local capturedParts    = {}   -- [part] = {bp, bg}
+local capturedParts    = {}   
 local savedStations    = {}
 local currentTargetPos = nil
 local targetPlayer     = nil
 local selectedItemName = "ALL" 
-local currentSystemMode = "MAGNET" -- "MAGNET" hoặc "BRING"
-local clickToFilterActive = false  -- Trạng thái chế độ Click chọn đồ
+local currentSystemMode = "MAGNET" 
+local clickToFilterActive = false  
 
 -- Config
 local AUTO_PICKUP_RADIUS = 20   
 local SCAN_INTERVAL      = 1.0  
 local BP_POWER           = 5000 
 local BP_DAMPING         = 800  
-local STACK_OFFSET_Y     = 8    
+local MAGNET_OFFSET_Y    = 8    
+local BRING_OFFSET_Y     = 22   
 
 -- =============================================
 -- CLAIM OWNERSHIP
@@ -62,7 +63,7 @@ sg = Instance.new("ScreenGui")
 sg.Name = "MagnetUI"; sg.ResetOnSpawn = false; sg.Parent = client.PlayerGui
 
 local mainFrame = Instance.new("Frame", sg)
-mainFrame.Size = UDim2.new(0, 480, 0, 595) -- Tăng chiều cao để chứa thêm nút Click chọn đồ
+mainFrame.Size = UDim2.new(0, 480, 0, 595) 
 mainFrame.Position = UDim2.new(0, 10, 0.5, -297)
 mainFrame.BackgroundColor3 = Color3.fromRGB(13, 13, 13)
 mainFrame.Draggable = true; mainFrame.Active = true
@@ -103,7 +104,7 @@ bringModeBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
 bringModeBtn.Font = Enum.Font.GothamBold; bringModeBtn.TextSize = 12
 Instance.new("UICorner", bringModeBtn).CornerRadius = UDim.new(0, 4)
 
--- 🆕 CLICK TO FILTER ROW (HÀNG NÚT BẬT TÍNH NĂNG CLICK CHỌN ĐỒ)
+-- CLICK TO FILTER ROW
 local clickSelectFrame = Instance.new("Frame", mainFrame)
 clickSelectFrame.Size = UDim2.new(1, -10, 0, 30); clickSelectFrame.Position = UDim2.new(0, 5, 0, 102)
 clickSelectFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
@@ -210,7 +211,7 @@ Instance.new("UICorner",scanAllBtn).CornerRadius=UDim.new(0,6)
 
 local infoLabel = Instance.new("TextLabel", mainFrame)
 infoLabel.Size=UDim2.new(1,-10,0,26); infoLabel.Position=UDim2.new(0,5,1,-30)
-infoLabel.Text="⚡ ANTI-DROP: Heartbeat lock | Click-to-Select Item v8"
+infoLabel.Text="⚡ ANTI-DROP: Heartbeat lock | v10 Smart Name (Anti-Number)"
 infoLabel.BackgroundColor3=Color3.fromRGB(20,20,20)
 infoLabel.TextColor3=Color3.fromRGB(100,255,100)
 infoLabel.TextSize=11; infoLabel.Font=Enum.Font.GothamBold
@@ -249,7 +250,6 @@ magnetModeBtn.MouseButton1Click:Connect(function()
         currentSystemMode = "MAGNET"
         releaseAll()
         updateModeUI()
-        game.StarterGui:SetCore("SendNotification",{Title="⚙️ Mode Changed",Duration=2,Text="Chế độ: MAGNET (Hút bám theo)"})
     end
 end)
 
@@ -258,32 +258,44 @@ bringModeBtn.MouseButton1Click:Connect(function()
         currentSystemMode = "BRING"
         releaseAll()
         updateModeUI()
-        game.StarterGui:SetCore("SendNotification",{Title="⚙️ Mode Changed",Duration=2,Text="Chế độ: INSTANT BRING (Tốc biến đồ)"})
     end
 end)
 
 -- =============================================
--- REAL NAME EXTRACTOR
+-- REAL NAME EXTRACTOR & CLEANER
 -- =============================================
 local function getRealItemName(obj)
-    if obj:IsA("BasePart") and not string.match(obj.Name, "^%d+$") then
-        return obj.Name
+    local rawName = obj.Name
+    if obj:IsA("BasePart") and not string.match(rawName, "^%d+$") then
+        rawName = obj.Name
+    else
+        local meshPart = obj:FindFirstChildWhichIsA("MeshPart") or obj:FindFirstChildWhichIsA("BasePart")
+        if meshPart then rawName = meshPart.Name end
     end
-    local meshPart = obj:FindFirstChildWhichIsA("MeshPart") or obj:FindFirstChildWhichIsA("BasePart")
-    if meshPart then return meshPart.Name end
-    return obj.Name
+    return rawName
 end
 
+-- 🆕 LỌC BỎ SỐ Ở ĐUÔI (Ví dụ: Fishfillet1 -> Fishfillet)
+local function cleanNameOfNumbers(name)
+    local cleaned = string.gsub(name, "%d+$", "") -- Xóa toàn bộ số ở cuối chuỗi
+    return cleaned
+end
+
+-- 🆕 LOGIC QUÉT SO SÁNH CHUỖI CON (CONTAINS)
 local function itemMatchesFilter(obj)
     if selectedItemName == "ALL" then return true end
-    return getRealItemName(obj) == selectedItemName
+    local realName = getRealItemName(obj)
+    
+    -- Chỉ cần tên vật phẩm chứa chuỗi Filter (Không phân biệt số đuôi)
+    return string.find(realName, selectedItemName) ~= nil
 end
 
 local function releaseMismatchedItems()
     if selectedItemName == "ALL" then return end
     for part, _ in pairs(capturedParts) do
         if part and part.Parent then
-            local match = (part.Name == selectedItemName) or (part.Parent and getRealItemName(part.Parent) == selectedItemName)
+            local realName = getRealItemName(part.Parent and part.Parent or part)
+            local match = string.find(realName, selectedItemName) ~= nil
             if not match then
                 pcall(function()
                     if capturedParts[part].bp then capturedParts[part].bp:Destroy() end
@@ -299,7 +311,7 @@ end
 -- =============================================
 -- ITEM LIST GENERATOR
 -- =============================================
-local updateItemList -- Khai báo trước để gọi chéo
+local updateItemList 
 function updateItemList()
     for _, v in ipairs(itemScroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
     local count = 0
@@ -318,7 +330,10 @@ function updateItemList()
         for _, obj in ipairs(df:GetChildren()) do
             if obj:IsA("BasePart") or obj:IsA("Model") or obj:IsA("Folder") then
                 local realName = getRealItemName(obj)
-                if realName and not string.match(realName, "^%d+$") then foundNames[realName] = true end
+                if realName and not string.match(realName, "^%d+$") then 
+                    local cleanName = cleanNameOfNumbers(realName) -- Hiển thị tên đã làm sạch số lên UI
+                    foundNames[cleanName] = true 
+                end
             end
         end
     end
@@ -346,7 +361,7 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 🆕 CLICK TO SELECT ITEM LOGIC
+-- CLICK TO SELECT ITEM LOGIC (Đã sửa đổi)
 -- =============================================
 local function toggleClickToFilter()
     clickToFilterActive = not clickToFilterActive
@@ -354,7 +369,6 @@ local function toggleClickToFilter()
         clickSelectBtn.Text = "🖱️ CLICK TO FILTER: ON 🟢"
         clickSelectBtn.BackgroundColor3 = Color3.fromRGB(20, 80, 20)
         clickSelectBtn.TextColor3 = Color3.new(1, 1, 1)
-        game.StarterGui:SetCore("SendNotification",{Title="🖱️ Nhấp chuột chọn đồ",Duration=2,Text="Bấm thẳng vào vật phẩm dưới đất để chọn lọc!"})
     else
         clickSelectBtn.Text = "🖱️ CLICK TO FILTER: OFF"
         clickSelectBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
@@ -366,18 +380,15 @@ clickSelectBtn.MouseButton1Click:Connect(toggleClickToFilter)
 
 mouse.Button1Down:Connect(function()
     if not clickToFilterActive then return end
-    
     local target = mouse.Target
     if not target then return end
 
-    -- Tìm xem vật phẩm có nằm trong DebrisField không
     local df = workspace:FindFirstChild("DebrisField")
     if df then
         local current = target
         local isInsideDebris = false
         local topObject = nil
 
-        -- Đi ngược lên trên tổ hợp cha để check xem có thuộc DebrisField không
         while current and current ~= workspace do
             if current.Parent == df then
                 isInsideDebris = true
@@ -390,16 +401,13 @@ mouse.Button1Down:Connect(function()
         if isInsideDebris and topObject then
             local realName = getRealItemName(topObject)
             if realName and not string.match(realName, "^%d+$") then
-                selectedItemName = realName
+                -- TỰ ĐỘNG LỌC BỎ SỐ KHI BẠN CLICK CHỌN
+                local finalCleanName = cleanNameOfNumbers(realName)
+                
+                selectedItemName = finalCleanName
                 releaseMismatchedItems()
                 updateItemList()
-                
-                game.StarterGui:SetCore("SendNotification",{
-                    Title="🎯 Đã Chọn Lọc",
-                    Duration=3,
-                    Text="Bộ lọc tự động đổi thành: " .. realName
-                })
-                -- Chọn xong tự tắt chế độ Click đi để tránh nhấp nhầm về sau
+                game.StarterGui:SetCore("SendNotification",{Title="🎯 Đã Chọn Loại",Duration=3,Text="Bộ lọc gốc: " .. finalCleanName})
                 toggleClickToFilter()
             end
         end
@@ -410,13 +418,17 @@ end)
 -- SYSTEM TARGET COORDINATES
 -- =============================================
 local function getTargetPos()
+    local currentOffset = (currentSystemMode == "BRING") and BRING_OFFSET_Y or MAGNET_OFFSET_Y
+
     if targetPlayer and targetPlayer.Character then
         local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then return hrp.Position + Vector3.new(0, STACK_OFFSET_Y, 0) end
+        if hrp then return hrp.Position + Vector3.new(0, currentOffset, 0) end
     end
-    if currentTargetPos then return currentTargetPos end
+    if currentTargetPos then 
+        return currentTargetPos + Vector3.new(0, currentOffset, 0) 
+    end
     local rp = client.Character and client.Character:FindFirstChild("HumanoidRootPart")
-    if rp then return (rp.CFrame * CFrame.new(0, STACK_OFFSET_Y, -3)).Position end
+    if rp then return (rp.CFrame * CFrame.new(0, currentOffset, -3)).Position end
     return nil
 end
 
@@ -467,7 +479,7 @@ local function capturePart(part)
 
     claimOwnership(part)
 
-    -- CHẾ ĐỘ BRING: TỐC BIẾN NGAY LẬP TỨC
+    -- CHẾ ĐỘ BRING: TỐC BIẾN LÊN CAO RƠI XUỐNG
     if currentSystemMode == "BRING" then
         pcall(function()
             part.Velocity = Vector3.new(0,0,0)
@@ -558,7 +570,7 @@ task.spawn(function()
             elseif currentTargetPos then
                 mode = "STATION"
             end
-            statusLabel.Text = string.format("Items: %d | Target: %s | Sys: %s", count, mode, currentSystemMode)
+            statusLabel.Text = string.format("Items: %d | Target: %s | Filter: %s", count, mode, selectedItemName)
         end
         task.wait(0.5)
     end
@@ -725,4 +737,4 @@ UserInputService.InputBegan:Connect(function(input,gpe) if not gpe and input.Key
 
 -- Init
 updateStationList(); updatePlayerList(); updateItemList(); updateModeUI()
-print("🧲 Magnet System v8 Ready! Bật nút 'CLICK TO FILTER' để nhấp chuột chọn nhanh đồ.")
+print("🧲 Magnet System v10 Loaded! Đã tối ưu hóa bộ lọc tên thông minh chống trùng số.")
