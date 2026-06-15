@@ -1,0 +1,170 @@
+--[[
+    SHERLOCK APEX V90: DRAG OVERHAUL
+    Fixes: Draggable frame functionality
+    Includes: Saved Item ESP, Player ESP, Inf Jump, Instant Interact
+--]]
+
+local UIS = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
+
+local ApexHub = Instance.new("ScreenGui")
+ApexHub.Name = "Apex_V90_Sea"; ApexHub.Parent = game:GetService("CoreGui")
+
+-- --- UI CONSTRUCTION ---
+local Main = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local Content = Instance.new("ScrollingFrame")
+local UIList = Instance.new("UIListLayout")
+local UICorner = Instance.new("UICorner")
+local UIStroke = Instance.new("UIStroke")
+
+Main.Parent = ApexHub; Main.BackgroundColor3 = Color3.fromRGB(12, 12, 18); Main.BorderSizePixel = 0
+Main.Position = UDim2.new(0.5, -130, 0.5, -200); Main.Size = UDim2.new(0, 260, 0, 400)
+Main.Active = true -- Important for dragging
+Main.Draggable = false -- We use our own custom logic for smoothness
+
+UICorner.CornerRadius = UDim.new(0, 15); UICorner.Parent = Main
+UIStroke.Thickness = 3; UIStroke.Color = Color3.fromRGB(0, 255, 120); UIStroke.Parent = Main
+
+-- --- THE FIXED DRAG SCRIPT ---
+local dragToggle, dragInput, dragStart, startPos
+local function updateInput(input)
+    local delta = input.Position - dragStart
+    Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+Main.InputBegan:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        dragToggle = true
+        dragStart = input.Position
+        startPos = Main.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragToggle = false
+            end
+        end)
+    end
+end)
+
+Main.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if input == dragInput and dragToggle then
+        updateInput(input)
+    end
+end)
+
+-- --- UI CONTENT ---
+Title.Parent = Main; Title.Size = UDim2.new(1, 0, 0, 50); Title.Text = "SHERLOCK APEX V90"; Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = Enum.Font.GothamBlack; Title.TextSize = 18; Title.BackgroundTransparency = 1
+
+Content.Parent = Main; Content.Position = UDim2.new(0, 15, 0, 60); Content.Size = UDim2.new(1, -30, 1, -75)
+Content.BackgroundTransparency = 1; Content.ScrollBarThickness = 0
+UIList.Parent = Content; UIList.Padding = UDim.new(0, 8)
+
+local function MakeBtn(txt, cb)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 45); btn.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    btn.Text = txt; btn.TextColor3 = Color3.new(1, 1, 1); btn.Font = Enum.Font.GothamBold; btn.TextSize = 10; btn.Parent = Content
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = btn
+    btn.MouseButton1Click:Connect(function() cb(btn) end)
+    return btn
+end
+
+-- --- 1. SAVED ITEM ESP ---
+local espOn = false
+local lootKeywords = {"wood", "plastic", "scrap", "metal", "barrel", "crate", "box", "plank", "bolt", "leaf"}
+
+MakeBtn("ITEM ESP: OFF", function(btn)
+    espOn = not espOn
+    btn.Text = espOn and "ITEM ESP: ACTIVE" or "ITEM ESP: OFF"
+    task.spawn(function()
+        while espOn do
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("BasePart") or v:IsA("Model") then
+                    local nameLower = v.Name:lower()
+                    local isLoot = false
+                    for _, key in pairs(lootKeywords) do if nameLower:find(key) then isLoot = true; break end end
+                    if isLoot then
+                        if not v:FindFirstChild("SherlockLabel") then
+                            local bg = Instance.new("BillboardGui", v)
+                            bg.Name = "SherlockLabel"; bg.Size = UDim2.new(0, 120, 0, 50); bg.AlwaysOnTop = true
+                            local tl = Instance.new("TextLabel", bg)
+                            tl.Size = UDim2.new(1, 0, 1, 0); tl.BackgroundTransparency = 1; tl.TextColor3 = Color3.new(0, 1, 1)
+                            tl.Text = "[ " .. v.Name .. " ]"; tl.Font = Enum.Font.GothamBold; tl.TextSize = 11; tl.TextStrokeTransparency = 0.5
+                        end
+                    end
+                end
+            end
+            task.wait(2)
+        end
+        for _, v in pairs(workspace:GetDescendants()) do if v.Name == "SherlockLabel" then v:Destroy() end end
+    end)
+end)
+
+-- --- 2. PLAYER ESP ---
+local pEsp = false
+MakeBtn("PLAYER ESP: OFF", function(btn)
+    pEsp = not pEsp
+    btn.Text = pEsp and "PLAYER ESP: ACTIVE" or "PLAYER ESP: OFF"
+    task.spawn(function()
+        while pEsp do
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local char = p.Character
+                    local hl = char:FindFirstChild("PlayerHighlight") or Instance.new("Highlight", char)
+                    hl.Name = "PlayerHighlight"; hl.FillColor = Color3.new(0.5, 0, 1); hl.OutlineColor = Color3.new(1, 1, 1)
+                    
+                    if not char.HumanoidRootPart:FindFirstChild("PlayerLabel") then
+                        local b = Instance.new("BillboardGui", char.HumanoidRootPart)
+                        b.Name = "PlayerLabel"; b.Size = UDim2.new(0, 150, 0, 50); b.AlwaysOnTop = true; b.ExtentsOffset = Vector3.new(0, 3, 0)
+                        local t = Instance.new("TextLabel", b)
+                        t.Size = UDim2.new(1, 0, 1, 0); t.BackgroundTransparency = 1; t.TextColor3 = Color3.new(1, 1, 1)
+                        t.Font = Enum.Font.GothamBold; t.TextSize = 12; t.TextStrokeTransparency = 0
+                        task.spawn(function()
+                            while char:FindFirstChild("HumanoidRootPart") and pEsp do
+                                local dist = math.floor((LP.Character.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude)
+                                t.Text = p.Name .. " [" .. dist .. "m]"
+                                task.wait(0.1)
+                            end
+                            b:Destroy()
+                        end)
+                    end
+                end
+            end
+            task.wait(2)
+        end
+        for _, p in pairs(Players:GetPlayers()) do if p.Character and p.Character:FindFirstChild("PlayerHighlight") then p.Character.PlayerHighlight:Destroy() end end
+    end)
+end)
+
+-- --- 3. INSTANT INTERACT ---
+MakeBtn("INSTANT INTERACT", function(btn)
+    for _, v in pairs(getgc(true)) do
+        if type(v) == "table" and (rawget(v, "CollectionTime") or rawget(v, "HoldTime")) then
+            v.CollectionTime = 0
+            v.HoldTime = 0
+        end
+    end
+    btn.Text = "INTERACT: GOD MODE"
+end)
+
+-- --- 4. INFINITE JUMP ---
+local infJump = false
+MakeBtn("INF JUMP: OFF", function(btn)
+    infJump = not infJump
+    btn.Text = infJump and "INF JUMP: ON" or "INF JUMP: OFF"
+end)
+
+UIS.JumpRequest:Connect(function()
+    if infJump and LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then
+        LP.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
+    end
+end)
+
+MakeBtn("EXIT", function() ApexHub:Destroy() end)
