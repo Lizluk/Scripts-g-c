@@ -1,18 +1,18 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- Tên file lưu trữ trên máy của bạn (nằm trong thư mục workspace của Executor)
-local SAVE_FILE_NAME = "FishingRod_SavedList.txt"
+-- Tên file lưu trữ trong thư mục workspace của Executor
+local SAVE_FILE_NAME = "FishingRod_SavedList_V3.txt"
 
--- Tự động dọn dẹp GUI cũ nếu chạy lại script
+-- Dọn dẹp GUI cũ nếu lỡ chạy lại script nhiều lần
 local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("FishingRodAttributeManager")
 if oldGui then oldGui:Destroy() end
 
--- Biến lưu trạng thái vòng lặp và danh sách đã lưu
+-- Biến lưu trạng thái
 local activeLoops = {}
 local savedNamesList = {}
 
--- Hàm lấy cần câu trong nhân vật
+-- Hàm lấy cần câu
 local function getFishingRod()
     local char = LocalPlayer.Character or workspace:FindFirstChild(LocalPlayer.Name) or workspace:FindFirstChild("RikaOrimoto_777")
     if char then
@@ -22,16 +22,15 @@ local function getFishingRod()
 end
 
 -- =========================================================================
--- HÀM LƯU VÀ ĐỌC FILE (SAVE / LOAD)
+-- HÀM LƯU VÀ ĐỌC FILE (SAVE / LOAD / DELETE)
 -- =========================================================================
 local function saveListToFile()
-    -- Chuyển danh sách table thành chuỗi văn bản, cách nhau bằng dấu phẩy
     local success, err = pcall(function()
         if writefile then
             writefile(SAVE_FILE_NAME, game:GetService("HttpService"):JSONEncode(savedNamesList))
         end
     end)
-    if not success then warn("⚠️ Không thể lưu file: ", err) end
+    if not success then warn("⚠️ Lỗi lưu file: ", err) end
 end
 
 local function loadListFromFile()
@@ -42,13 +41,13 @@ local function loadListFromFile()
         end)
         if success and type(result) == "table" then
             savedNamesList = result
-            print("💾 Đã tải thành công danh sách lưu từ máy!")
+            print("💾 Đã tải danh sách lưu cũ!")
         end
     end
 end
 
 -- =========================================================================
--- KHỞI TẠO GIAO DIỆN (UI)
+-- KHỞI TẠO GIAO DIỆN CHÍNH (UI)
 -- =========================================================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "FishingRodAttributeManager"
@@ -56,9 +55,9 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 320, 0, 420)
-MainFrame.Position = UDim2.new(0.5, -160, 0.4, -210)
-MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+MainFrame.Size = UDim2.new(0, 340, 0, 420)
+MainFrame.Position = UDim2.new(0.5, -170, 0.4, -210)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -69,16 +68,16 @@ Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundTransparency = 1
-Title.Text = "🎣 Fishing Rod Lock (Auto-Save)"
+Title.Text = "🎣 Fishing Rod Lock & Edit"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 16
 Title.Font = Enum.Font.SourceSansBold
 Title.Parent = MainFrame
 
 local InputBox = Instance.new("TextBox")
-InputBox.Size = UDim2.new(0, 280, 0, 40)
+InputBox.Size = UDim2.new(0, 300, 0, 40)
 InputBox.Position = UDim2.new(0, 20, 0, 50)
-InputBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+InputBox.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
 InputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 InputBox.PlaceholderText = "Nhập tên cá muốn Loop Lock..."
 InputBox.Text = ""
@@ -88,9 +87,9 @@ InputBox.Parent = MainFrame
 Instance.new("UICorner", InputBox).CornerRadius = UDim.new(0, 6)
 
 local AddButton = Instance.new("TextButton")
-AddButton.Size = UDim2.new(0, 280, 0, 40)
+AddButton.Size = UDim2.new(0, 300, 0, 40)
 AddButton.Position = UDim2.new(0, 20, 0, 100)
-AddButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+AddButton.BackgroundColor3 = Color3.fromRGB(0, 130, 180)
 AddButton.Text = "➕ Thêm Vào Danh Sách Khóa"
 AddButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 AddButton.TextSize = 15
@@ -99,7 +98,7 @@ AddButton.Parent = MainFrame
 Instance.new("UICorner", AddButton).CornerRadius = UDim.new(0, 6)
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(0, 280, 0, 240)
+ScrollingFrame.Size = UDim2.new(0, 300, 0, 240)
 ScrollingFrame.Position = UDim2.new(0, 20, 0, 155)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -116,7 +115,7 @@ UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 end)
 
 -- =========================================================================
--- LOGIC VÒNG LẶP QUÉT & KHÓA (LOOP ATTRIBUTE)
+-- LOGIC VÒNG LẶP KHÓA (LOOP ATTRIBUTE)
 -- =========================================================================
 local function startLockLoop(fishName)
     if activeLoops[fishName] then return end
@@ -133,38 +132,62 @@ local function startLockLoop(fishName)
     end)
 end
 
--- Hàm tạo Nút bấm trong UI công cộng
+-- =========================================================================
+-- HÀM TẠO DÒNG ITEM CÓ NÚT XÓA (❌)
+-- =========================================================================
 local function createLoopButton(fishName)
-    if ScrollingFrame:FindFirstChild(fishName) then return end
+    if ScrollingFrame:FindFirstChild("Container_" .. fishName) then return end
 
+    -- Khung chứa bao gồm cả nút bấm và nút xóa
+    local Container = Instance.new("Frame")
+    Container.Name = "Container_" .. fishName
+    Container.Size = UDim2.new(1, 0, 0, 38)
+    Container.BackgroundTransparency = 1
+    Container.Parent = ScrollingFrame
+
+    -- Nút bật/tắt Loop chính (Nằm bên trái)
     local ItemButton = Instance.new("TextButton")
-    ItemButton.Name = fishName
-    ItemButton.Size = UDim2.new(1, 0, 0, 38)
+    ItemButton.Size = UDim2.new(1, -45, 1, 0) -- Chừa khoảng trống bên phải cho nút xóa
+    ItemButton.Position = UDim2.new(0, 0, 0, 0)
     ItemButton.BackgroundColor3 = Color3.fromRGB(55, 55, 60)
     ItemButton.Text = "  ⚪ Loop: " .. fishName
     ItemButton.TextColor3 = Color3.fromRGB(220, 220, 220)
     ItemButton.TextSize = 14
     ItemButton.Font = Enum.Font.SourceSansBold
     ItemButton.TextXAlignment = Enum.TextXAlignment.Left
-    ItemButton.Parent = ScrollingFrame
+    ItemButton.Parent = Container
     Instance.new("UICorner", ItemButton).CornerRadius = UDim.new(0, 5)
+
+    -- Nút Xóa (Nằm bên phải)
+    local DeleteButton = Instance.new("TextButton")
+    DeleteButton.Size = UDim2.new(0, 38, 1, 0)
+    DeleteButton.Position = UDim2.new(1, -38, 0, 0)
+    DeleteButton.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
+    DeleteButton.Text = "❌"
+    DeleteButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DeleteButton.TextSize = 12
+    DeleteButton.Font = Enum.Font.SourceSansBold
+    DeleteButton.Parent = Container
+    Instance.new("UICorner", DeleteButton).CornerRadius = UDim.new(0, 5)
 
     local isLooping = false
 
+    -- Logic khi nhấn vào nút chọn tên cá (Bật/Tắt Loop)
     ItemButton.MouseButton1Click:Connect(function()
         isLooping = not isLooping
         if isLooping then
-            -- Tắt các loop khác đang chạy
+            -- Tắt các dòng khác đang bật loop để tránh xung đột
             for otherName, _ in pairs(activeLoops) do
                 activeLoops[otherName] = false
-                local otherBtn = ScrollingFrame:FindFirstChild(otherName)
-                if otherBtn then
+                local otherContainer = ScrollingFrame:FindFirstChild("Container_" .. otherName)
+                local otherBtn = otherContainer and otherContainer:FindFirstChildOfClass("TextButton")
+                if otherBtn and otherBtn ~= ItemButton then
                     otherBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 60)
                     otherBtn.Text = "  ⚪ Loop: " .. otherName
                 end
             end
             startLockLoop(fishName)
-            ItemButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            ItemButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Đỏ rực báo hiệu đang khóa
             ItemButton.Text = "  🔴 LOCKING: " .. fishName
         else
             activeLoops[fishName] = false
@@ -172,25 +195,44 @@ local function createLoopButton(fishName)
             ItemButton.Text = "  ⚪ Loop: " .. fishName
         end
     end)
+
+    -- Logic khi bấm nút xóa (❌)
+    DeleteButton.MouseButton1Click:Connect(function()
+        -- 1. Ngắt vòng lặp loop nếu dòng này đang chạy
+        activeLoops[fishName] = false
+        
+        -- 2. Xóa khỏi table bộ nhớ lưu trữ
+        local index = table.find(savedNamesList, fishName)
+        if index then
+            table.remove(savedNamesList, index)
+        end
+        
+        -- 3. Cập nhật lại file lưu trên máy
+        saveListToFile()
+        
+        -- 4. Xóa khối UI này khỏi màn hình ngay lập tức
+        Container:Destroy()
+        print("🗑️ Đã xóa hoàn toàn: " .. fishName)
+    end)
 end
 
 -- =========================================================================
--- KHỞI CHẠY VÀ ĐỒNG BỘ
+-- KHỞI CHẠY HỆ THỐNG
 -- =========================================================================
 
--- Bước 1: Đọc dữ liệu cũ từ máy lên (nếu có)
+-- Tự động tải file lưu cũ từ máy lên giao diện
 loadListFromFile()
 for _, name in ipairs(savedNamesList) do
     createLoopButton(name)
 end
 
--- Bước 2: Sự kiện khi người dùng gõ và thêm tên mới
+-- Sự kiện nạp thêm từ mới từ ô nhập văn bản
 AddButton.MouseButton1Click:Connect(function()
     local text = InputBox.Text:gsub("^%s*(.-)%s*$", "%1")
     if text ~= "" and not table.find(savedNamesList, text) then
-        table.insert(savedNamesList, text) -- Thêm vào table bộ nhớ
-        saveListToFile() -- Ghi đè cập nhật vào file lưu trữ của máy
-        createLoopButton(text) -- Tạo nút bấm trên màn hình
+        table.insert(savedNamesList, text)
+        saveListToFile() -- Lưu lại vào máy tính
+        createLoopButton(text) -- Tạo dòng nút bấm + nút xóa trên bảng
         InputBox.Text = ""
     end
 end)
