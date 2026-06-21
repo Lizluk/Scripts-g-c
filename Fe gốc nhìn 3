@@ -1,0 +1,224 @@
+-- Third Person View - Fixed Đầu Thỏ & Ẩn GUI
+-- V = Bật/Tắt góc nhìn thứ ba
+-- K = Ẩn/Hiện bảng Menu GUI thông số
+-- Lăn chuột giữa = Phóng to / Thu nhỏ khoảng cách
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+local enabled = false
+local guiVisible = true -- Trạng thái ẩn/hiện GUI
+local updateConn = nil
+local originalMaxZoom = nil
+local originalMinZoom = nil
+
+-- Cấu hình khoảng cách Zoom ban đầu và giới hạn
+local ZOOM_DISTANCE = 15
+local MIN_ZOOM = 1       
+local MAX_ZOOM = 100      
+local ZOOM_STEP = 1.5    
+
+-- =============================================
+-- XỬ LÝ ẨN ĐẦU GỐC TRẮNG - GIỮ LẠI ĐẦU THỎ/MŨ
+-- =============================================
+local function showHeadAndAccessories()
+    if not character then return end
+    
+    -- ẨN CÁI ĐẦU MÀU TRẮNG GỐC BÊN TRONG (Fix lỗi lộ đầu trắng)
+    local head = character:FindFirstChild("Head")
+    if head then
+        head.LocalTransparencyModifier = 1 -- 1 = Hoàn toàn ẩn đầu gốc
+        head.Transparency = 1
+    end
+    
+    -- HIỆN TẤT CẢ PHỤ KIỆN (Mũ, tóc, đầu thỏ của game)
+    for _, obj in pairs(character:GetDescendants()) do
+        if obj:IsA("Accessory") or obj:IsA("Hat") then
+            local handle = obj:FindFirstChild("Handle")
+            if handle and handle:IsA("BasePart") then
+                handle.LocalTransparencyModifier = 0 -- 0 = Hiện rõ
+                handle.Transparency = 0
+            end
+        end
+        
+        if obj:IsA("MeshPart") or obj:IsA("Part") then
+            if obj.Parent and obj.Parent:IsA("Accessory") then
+                obj.LocalTransparencyModifier = 0
+                obj.Transparency = 0
+            end
+        end
+    end
+end
+
+-- =============================================
+-- GUI MÀU ĐEN THÔNG BÁO
+-- =============================================
+local sg = Instance.new("ScreenGui")
+sg.Name = "ThirdPersonGui"
+sg.ResetOnSpawn = false
+sg.Parent = player:WaitForChild("PlayerGui")
+
+local lbl = Instance.new("TextLabel")
+lbl.Size = UDim2.new(0, 280, 0, 95)
+lbl.Position = UDim2.new(0, 10, 0.5, 300)
+lbl.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+lbl.BackgroundTransparency = 0.1
+lbl.BorderSizePixel = 0
+lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+lbl.TextSize = 16
+lbl.Font = Enum.Font.GothamBold
+lbl.TextWrapped = true
+lbl.Text = string.format("[V] Third Person: OFF\n\nZoom: %d studs\n[Scroll] Đổi khoảng cách\n[K] Ẩn/Hiện Menu này", ZOOM_DISTANCE)
+lbl.Parent = sg
+
+Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 10)
+local stroke = Instance.new("UIStroke", lbl)
+stroke.Color = Color3.fromRGB(80, 80, 80)
+stroke.Thickness = 2
+
+-- Cập nhật chữ trên giao diện
+local function updateGuiText()
+    if enabled then
+        lbl.Text = string.format("[V] Third Person: ON\n\nZoom: %.1f studs\n[Scroll] Đổi khoảng cách\n[K] Ẩn/Hiện Menu này", ZOOM_DISTANCE)
+        lbl.BackgroundColor3 = Color3.fromRGB(0, 0, 40)
+        stroke.Color = Color3.fromRGB(50, 150, 255)
+    else
+        lbl.Text = string.format("[V] Third Person: OFF\n\nZoom: %.1f studs\n[Scroll] Đổi khoảng cách\n[K] Ẩn/Hiện Menu này", ZOOM_DISTANCE)
+        lbl.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+        stroke.Color = Color3.fromRGB(80, 80, 80)
+    end
+end
+
+-- =============================================
+-- BẬT THIRD PERSON
+-- =============================================
+local function enableThirdPerson()
+    enabled = true
+    
+    originalMaxZoom = player.CameraMaxZoomDistance
+    originalMinZoom = player.CameraMinZoomDistance
+    
+    player.CameraMaxZoomDistance = ZOOM_DISTANCE
+    player.CameraMinZoomDistance = ZOOM_DISTANCE
+    player.CameraMode = Enum.CameraMode.Classic
+    
+    local camera = workspace.CurrentCamera
+    if camera then
+        camera.CameraType = Enum.CameraType.Custom
+    end
+    
+    -- Xử lý ẩn đầu trắng ngay
+    showHeadAndAccessories()
+    
+    -- Update liên tục theo từng khung hình (mỗi frame)
+    updateConn = RunService.Heartbeat:Connect(function()
+        if not enabled then return end
+        
+        player.CameraMaxZoomDistance = ZOOM_DISTANCE
+        player.CameraMinZoomDistance = ZOOM_DISTANCE
+        player.CameraMode = Enum.CameraMode.Classic
+        
+        local cam = workspace.CurrentCamera
+        if cam then
+            cam.CameraType = Enum.CameraType.Custom
+        end
+        
+        -- Khóa ẩn đầu trắng liên tục
+        showHeadAndAccessories()
+    end)
+    
+    updateGuiText()
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "👁️ Third Person ON",
+        Duration = 2,
+        Text = "Đầu thỏ đã được sửa lỗi hiển thị!",
+    })
+end
+
+-- =============================================
+-- TẮT THIRD PERSON
+-- =============================================
+local function disableThirdPerson()
+    enabled = false
+    
+    if updateConn then
+        updateConn:Disconnect()
+        updateConn = nil
+    end
+    
+    if originalMaxZoom then player.CameraMaxZoomDistance = originalMaxZoom end
+    if originalMinZoom then player.CameraMinZoomDistance = originalMinZoom end
+    
+    -- Trả lại thuộc tính đầu khi tắt hack
+    local head = character:FindFirstChild("Head")
+    if head then head.LocalTransparencyModifier = 0 end
+    
+    updateGuiText()
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "✅ Default View",
+        Duration = 2,
+        Text = "Camera trở lại bình thường",
+    })
+end
+
+-- =============================================
+-- ĐỌC PHÍM BẤM (INPUT)
+-- =============================================
+UserInputService.InputBegan:Connect(function(input, chat)
+    if chat then return end
+    
+    -- Bấm V để bật/tắt Góc nhìn
+    if input.KeyCode == Enum.KeyCode.V then
+        if not enabled then
+            enableThirdPerson()
+        else
+            disableThirdPerson()
+        end
+    end
+    
+    -- Bấm K để Ẩn/Hiện bảng đen Menu GUI
+    if input.KeyCode == Enum.KeyCode.K then
+        guiVisible = not guiVisible
+        lbl.Visible = guiVisible
+    end
+end)
+
+-- =============================================
+-- LĂN CHUỘT ĐỂ ZOOM KHOẢNG CÁCH
+-- =============================================
+UserInputService.InputChanged:Connect(function(input, chat)
+    if chat then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseWheel then
+        if input.Position.Z > 0 then
+            ZOOM_DISTANCE = math.max(MIN_ZOOM, ZOOM_DISTANCE - ZOOM_STEP)
+        else
+            ZOOM_DISTANCE = math.min(MAX_ZOOM, ZOOM_DISTANCE + ZOOM_STEP)
+        end
+        
+        if enabled then
+            player.CameraMaxZoomDistance = ZOOM_DISTANCE
+            player.CameraMinZoomDistance = ZOOM_DISTANCE
+        end
+        
+        updateGuiText()
+    end
+end)
+
+-- Hồi sinh nhân vật
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    if enabled then
+        task.wait(1)
+        enableThirdPerson()
+    end
+end)
+
+print("⚙️ Đã nạp bản Vá Đầu Thỏ & Thêm Phím K để ẩn Menu!")
