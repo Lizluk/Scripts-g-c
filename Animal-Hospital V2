@@ -1,0 +1,512 @@
+-- [[ LIZLUK ANOMALY EXPLOIT PANEL - ULTRA ATTRIBUTE FIX ]] --
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+local Config = {
+    MonsterESP = false,
+    PlayerESP = false,
+    ItemESP = false,
+    AreaESP = false,
+    AutoInteract = false,
+    AntiSanity = false,
+    AutoLockSanity = false, 
+    AutoLockCharges = false, 
+    AutoHeartbeat = false,
+    InfiniteRevive = false,
+    AntiJumpscare = false
+}
+
+if LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("Lizluk_Anomaly_Panel") then
+    LocalPlayer.PlayerGui.Lizluk_Anomaly_Panel:Destroy()
+end
+
+--======================================================================
+-- 1. GIAO DIỆN ĐIỀU KHIỂN (GUI)
+--======================================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Lizluk_Anomaly_Panel"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 340, 0, 520)
+MainFrame.Position = UDim2.new(0.5, -170, 0.5, -260)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = MainFrame
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(255, 255, 255)
+UIStroke.Thickness = 2
+UIStroke.Parent = MainFrame
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, 0, 0, 50)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "🦋 LIZLUK ANOMALY V2 🦋"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextSize = 16
+TitleLabel.Parent = MainFrame
+
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Size = UDim2.new(1, -20, 1, -120)
+ScrollingFrame.Position = UDim2.new(0, 10, 0, 55)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.ScrollBarThickness = 4
+ScrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 255, 255)
+ScrollingFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ScrollingFrame
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 6)
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+local ActionFrame = Instance.new("Frame")
+ActionFrame.Size = UDim2.new(1, -20, 0, 45)
+ActionFrame.Position = UDim2.new(0, 10, 1, -55)
+ActionFrame.BackgroundTransparency = 1
+ActionFrame.Parent = MainFrame
+
+local function createToggle(configName, displayName)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -10, 0, 38)
+    button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    button.Text = "   ❌   " .. displayName
+    button.TextColor3 = Color3.fromRGB(180, 180, 180)
+    button.Font = Enum.Font.GothamMedium
+    button.TextSize = 13
+    button.TextXAlignment = Enum.TextXAlignment.Left
+    button.Parent = ScrollingFrame
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = button
+
+    local btnStroke = Instance.new("UIStroke")
+    btnStroke.Color = Color3.fromRGB(50, 50, 50)
+    btnStroke.Thickness = 1
+    btnStroke.Parent = button
+
+    button.MouseButton1Click:Connect(function()
+        Config[configName] = not Config[configName]
+        if Config[configName] then
+            button.Text = "   ✅   " .. displayName
+            button.TextColor3 = Color3.fromRGB(0, 0, 0)
+            TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+            btnStroke.Color = Color3.fromRGB(255, 255, 255)
+        else
+            button.Text = "   ❌   " .. displayName
+            button.TextColor3 = Color3.fromRGB(180, 180, 180)
+            TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 30)}):Play()
+            btnStroke.Color = Color3.fromRGB(50, 50, 50)
+        end
+    end)
+    return button
+end
+
+createToggle("MonsterESP", "Nhìn xuyên tường Quái Vật (Monster)")
+createToggle("PlayerESP", "Nhìn xuyên tường Đồng Đội (Players)")
+createToggle("ItemESP", "Nhìn xuyên tường Vật Phẩm & Thùng Rác")
+createToggle("AreaESP", "Hiển thị Tên Phòng Ốc (Areas)")
+createToggle("AutoInteract", "Tự động nhặt đồ cực nhanh (Auto PP)")
+createToggle("AntiSanity", "Chống giảm độ tỉnh táo (Anti-Sanity)")
+createToggle("AutoHeartbeat", "Tự động thắng Minigame Đập Tim")
+createToggle("AntiJumpscare", "Bẻ khóa chặn Jumpscare / Mù màn hình")
+createToggle("InfiniteRevive", "Auto hồi sinh đồng đội từ xa liên tục")
+
+--======================================================================
+-- CONTAINER SANITY
+--======================================================================
+local SanityContainer = Instance.new("Frame")
+SanityContainer.Size = UDim2.new(1, -10, 0, 42)
+SanityContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+SanityContainer.Parent = ScrollingFrame
+
+local SanityCorner = Instance.new("UICorner")
+SanityCorner.CornerRadius = UDim.new(0, 6)
+SanityCorner.Parent = SanityContainer
+
+local SanityLabel = Instance.new("TextLabel")
+SanityLabel.Size = UDim2.new(0.65, 0, 1, 0)
+SanityLabel.Position = UDim2.new(0, 10, 0, 0)
+SanityLabel.BackgroundTransparency = 1
+SanityLabel.Text = "🧠 Đặt số Sanity (Đổi trực tiếp Attribute):"
+SanityLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+SanityLabel.Font = Enum.Font.GothamMedium
+SanityLabel.TextSize = 11
+SanityLabel.TextXAlignment = Enum.TextXAlignment.Left
+SanityLabel.Parent = SanityContainer
+
+local SanityInput = Instance.new("TextBox")
+SanityInput.Size = UDim2.new(0.3, -10, 0, 28)
+SanityInput.Position = UDim2.new(0.7, 0, 0.5, -14)
+SanityInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+SanityInput.Text = "100"
+SanityInput.TextColor3 = Color3.fromRGB(0, 255, 150)
+SanityInput.Font = Enum.Font.GothamBold
+SanityInput.TextSize = 13
+SanityInput.PlaceholderText = "Số..."
+SanityInput.Parent = SanityContainer
+
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 4)
+InputCorner.Parent = SanityInput
+
+SanityInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local value = tonumber(SanityInput.Text)
+        if value then
+            value = math.clamp(value, 0, 100)
+            SanityInput.Text = tostring(value)
+            LocalPlayer:SetAttribute("Sanity", value)
+        end
+    end
+end)
+
+local LockSanityToggle = createToggle("AutoLockSanity", "Tự động hoàn lại số Sanity nếu bị giảm xuống")
+
+--======================================================================
+-- CONTAINER ĐẶT SỐ LƯỢNG CHO TOOL (QUÉT TOÀN DIỆN VẬT THỂ)
+--======================================================================
+local ChargesContainer = Instance.new("Frame")
+ChargesContainer.Size = UDim2.new(1, -10, 0, 42)
+ChargesContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+ChargesContainer.Parent = ScrollingFrame
+
+local ChargesCorner = Instance.new("UICorner")
+ChargesCorner.CornerRadius = UDim.new(0, 6)
+ChargesCorner.Parent = ChargesContainer
+
+local ChargesLabel = Instance.new("TextLabel")
+ChargesLabel.Size = UDim2.new(0.65, 0, 1, 0)
+ChargesLabel.Position = UDim2.new(0, 10, 0, 0)
+ChargesLabel.BackgroundTransparency = 1
+ChargesLabel.Text = "⚡ Đặt Charges cho Taser & Cứu Hỏa:"
+ChargesLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+ChargesLabel.Font = Enum.Font.GothamMedium
+ChargesLabel.TextSize = 11
+ChargesLabel.TextXAlignment = Enum.TextXAlignment.Left
+ChargesLabel.Parent = ChargesContainer
+
+local ChargesInput = Instance.new("TextBox")
+ChargesInput.Size = UDim2.new(0.3, -10, 0, 28)
+ChargesInput.Position = UDim2.new(0.7, 0, 0.5, -14)
+ChargesInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+ChargesInput.Text = "100" 
+ChargesInput.TextColor3 = Color3.fromRGB(255, 200, 0)
+ChargesInput.Font = Enum.Font.GothamBold
+ChargesInput.TextSize = 13
+ChargesInput.PlaceholderText = "Số..."
+ChargesInput.Parent = ChargesContainer
+
+local ChargesInputCorner = Instance.new("UICorner")
+ChargesInputCorner.CornerRadius = UDim.new(0, 4)
+ChargesInputCorner.Parent = ChargesInput
+
+-- SỬA ĐỔI: Quét diện rộng không phụ thuộc vào đường dẫn cứng Backpack cố định
+local function ForceUpdateGlobalTools(value)
+    for _, v in pairs(game:GetDescendants()) do
+        if v:IsA("Tool") and (v.Name == "Taser" or v.Name == "FireExtinguisher") then
+            pcall(function()
+                v:SetAttribute("Charges", value)
+            end)
+        end
+    end
+end
+
+ChargesInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local value = tonumber(ChargesInput.Text)
+        if value then
+            ChargesInput.Text = tostring(value)
+            ForceUpdateGlobalTools(value)
+        end
+    end
+end)
+
+local LockChargesToggle = createToggle("AutoLockCharges", "Chống giảm & Khóa cứng Charges (Taser/Cứu Hỏa)")
+
+--======================================================================
+-- 2. SIÊU CƠ CHẾ CAN THIỆP CHỐNG GIẢM KHÓA BẰNG METATABLE HOOK
+--======================================================================
+local espObjects = {}
+
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    
+    if method == "SetAttribute" and args[1] == "Charges" and Config.AutoLockCharges then
+        if self:IsA("Tool") and (self.Name == "Taser" or self.Name == "FireExtinguisher") then
+            local setCharges = tonumber(ChargesInput.Text) or 100
+            local inputVal = tonumber(args[2])
+            if inputVal and inputVal < setCharges then
+                return oldNamecall(self, "Charges", setCharges) 
+            end
+        end
+    end
+
+    if method == "FireServer" then
+        if Config.AntiSanity and (self.Name == "PlayerLostSanity" or self.Name == "RE/PlayerLostSanity") then return nil end
+        if Config.AntiJumpscare and (self.Name == "JumpscareHollow" or self.Name == "JumpscareShadowWithEyesIMG" or self.Name == "Blackscreen") then return nil end
+        
+        if Config.AutoLockCharges then
+            if self.Name == "UseTaser" or self.Name == "TaserFire" or self.Name == "RE/TaserUsed" or 
+               self.Name == "UseFireExtinguisher" or self.Name == "ExtinguisherFire" or self.Name == "RE/ExtinguisherUsed" then
+                return nil
+            end
+        end
+    end
+    return oldNamecall(self, ...)
+end)
+
+-- SỬA ĐỔI: Vòng lặp tối ưu tốc độ cực cao, quét trực tiếp nhân vật và túi đồ theo cấu trúc động
+task.spawn(function()
+    while task.wait(0.1) do 
+        if Config.AutoLockSanity then
+            pcall(function()
+                local setNumber = tonumber(SanityInput.Text) or 100
+                setNumber = math.clamp(setNumber, 0, 100)
+                local currentSanity = LocalPlayer:GetAttribute("Sanity")
+                if currentSanity and currentSanity < setNumber then
+                    LocalPlayer:SetAttribute("Sanity", setNumber)
+                end
+            end)
+        end
+
+        -- SỬA ĐỔI CHÍNH: Quét tất cả các thư mục chứa Tool khả dụng của người chơi hiện tại
+        if Config.AutoLockCharges then
+            pcall(function()
+                local setCharges = tonumber(ChargesInput.Text) or 100
+                local storagePlaces = {}
+                
+                -- Tìm trong Backpack của mọi Object trùng tên bản thân
+                for _, p in pairs(Players:GetPlayers()) do
+                    if p.Name == LocalPlayer.Name or p.Name == "RikaOrimoto_777" then
+                        table.insert(storagePlaces, p:FindFirstChild("Backpack"))
+                    end
+                end
+                -- Tìm trong Character thực tế ngoài Workspace
+                if LocalPlayer.Character then table.insert(storagePlaces, LocalPlayer.Character) end
+                for _, p in pairs(Workspace:GetChildren()) do
+                    if p.Name == LocalPlayer.Name or p.Name == "Balo" then table.insert(storagePlaces, p) end
+                end
+
+                -- Thực hiện ép xung khóa chỉ số
+                for _, place in pairs(storagePlaces) do
+                    if place then
+                        for _, tool in pairs(place:GetChildren()) do
+                            if tool:IsA("Tool") and (tool.Name == "Taser" or tool.Name == "FireExtinguisher") then
+                                local currentCharges = tool:GetAttribute("Charges")
+                                if currentCharges and currentCharges < setCharges then
+                                    tool:SetAttribute("Charges", setCharges)
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+
+        if Config.AutoHeartbeat then
+            local NetFolder = ReplicatedStorage:WaitForChild("Util"):WaitForChild("Net")
+            local hrEvent = NetFolder:FindFirstChild("HeartbeatMinigameComplete") or NetFolder:FindFirstChild("RE/HeartbeatMinigameComplete")
+            if hrEvent then hrEvent:FireServer(true) end
+        end
+
+        if Config.InfiniteRevive then
+            local NetFolder = ReplicatedStorage:WaitForChild("Util"):WaitForChild("Net")
+            local reviveRE = NetFolder:FindFirstChild("ReviveOther") or NetFolder:FindFirstChild("RE/ReviveOther")
+            local enableReviveRE = NetFolder:FindFirstChild("EnabledReviveOther") or NetFolder:FindFirstChild("RE/EnabledReviveOther")
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("RevivePP") then
+                    if reviveRE then reviveRE:FireServer(p) end
+                    if enableReviveRE then enableReviveRE:FireServer(p) end
+                end
+            end
+        end
+    end
+end)
+
+--======================================================================
+-- HỆ THỐNG ESP (QUÉT HIỂN THỊ)
+--======================================================================
+local function createESP(object, color, name)
+    if not object or espObjects[object] then return end
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = color
+    highlight.FillTransparency = 0.5
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0
+    highlight.Adornee = object
+    highlight.Parent = object
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 180, 0, 40)
+    billboard.AlwaysOnTop = true
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.Adornee = object
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = color
+    label.TextSize = 13
+    label.Font = Enum.Font.GothamBold
+    label.TextStrokeTransparency = 0
+    label.Parent = billboard
+    billboard.Parent = object
+    
+    espObjects[object] = {highlight, billboard}
+end
+
+local function removeESP(object)
+    if espObjects[object] then
+        for _, gui in pairs(espObjects[object]) do pcall(function() gui:Destroy() end) end
+        espObjects[object] = nil
+    end
+end
+
+task.spawn(function()
+    while task.wait(1) do
+        if Config.MonsterESP then
+            for _, child in pairs(Workspace:GetChildren()) do
+                if child:IsA("Model") and (child.Name == "SkinwalkerSeparated" or child.Name == "Hider" or child.Name == "Shadow" or child.Name == "TallMonster") then
+                    createESP(child, Color3.fromRGB(255, 50, 50), "⚠️ " .. child.Name)
+                end
+            end
+        else
+            for _, child in pairs(Workspace:GetChildren()) do
+                if child.Name == "SkinwalkerSeparated" or child.Name == "Hider" or child.Name == "Shadow" or child.Name == "TallMonster" then removeESP(child) end
+            end
+        end
+
+        if Config.PlayerESP then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    createESP(p.Character, Color3.fromRGB(0, 255, 150), p.Name)
+                end
+            end
+        else
+            for _, p in pairs(Players:GetPlayers()) do if p.Character then removeESP(p.Character) end end
+        end
+
+        if Config.ItemESP then
+            for _, child in pairs(Workspace:GetChildren()) do
+                if child:IsA("Model") and (child.Name == "Chocolate bar" or child.Name == "Trash" or child.Name == "JumpscareMask") then
+                    createESP(child, Color3.fromRGB(255, 255, 50), "📦 " .. child.Name)
+                elseif child:IsA("Part") and child.Name == "Fuse Box" then
+                    createESP(child, Color3.fromRGB(255, 150, 0), "⚡ Fuse Box")
+                end
+            end
+        else
+            for _, child in pairs(Workspace:GetChildren()) do
+                if child.Name == "Chocolate bar" or child.Name == "Trash" or child.Name == "Fuse Box" or child.Name == "JumpscareMask" then removeESP(child) end
+            end
+        end
+
+        local Areas = Workspace:FindFirstChild("Areas")
+        if Config.AreaESP and Areas then
+            for _, part in pairs(Areas:GetChildren()) do
+                if part:IsA("Part") then createESP(part, Color3.fromRGB(0, 180, 255), "🚪 " .. part.Name) end
+            end
+        else
+            if Areas then for _, part in pairs(Areas:GetChildren()) do removeESP(part) end end
+        end
+    end
+end)
+
+Workspace.DescendantAdded:Connect(function(descendant)
+    if Config.AutoInteract and descendant:IsA("ProximityPrompt") then
+        task.wait()
+        descendant.HoldDuration = 0
+        descendant:InputHoldBegin()
+        descendant:InputHoldEnd()
+    end
+end)
+
+--======================================================================
+-- 3. CÀI ĐẶT CHỨC NĂNG CHO CÁC NÚT HÀNH ĐỘNG
+--======================================================================
+local function createActionButton(text, posX, widthPercent, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(widthPercent, -5, 1, 0)
+    btn.Position = UDim2.new(posX, 0, 0, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
+    btn.Parent = ActionFrame
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = btn
+
+    local btnStroke = Instance.new("UIStroke")
+    btnStroke.Color = Color3.fromRGB(120, 120, 120)
+    btnStroke.Thickness = 1
+    btnStroke.Parent = btn
+
+    btn.MouseButton1Click:Connect(callback)
+end
+
+createActionButton("🎯 GOM TẤT CẢ VẬT PHẨM", 0, 0.5, function()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("ProximityPrompt") then
+            local pModel = v.Parent
+            if pModel and pModel:IsA("Model") and (pModel.Name == "Chocolate bar" or pModel.Name == "Trash" or pModel.Name == "JumpscareMask") then
+                if pModel.PrimaryPart then
+                    pModel:SetPrimaryPartCFrame(CFrame.new(root.Position + Vector3.new(0, 1, 0)))
+                else
+                    for _, pt in pairs(pModel:GetChildren()) do
+                        if pt:IsA("BasePart") then pt.CFrame = CFrame.new(root.Position + Vector3.new(0, 1, 0)) end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+createActionButton("⚡ TELEPORT ĐỒNG ĐỘI", 0.5, 0.5, function()
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            root.CFrame = p.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+            break
+        end
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.M then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
+
+print("Lizluk Anomaly V2 Panel - Đã vá lỗi định danh nhân vật thực tế!")
