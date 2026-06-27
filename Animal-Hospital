@@ -173,7 +173,7 @@ SanityInput.FocusLost:Connect(function(enterPressed)
     if enterPressed then
         local value = tonumber(SanityInput.Text)
         if value then
-            value = math.clamp(value, 0, 100)
+            value = math.clamp(value, 0, 1000)
             SanityInput.Text = tostring(value)
             
             -- Sửa trực tiếp thuộc tính ẩn Sanity nằm trên đối tượng Player của bạn
