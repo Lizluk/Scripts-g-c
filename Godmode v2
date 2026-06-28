@@ -1,0 +1,587 @@
+-- Gui to Lua
+-- Version: 3.2
+
+-- Instances:
+
+local ScreenGui = Instance.new("ScreenGui")
+local menu = Instance.new("Frame")
+local menuname = Instance.new("TextLabel")
+local _01 = Instance.new("TextButton")
+local _02 = Instance.new("TextButton")
+local _03 = Instance.new("TextButton")
+local _04 = Instance.new("TextButton")
+local _05 = Instance.new("TextButton")
+local _06 = Instance.new("TextButton")
+local _07 = Instance.new("TextButton")
+local _08 = Instance.new("TextButton")
+local _09 = Instance.new("TextButton")
+local _10 = Instance.new("TextButton")
+local _11 = Instance.new("TextButton")
+local _12 = Instance.new("TextButton")
+local _13 = Instance.new("TextButton")
+local _14 = Instance.new("TextButton")
+local _15 = Instance.new("TextButton")
+local _16 = Instance.new("TextButton")
+local _17 = Instance.new("TextButton")
+local _18 = Instance.new("TextButton")
+local _19 = Instance.new("TextButton")
+local _20 = Instance.new("TextButton")
+local _21 = Instance.new("TextButton")
+local _22 = Instance.new("TextButton")
+local _23 = Instance.new("TextButton")
+local _24 = Instance.new("TextButton")
+local _25 = Instance.new("TextButton")
+local _26 = Instance.new("TextButton")
+local _27 = Instance.new("TextButton")
+local _28 = Instance.new("TextButton")
+local exit = Instance.new("TextButton")
+local openmenu = Instance.new("Frame")
+local openmenubutton = Instance.new("TextButton")
+
+--Properties:
+
+ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+menu.Name = "menu"
+menu.Parent = ScreenGui
+menu.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+menu.BorderColor3 = Color3.fromRGB(0, 0, 0)
+menu.BorderSizePixel = 0
+menu.Position = UDim2.new(0.740688145, 0, 0.0439023636, 0)
+menu.Size = UDim2.new(0, 322, 0, 689)
+
+menuname.Name = "menuname"
+menuname.Parent = menu
+menuname.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+menuname.BorderColor3 = Color3.fromRGB(0, 0, 0)
+menuname.BorderSizePixel = 0
+menuname.Size = UDim2.new(0, 321, 0, 46)
+menuname.Font = Enum.Font.SourceSans
+menuname.Text = "Murder Mystery 2 menu Vip"
+menuname.TextColor3 = Color3.fromRGB(0, 0, 0)
+menuname.TextSize = 14.000
+
+_01.Name = "01"
+_01.Parent = menu
+_01.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_01.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_01.BorderSizePixel = 0
+_01.Position = UDim2.new(-0.00222222228, 0, 0.0614973269, 0)
+_01.Size = UDim2.new(0, 160, 0, 50)
+_01.Font = Enum.Font.SourceSans
+_01.Text = "invsibes Qon E off"
+_01.TextColor3 = Color3.fromRGB(0, 0, 0)
+_01.TextSize = 14.000
+
+_02.Name = "02"
+_02.Parent = menu
+_02.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_02.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_02.BorderSizePixel = 0
+_02.Position = UDim2.new(0.500664592, 0, 0.0614973269, 0)
+_02.Size = UDim2.new(0, 161, 0, 50)
+_02.Font = Enum.Font.SourceSans
+_02.TextColor3 = Color3.fromRGB(0, 0, 0)
+_02.TextSize = 14.000
+
+_03.Name = "03"
+_03.Parent = menu
+_03.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_03.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_03.BorderSizePixel = 0
+_03.Position = UDim2.new(-0.00222222228, 0, 0.128342241, 0)
+_03.Size = UDim2.new(0, 160, 0, 50)
+_03.Font = Enum.Font.SourceSans
+_03.Text = "Remove head"
+_03.TextColor3 = Color3.fromRGB(0, 0, 0)
+_03.TextSize = 14.000
+
+_04.Name = "04"
+_04.Parent = menu
+_04.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_04.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_04.BorderSizePixel = 0
+_04.Position = UDim2.new(0.501557648, 0, 0.128342241, 0)
+_04.Size = UDim2.new(0, 160, 0, 50)
+_04.Font = Enum.Font.SourceSans
+_04.TextColor3 = Color3.fromRGB(0, 0, 0)
+_04.TextSize = 14.000
+
+_05.Name = "05"
+_05.Parent = menu
+_05.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_05.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_05.BorderSizePixel = 0
+_05.Position = UDim2.new(-0.00222222228, 0, 0.195187166, 0)
+_05.Size = UDim2.new(0, 160, 0, 50)
+_05.Font = Enum.Font.SourceSans
+_05.Text = "Godmode Q E On"
+_05.TextColor3 = Color3.fromRGB(0, 0, 0)
+_05.TextSize = 14.000
+
+_06.Name = "06"
+_06.Parent = menu
+_06.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_06.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_06.BorderSizePixel = 0
+_06.Position = UDim2.new(0.501557648, 0, 0.195187166, 0)
+_06.Size = UDim2.new(0, 160, 0, 50)
+_06.Font = Enum.Font.SourceSans
+_06.TextColor3 = Color3.fromRGB(0, 0, 0)
+_06.TextSize = 14.000
+
+_07.Name = "07"
+_07.Parent = menu
+_07.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_07.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_07.BorderSizePixel = 0
+_07.Position = UDim2.new(-0.00222222228, 0, 0.262032092, 0)
+_07.Size = UDim2.new(0, 160, 0, 50)
+_07.Font = Enum.Font.SourceSans
+_07.Text = "ESP"
+_07.TextColor3 = Color3.fromRGB(0, 0, 0)
+_07.TextSize = 14.000
+
+_08.Name = "08"
+_08.Parent = menu
+_08.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_08.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_08.BorderSizePixel = 0
+_08.Position = UDim2.new(0.501557648, 0, 0.262032092, 0)
+_08.Size = UDim2.new(0, 160, 0, 50)
+_08.Font = Enum.Font.SourceSans
+_08.TextColor3 = Color3.fromRGB(0, 0, 0)
+_08.TextSize = 14.000
+
+_09.Name = "09"
+_09.Parent = menu
+_09.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_09.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_09.BorderSizePixel = 0
+_09.Position = UDim2.new(-0.00222222228, 0, 0.328877002, 0)
+_09.Size = UDim2.new(0, 160, 0, 50)
+_09.Font = Enum.Font.SourceSans
+_09.Text = "Save key F & Load key C"
+_09.TextColor3 = Color3.fromRGB(0, 0, 0)
+_09.TextSize = 14.000
+
+_10.Name = "10"
+_10.Parent = menu
+_10.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_10.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_10.BorderSizePixel = 0
+_10.Position = UDim2.new(0.501557648, 0, 0.328877002, 0)
+_10.Size = UDim2.new(0, 160, 0, 50)
+_10.Font = Enum.Font.SourceSans
+_10.TextColor3 = Color3.fromRGB(0, 0, 0)
+_10.TextSize = 14.000
+
+_11.Name = "11"
+_11.Parent = menu
+_11.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_11.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_11.BorderSizePixel = 0
+_11.Position = UDim2.new(-0.00132921012, 0, 0.395721912, 0)
+_11.Size = UDim2.new(0, 160, 0, 50)
+_11.Font = Enum.Font.SourceSans
+_11.TextColor3 = Color3.fromRGB(0, 0, 0)
+_11.TextSize = 14.000
+
+_12.Name = "12"
+_12.Parent = menu
+_12.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_12.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_12.BorderSizePixel = 0
+_12.Position = UDim2.new(0.500664592, 0, 0.395721912, 0)
+_12.Size = UDim2.new(0, 160, 0, 50)
+_12.Font = Enum.Font.SourceSans
+_12.TextColor3 = Color3.fromRGB(0, 0, 0)
+_12.TextSize = 14.000
+
+_13.Name = "13"
+_13.Parent = menu
+_13.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_13.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_13.BorderSizePixel = 0
+_13.Position = UDim2.new(-0.00222222228, 0, 0.46122995, 0)
+_13.Size = UDim2.new(0, 160, 0, 50)
+_13.Font = Enum.Font.SourceSans
+_13.TextColor3 = Color3.fromRGB(0, 0, 0)
+_13.TextSize = 14.000
+
+_14.Name = "14"
+_14.Parent = menu
+_14.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_14.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_14.BorderSizePixel = 0
+_14.Position = UDim2.new(0.501557648, 0, 0.462566853, 0)
+_14.Size = UDim2.new(0, 160, 0, 50)
+_14.Font = Enum.Font.SourceSans
+_14.TextColor3 = Color3.fromRGB(0, 0, 0)
+_14.TextSize = 14.000
+
+_15.Name = "15"
+_15.Parent = menu
+_15.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_15.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_15.BorderSizePixel = 0
+_15.Position = UDim2.new(-0.00222222228, 0, 0.526737988, 0)
+_15.Size = UDim2.new(0, 160, 0, 50)
+_15.Font = Enum.Font.SourceSans
+_15.TextColor3 = Color3.fromRGB(0, 0, 0)
+_15.TextSize = 14.000
+
+_16.Name = "16"
+_16.Parent = menu
+_16.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_16.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_16.BorderSizePixel = 0
+_16.Position = UDim2.new(0.500664592, 0, 0.52807492, 0)
+_16.Size = UDim2.new(0, 160, 0, 50)
+_16.Font = Enum.Font.SourceSans
+_16.TextColor3 = Color3.fromRGB(0, 0, 0)
+_16.TextSize = 14.000
+
+_17.Name = "17"
+_17.Parent = menu
+_17.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_17.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_17.BorderSizePixel = 0
+_17.Position = UDim2.new(-0.00132921012, 0, 0.593582869, 0)
+_17.Size = UDim2.new(0, 160, 0, 50)
+_17.Font = Enum.Font.SourceSans
+_17.TextColor3 = Color3.fromRGB(0, 0, 0)
+_17.TextSize = 14.000
+
+_18.Name = "18"
+_18.Parent = menu
+_18.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_18.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_18.BorderSizePixel = 0
+_18.Position = UDim2.new(0.501557589, 0, 0.594919801, 0)
+_18.Size = UDim2.new(0, 160, 0, 50)
+_18.Font = Enum.Font.SourceSans
+_18.TextColor3 = Color3.fromRGB(0, 0, 0)
+_18.TextSize = 14.000
+
+_19.Name = "19"
+_19.Parent = menu
+_19.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_19.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_19.BorderSizePixel = 0
+_19.Position = UDim2.new(-0.00222222228, 0, 0.659090996, 0)
+_19.Size = UDim2.new(0, 160, 0, 50)
+_19.Font = Enum.Font.SourceSans
+_19.TextColor3 = Color3.fromRGB(0, 0, 0)
+_19.TextSize = 14.000
+
+_20.Name = "20"
+_20.Parent = menu
+_20.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_20.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_20.BorderSizePixel = 0
+_20.Position = UDim2.new(0.501557589, 0, 0.660427868, 0)
+_20.Size = UDim2.new(0, 160, 0, 50)
+_20.Font = Enum.Font.SourceSans
+_20.TextColor3 = Color3.fromRGB(0, 0, 0)
+_20.TextSize = 14.000
+
+_21.Name = "21"
+_21.Parent = menu
+_21.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_21.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_21.BorderSizePixel = 0
+_21.Position = UDim2.new(-0.00222222228, 0, 0.725935936, 0)
+_21.Size = UDim2.new(0, 160, 0, 50)
+_21.Font = Enum.Font.SourceSans
+_21.TextColor3 = Color3.fromRGB(0, 0, 0)
+_21.TextSize = 14.000
+
+_22.Name = "22"
+_22.Parent = menu
+_22.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_22.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_22.BorderSizePixel = 0
+_22.Position = UDim2.new(0.501557589, 0, 0.727272809, 0)
+_22.Size = UDim2.new(0, 160, 0, 50)
+_22.Font = Enum.Font.SourceSans
+_22.TextColor3 = Color3.fromRGB(0, 0, 0)
+_22.TextSize = 14.000
+
+_23.Name = "23"
+_23.Parent = menu
+_23.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_23.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_23.BorderSizePixel = 0
+_23.Position = UDim2.new(-0.00222222228, 0, 0.792780817, 0)
+_23.Size = UDim2.new(0, 160, 0, 50)
+_23.Font = Enum.Font.SourceSans
+_23.TextColor3 = Color3.fromRGB(0, 0, 0)
+_23.TextSize = 14.000
+
+_24.Name = "24"
+_24.Parent = menu
+_24.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_24.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_24.BorderSizePixel = 0
+_24.Position = UDim2.new(0.501557589, 0, 0.794117749, 0)
+_24.Size = UDim2.new(0, 160, 0, 50)
+_24.Font = Enum.Font.SourceSans
+_24.TextColor3 = Color3.fromRGB(0, 0, 0)
+_24.TextSize = 14.000
+
+_25.Name = "25"
+_25.Parent = menu
+_25.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_25.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_25.BorderSizePixel = 0
+_25.Position = UDim2.new(-0.00222222228, 0, 0.859625757, 0)
+_25.Size = UDim2.new(0, 160, 0, 50)
+_25.Font = Enum.Font.SourceSans
+_25.TextColor3 = Color3.fromRGB(0, 0, 0)
+_25.TextSize = 14.000
+
+_26.Name = "26"
+_26.Parent = menu
+_26.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_26.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_26.BorderSizePixel = 0
+_26.Position = UDim2.new(0.500664592, 0, 0.860962629, 0)
+_26.Size = UDim2.new(0, 160, 0, 50)
+_26.Font = Enum.Font.SourceSans
+_26.TextColor3 = Color3.fromRGB(0, 0, 0)
+_26.TextSize = 14.000
+
+_27.Name = "27"
+_27.Parent = menu
+_27.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_27.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_27.BorderSizePixel = 0
+_27.Position = UDim2.new(-0.00222222228, 0, 0.926470697, 0)
+_27.Size = UDim2.new(0, 160, 0, 50)
+_27.Font = Enum.Font.SourceSans
+_27.TextColor3 = Color3.fromRGB(0, 0, 0)
+_27.TextSize = 14.000
+
+_28.Name = "28"
+_28.Parent = menu
+_28.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+_28.BorderColor3 = Color3.fromRGB(0, 0, 0)
+_28.BorderSizePixel = 0
+_28.Position = UDim2.new(0.500664592, 0, 0.92780757, 0)
+_28.Size = UDim2.new(0, 160, 0, 50)
+_28.Font = Enum.Font.SourceSans
+_28.TextColor3 = Color3.fromRGB(0, 0, 0)
+_28.TextSize = 14.000
+
+exit.Name = "exit"
+exit.Parent = menu
+exit.BackgroundColor3 = Color3.fromRGB(9, 9, 9)
+exit.BorderColor3 = Color3.fromRGB(0, 0, 0)
+exit.BorderSizePixel = 0
+exit.Size = UDim2.new(0, 38, 0, 30)
+exit.Font = Enum.Font.SourceSans
+exit.Text = "X"
+exit.TextColor3 = Color3.fromRGB(170, 0, 0)
+exit.TextSize = 14.000
+
+openmenu.Name = "openmenu"
+openmenu.Parent = ScreenGui
+openmenu.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+openmenu.BorderColor3 = Color3.fromRGB(0, 0, 0)
+openmenu.BorderSizePixel = 0
+openmenu.Position = UDim2.new(0, 0, 0.349999994, 0)
+openmenu.Size = UDim2.new(0, 111, 0, 45)
+
+openmenubutton.Name = "openmenubutton"
+openmenubutton.Parent = openmenu
+openmenubutton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+openmenubutton.BorderColor3 = Color3.fromRGB(0, 0, 0)
+openmenubutton.BorderSizePixel = 0
+openmenubutton.Size = UDim2.new(0, 111, 0, 45)
+openmenubutton.Font = Enum.Font.SourceSans
+openmenubutton.Text = "Open Menu"
+openmenubutton.TextColor3 = Color3.fromRGB(170, 0, 0)
+openmenubutton.TextSize = 14.000
+
+-- Scripts:
+
+local function JXQBE_fake_script() -- _01.Script 
+	local script = Instance.new('Script', _01)
+
+	_01.MouseButton1Down:Connect(function()
+		-- made by m3xp0 :-)
+	
+		local UIS = game:GetService("UserInputService")
+	
+		UIS.InputBegan:connect(function(input)
+			if input.KeyCode == Enum.KeyCode.F1 then -- turns on ghost/change key if you want a different key
+				game:GetService("ReplicatedStorage").Remotes.Gameplay.Stealth:FireServer(true)
+			end end)
+	
+		UIS.InputBegan:connect(function(input)
+			if input.KeyCode == Enum.KeyCode.F2 then -- turns off ghost/change key if you want a different key
+				game:GetService("ReplicatedStorage").Remotes.Gameplay.Stealth:FireServer(false)
+			end end)
+	
+		game.Players.LocalPlayer.Character:WaitForChild('Humanoid').Died:connect(function()
+			game:GetService("ReplicatedStorage").Remotes.Gameplay.Stealth:FireServer(false)
+		end)    
+	end)
+end
+coroutine.wrap(JXQBE_fake_script)()
+local function OBEAEJY_fake_script() -- _03.Script 
+	local script = Instance.new('Script', _03)
+
+	_03.MouseButton1Down:Connect(function()
+	
+		local lp = game:GetService "Players".LocalPlayer
+		if lp.Character:FindFirstChild "Head" then
+			local char = lp.Character
+			char.Archivable = true
+			local new = char:Clone()
+			new.Parent = workspace
+			lp.Character = new
+			wait(2)
+			local oldhum = char:FindFirstChildWhichIsA "Humanoid"
+			local newhum = oldhum:Clone()
+			newhum.Parent = char
+			newhum.RequiresNeck = false
+			oldhum.Parent = nil
+			wait(2)
+			lp.Character = char
+			new:Destroy()
+			wait(1)
+			newhum:GetPropertyChangedSignal("Health"):Connect(
+			function()
+				if newhum.Health <= 0 then
+					oldhum.Parent = lp.Character
+					wait(1)
+					oldhum:Destroy()
+				end
+			end)
+			workspace.CurrentCamera.CameraSubject = char
+			if char:FindFirstChild "Animate" then
+				char.Animate.Disabled = true
+				wait(.1)
+				char.Animate.Disabled = false
+			end
+			lp.Character:FindFirstChild "Head":Destroy()
+		end
+	
+	end)
+end
+coroutine.wrap(OBEAEJY_fake_script)()
+local function UHWVBXF_fake_script() -- _05.Script 
+	local script = Instance.new('Script', _05)
+
+	_05.MouseButton1Down:Connect(function()
+		-- made by m3xp0 :-)
+	
+		local UIS = game:GetService("UserInputService")
+	
+		UIS.InputBegan:connect(function(input)
+			if input.KeyCode == Enum.KeyCode.F1 then -- turns on ghost/change key if you want a different key
+				local accessories = {}
+				function GodMode()
+					if game.Players.LocalPlayer.Character then
+						if game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+							for _, accessory in pairs(game.Players.LocalPlayer.Character.Humanoid:GetAccessories()) do
+								table.insert(accessories, accessory:Clone())
+							end
+							game.Players.LocalPlayer.Character.Humanoid.Name = "deku"
+						end
+						local v = game.Players.LocalPlayer.Character["deku"]:Clone()
+						v.Parent = game.Players.LocalPlayer.Character
+						v.Name = "Humanoid"
+						wait(0.1)
+						game.Players.LocalPlayer.Character["deku"]:Destroy()
+						workspace.CurrentCamera.CameraSubject = game.Players.LocalPlayer.Character.Humanoid
+						for _, accessory in pairs(accessories) do
+							game.Players.LocalPlayer.Character.Humanoid:AddAccessory(accessory)
+						end
+						game.Players.LocalPlayer.Character.Animate.Disabled = true
+						wait(0.1)
+						game.Players.LocalPlayer.Character.Animate.Disabled = false
+					end
+				end
+				GodMode()
+			end end)
+	
+		UIS.InputBegan:connect(function(input)
+			if input.KeyCode == Enum.KeyCode.F2 then -- turns off ghost/change key if you want a different key
+				local accessories = {}
+				function GodMode()
+					if game.Players.LocalPlayer.Character then
+						if game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+							for _, accessory in pairs(game.Players.LocalPlayer.Character.Humanoid:GetAccessories()) do
+								table.insert(accessories, accessory:Clone())
+							end
+							game.Players.LocalPlayer.Character.Humanoid.Name = "deku"
+						end
+						local v = game.Players.LocalPlayer.Character["deku"]:Clone()
+						v.Parent = game.Players.LocalPlayer.Character
+						v.Name = "Humanoid"
+						wait(0.1)
+						game.Players.LocalPlayer.Character["deku"]:Destroy()
+						workspace.CurrentCamera.CameraSubject = game.Players.LocalPlayer.Character.Humanoid
+						for _, accessory in pairs(accessories) do
+							game.Players.LocalPlayer.Character.Humanoid:AddAccessory(accessory)
+						end
+						game.Players.LocalPlayer.Character.Animate.Disabled = true
+						wait(0.1)
+						game.Players.LocalPlayer.Character.Animate.Disabled = false
+					end
+				end
+				GodMode()
+			end end)    
+	end)
+end
+coroutine.wrap(UHWVBXF_fake_script)()
+local function DIIHGM_fake_script() -- _09.Script 
+	local script = Instance.new('Script', _09)
+
+	_09.MouseButton1Down:Connect(function()
+		-- made by m3xp0 :-)
+	
+		local UIS = game:GetService("UserInputService")
+	
+		UIS.InputBegan:connect(function(input)
+			if input.KeyCode == Enum.KeyCode.F1 then -- turns on ghost/change key if you want a different key
+				asd=game.Players.LocalPlayer.Character.HumanoidRootPart.Position
+			end end)
+	
+		UIS.InputBegan:connect(function(input)
+			if input.KeyCode == Enum.KeyCode.F2 then -- turns off ghost/change key if you want a different key
+				game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame=
+					CFrame.new(asd)+Vector3.new(1,0,0)
+			end end) 
+	end)
+end
+coroutine.wrap(DIIHGM_fake_script)()
+local function NCDQ_fake_script() -- exit.LocalScript 
+	local script = Instance.new('LocalScript', exit)
+
+	exit.MouseButton1Down:Connect(function()
+		menu.Visible = false
+		openmenu.Visible = true
+	end)
+end
+coroutine.wrap(NCDQ_fake_script)()
+local function KRWFLD_fake_script() -- openmenubutton.LocalScript 
+	local script = Instance.new('LocalScript', openmenubutton)
+
+	openmenubutton.MouseButton1Down:Connect(function()
+		menu.Visible = true
+		openmenu.Visible = false
+	end)
+end
+coroutine.wrap(KRWFLD_fake_script)()
+local function XDKFE_fake_script() -- openmenu.LocalScript 
+	local script = Instance.new('LocalScript', openmenu)
+
+	openmenu.Draggable = true
+	openmenu.Visible = false
+end
+coroutine.wrap(XDKFE_fake_script)()
