@@ -1,0 +1,27 @@
+-- Đợi cho đến khi trò chơi tải hoàn tất các dữ liệu cốt lõi (Chống lỗi khi auto-exec)
+repeat task.wait() until game:IsLoaded()
+
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+
+-- Hàm thực hiện xóa Player khỏi Client giống như hành động bấm nút Delete trên Dex
+local function deletePlayerLikeDev()
+    local LocalPlayer = Players.LocalPlayer
+    if LocalPlayer and LocalPlayer.Parent then
+        LocalPlayer.Parent = nil
+        print("🗑️ [AutoExec] Đã gỡ bỏ thành công đối tượng Player khỏi danh sách hiển thị của Client!")
+    else
+        print("ℹ️ [AutoExec] Đối tượng Player không tồn tại hoặc đã bị xóa trước đó rồi.")
+    end
+end
+
+-- Lắng nghe sự kiện nhấn phím T
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end -- Bỏ qua nếu bạn đang gõ nội dung ở ô Chat
+    
+    if input.KeyCode == Enum.KeyCode.T then
+        deletePlayerLikeDev()
+    end
+end)
+
+print("🎯 [AutoExec] Script Xóa Tên Đã Sẵn Sàng! Từ bây giờ, vào game chỉ cần nhấn 'T' là tên bốc hơi.")
