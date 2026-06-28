@@ -1,0 +1,433 @@
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+if CoreGui:FindFirstChild("ItemGrabberImageGUI") then
+    CoreGui.ItemGrabberImageGUI:Destroy()
+end
+
+-- 1. Khởi Tạo Giao Diện Chính
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ItemGrabberImageGUI"
+ScreenGui.Parent = CoreGui
+ScreenGui.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 570, 0, 460)
+MainFrame.Position = UDim2.new(0.1, 0, 0.2, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 10)
+FrameCorner.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 45)
+Title.Text = "🏥 NIGHT SLAYER HUB - DYNAMIC ICON AUTO-SCAN"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.SourceSansBold
+Title.BackgroundColor3 = Color3.fromRGB(34, 34, 38)
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = Title
+
+-- PHÂN VÙNG TRÁI: 15 MÓN ĐỒ CHUNG
+local LeftTitle = Instance.new("TextLabel")
+LeftTitle.Size = UDim2.new(0, 320, 0, 25)
+LeftTitle.Position = UDim2.new(0, 15, 0, 55)
+LeftTitle.Text = "📦 DANH SÁCH VẬT PHẨM CHUNG"
+LeftTitle.TextColor3 = Color3.fromRGB(180, 180, 180)
+LeftTitle.TextSize = 11
+LeftTitle.Font = Enum.Font.SourceSansBold
+LeftTitle.BackgroundTransparency = 1
+LeftTitle.TextXAlignment = Enum.TextXAlignment.Left
+LeftTitle.Parent = MainFrame
+
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(0, 320, 1, -110)
+ScrollFrame.Position = UDim2.new(0, 15, 0, 85)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = 4
+ScrollFrame.Parent = MainFrame
+
+local UIGridLayout = Instance.new("UIGridLayout")
+UIGridLayout.Parent = ScrollFrame
+UIGridLayout.CellSize = UDim2.new(0, 93, 0, 93)
+UIGridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
+
+UIGridLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIGridLayout.AbsoluteContentSize.Y + 15)
+end)
+
+-- PHÂN VÙNG PHẢI: PHÒNG & KHU VỰC HIỂN THỊ CHỮ TO
+local RightTitle = Instance.new("TextLabel")
+RightTitle.Size = UDim2.new(0, 200, 0, 25)
+RightTitle.Position = UDim2.new(0, 355, 0, 55)
+RightTitle.Text = "📺 DANH SÁCH CÁC PHÒNG"
+RightTitle.TextColor3 = Color3.fromRGB(0, 255, 150)
+RightTitle.TextSize = 11
+RightTitle.Font = Enum.Font.SourceSansBold
+RightTitle.BackgroundTransparency = 1
+RightTitle.TextXAlignment = Enum.TextXAlignment.Left
+RightTitle.Parent = MainFrame
+
+local TVFrame = Instance.new("Frame")
+TVFrame.Size = UDim2.new(0, 200, 0, 210)
+TVFrame.Position = UDim2.new(0, 355, 0, 85)
+TVFrame.BackgroundTransparency = 1
+TVFrame.Parent = MainFrame
+
+local TVGrid = Instance.new("UIGridLayout")
+TVGrid.Parent = TVFrame
+TVGrid.CellSize = UDim2.new(0, 92, 0, 42)
+TVGrid.CellPadding = UDim2.new(0, 8, 0, 12)
+
+-- BẢNG THÔNG BÁO VÙNG CHỮ SIÊU TO
+local ZoneStatusBox = Instance.new("Frame")
+ZoneStatusBox.Size = UDim2.new(0, 192, 0, 90)
+ZoneStatusBox.Position = UDim2.new(0, 355, 0, 310)
+ZoneStatusBox.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+ZoneStatusBox.BorderSizePixel = 0
+ZoneStatusBox.Parent = MainFrame
+
+local BoxCorner = Instance.new("UICorner")
+BoxCorner.CornerRadius = UDim.new(0, 8)
+BoxCorner.Parent = ZoneStatusBox
+
+local BoxStroke = Instance.new("UIStroke")
+BoxStroke.Color = Color3.fromRGB(255, 215, 0)
+BoxStroke.Thickness = 1.5
+BoxStroke.Parent = ZoneStatusBox
+
+local ZoneStatusText = Instance.new("TextLabel")
+ZoneStatusText.Size = UDim2.new(1, 0, 1, 0)
+ZoneStatusText.BackgroundTransparency = 1
+ZoneStatusText.Text = "📍 VỊ TRÍ:\nĐANG Ở SẢNH"
+ZoneStatusText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ZoneStatusText.TextSize = 15
+ZoneStatusText.Font = Enum.Font.SourceSansBold 
+ZoneStatusText.TextWrapped = true
+ZoneStatusText.Parent = ZoneStatusBox
+
+
+-- 2. Định Nghĩa Thứ Tự Hiển Thị Trên GUI
+local targetList = {
+    "Medicine", "Cough Syrup", "Herbs", "IV Drops", "Eye Drops",
+    "Medkit", "Thermo", "Ointment", "Bandages", "Maple Syrup",
+    "Organ", "Transplant", "Scalpel", "Scissors", "Antibiotics"
+}
+
+local roomToggleState = {false, false, false, false, false, false, false, false}
+local roomButtonsTable = {}
+local imageLabelsRegistry = {} -- Lưu danh sách ImageLabel để cập nhật real-time
+
+-- 3. HÀM QUÉT ẢNH THÔNG MINH (Quét trực tiếp từ UI game và Workspace)
+local function getLiveIcon(itemName)
+    -- Bước 1: Quét từ bảng minigame/TV/Report đang hiển thị trong các phòng trước
+    local roomsFolder = Workspace:FindFirstChild("Rooms")
+    if roomsFolder then
+        for _, zone in ipairs(roomsFolder:GetChildren()) do
+            for _, room in ipairs(zone:GetChildren()) do
+                local inv = room:FindFirstChild("Minigame") and room.Minigame:FindFirstChild("TV") 
+                    and room.Minigame.TV:FindFirstChild("Screen") and room.Minigame.TV.Screen:FindFirstChild("UI")
+                    and room.Minigame.TV.Screen.UI:FindFirstChild("Report") and room.Minigame.TV.Screen.UI.Report:FindFirstChild("inv")
+                
+                if inv then
+                    local targetUI = inv:FindFirstChild(itemName)
+                    if targetUI and targetUI:IsA("ImageLabel") and targetUI.Image ~= "" then
+                        return targetUI.Image
+                    end
+                end
+            end
+        end
+    end
+
+    -- Bước 2: Quét từ Billboard của item thực tế nằm dưới sàn
+    -- Riêng Medicine chặn không cho lấy nhầm từ model 'Organ'
+    for _, desc in ipairs(Workspace:GetDescendants()) do
+        if desc.Name == itemName and (desc:IsA("Model") or desc:IsA("Folder") or desc:IsA("BasePart")) then
+            if itemName == "Medicine" and desc.Parent and desc.Parent.Name == "Organ" then
+                continue -- bỏ qua nếu bị lồng nhầm vào asset tim
+            end
+            local billboard = desc:FindFirstChildOfClass("BillboardGui") or desc:FindFirstChild("BillboardGui", true)
+            if billboard then
+                local img = billboard:FindFirstChildOfClass("ImageLabel")
+                if img and img.Image ~= "" then 
+                    return img.Image 
+                end
+            end
+        end
+    end
+
+    -- Ảnh tạm thời khi chưa quét thấy (Dùng dấu hỏi chấm hệ thống hoặc icon gốc của game)
+    return "rbxassetid://6034287525" 
+end
+
+-- Tự động chạy nền liên tục cập nhật ảnh real-time khi item xuất hiện
+task.spawn(function()
+    while true do
+        for _, itemName in ipairs(targetList) do
+            if imageLabelsRegistry[itemName] then
+                local liveImg = getLiveIcon(itemName)
+                if liveImg and liveImg ~= "" and imageLabelsRegistry[itemName].Image ~= liveImg then
+                    imageLabelsRegistry[itemName].Image = liveImg
+                end
+            end
+        end
+        task.wait(1.5) -- Quét lại mỗi 1.5 giây để tránh lag
+    end
+end)
+
+-- 4. Hàm Dịch Chuyển Hút Đồ
+local isTeleporting = false
+local function teleportAndGrab(itemName)
+    if isTeleporting or not itemName then return false end
+    
+    local character = LocalPlayer.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not rootPart or not fireproximityprompt then return false end
+
+    for _, object in ipairs(Workspace:GetDescendants()) do
+        if object:IsA("ProximityPrompt") then
+            local parentName = object.Parent and object.Parent.Name
+            local objectText = object.ObjectText
+            local grandParentName = object.Parent and object.Parent.Parent and object.Parent.Parent.Name
+            
+            if parentName == itemName or objectText == itemName or grandParentName == itemName then
+                isTeleporting = true
+                local oldCFrame = rootPart.CFrame
+                local targetCFrame = object.Parent:IsA("Model") and object.Parent:GetModelCFrame() or object.Parent.CFrame
+                
+                rootPart.CFrame = targetCFrame
+                task.wait(0.15)
+                
+                fireproximityprompt(object)
+                task.wait(0.08)
+                
+                rootPart.CFrame = oldCFrame
+                task.wait(0.1)
+                isTeleporting = false
+                return true
+            end
+        end
+    end
+    isTeleporting = false
+    return false
+end
+
+-- 5. Hàm quét TV một lần duy nhất
+local function runOneShotTVGrab(roomNumber, buttonObject, strokeObject, numLabel)
+    task.spawn(function()
+        local roomsFolder = Workspace:FindFirstChild("Rooms")
+        local targetFolder = nil
+        
+        if roomNumber >= 1 and roomNumber <= 5 then
+            targetFolder = roomsFolder and roomsFolder:FindFirstChild("Medical")
+        elseif roomNumber >= 6 and roomNumber <= 8 then
+            targetFolder = roomsFolder and roomsFolder:FindFirstChild("Emergency")
+        end
+        
+        local roomObj = targetFolder and targetFolder:FindFirstChild("Room" .. roomNumber)
+        local minigame = roomObj and roomObj:FindFirstChild("Minigame")
+        local tv = minigame and minigame:FindFirstChild("TV")
+        local screen = tv and tv:FindFirstChild("Screen")
+        local ui = screen and screen:FindFirstChild("UI")
+        local report = ui and ui:FindFirstChild("Report")
+        local inv = report and report:FindFirstChild("inv")
+        
+        if inv then
+            for _, itemUI in ipairs(inv:GetChildren()) do
+                if (itemUI:IsA("ImageLabel") or itemUI:IsA("Frame")) and itemUI.Visible == true and itemUI.Name ~= "UIGridLayout" then
+                    local checkIcon = itemUI:FindFirstChild("check")
+                    local isAlreadyDone = checkIcon and checkIcon.Visible == true
+                    
+                    if not isAlreadyDone then
+                        print("🛒 [One-Shot] Đang gom: " .. itemUI.Name .. " - Phòng " .. roomNumber)
+                        teleportAndGrab(itemUI.Name)
+                        task.wait(0.3)
+                    end
+                end
+            end
+        else
+            print("❌ Không tìm thấy màn hình TV của Phòng " .. roomNumber)
+        end
+        
+        roomToggleState[roomNumber] = false
+        buttonObject.BackgroundColor3 = Color3.fromRGB(32, 38, 34)
+        numLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+        strokeObject.Color = Color3.fromRGB(0, 180, 100)
+        print("✅ Phòng " .. roomNumber .. " xử lý xong!")
+    end)
+end
+
+-- 6. Khởi Tạo Các Ô Vật Phẩm Phía Bên Trái
+for _, itemName in ipairs(targetList) do
+    local Card = Instance.new("Frame")
+    Card.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    Card.BorderSizePixel = 0
+    Card.Parent = ScrollFrame
+    
+    local CardCorner = Instance.new("UICorner")
+    CardCorner.CornerRadius = UDim.new(0, 6)
+    CardCorner.Parent = Card
+
+    local ItemImage = Instance.new("ImageLabel")
+    ItemImage.Size = UDim2.new(0, 50, 0, 50)
+    ItemImage.Position = UDim2.new(0.5, -25, 0, 8)
+    ItemImage.BackgroundTransparency = 1
+    ItemImage.Image = getLiveIcon(itemName)
+    ItemImage.Parent = Card
+    
+    -- Lưu vào Registry để loop cập nhật tự động phía trên
+    imageLabelsRegistry[itemName] = ItemImage
+
+    local ClickBtn = Instance.new("TextButton")
+    ClickBtn.Size = UDim2.new(1, 0, 1, 0)
+    ClickBtn.BackgroundTransparency = 1
+    ClickBtn.Text = ""
+    ClickBtn.ZIndex = 5
+    ClickBtn.Parent = Card
+
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Size = UDim2.new(1, 0, 0, 20)
+    NameLabel.Position = UDim2.new(0, 0, 1, -20)
+    NameLabel.Text = itemName
+    NameLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
+    NameLabel.TextSize = 10
+    NameLabel.Font = Enum.Font.SourceSansBold
+    NameLabel.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+    NameLabel.Parent = Card
+
+    local LabelCorner = Instance.new("UICorner")
+    LabelCorner.CornerRadius = UDim.new(0, 4)
+    LabelCorner.Parent = NameLabel
+
+    ClickBtn.MouseButton1Click:Connect(function()
+        teleportAndGrab(itemName)
+    end)
+end
+
+-- 7. Khởi Tạo Nút Phòng (1 - 8)
+for roomIdx = 1, 8 do
+    local RoomBtn = Instance.new("Frame")
+    RoomBtn.BackgroundColor3 = Color3.fromRGB(32, 38, 34)
+    RoomBtn.BorderSizePixel = 0
+    RoomBtn.Parent = TVFrame
+    
+    local BtnCorner = Instance.new("UICorner")
+    BtnCorner.CornerRadius = UDim.new(0, 6)
+    BtnCorner.Parent = RoomBtn
+    
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Color = Color3.fromRGB(0, 180, 100)
+    Stroke.Thickness = 1.5
+    Stroke.Parent = RoomBtn
+
+    local TextLabel = Instance.new("TextLabel")
+    TextLabel.Size = UDim2.new(0, 65, 1, 0)
+    TextLabel.Position = UDim2.new(0, 6, 0, 0)
+    TextLabel.Text = "🚪 PHÒNG"
+    TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextLabel.Font = Enum.Font.SourceSansBold
+    TextLabel.TextSize = 12
+    TextLabel.BackgroundTransparency = 1
+    TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TextLabel.Parent = RoomBtn
+
+    local NumLabel = Instance.new("TextLabel")
+    NumLabel.Size = UDim2.new(0, 20, 1, 0)
+    NumLabel.Position = UDim2.new(0, 68, 0, 0)
+    NumLabel.Text = tostring(roomIdx)
+    NumLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+    NumLabel.Font = Enum.Font.SourceSansBold
+    NumLabel.TextSize = 14
+    NumLabel.BackgroundTransparency = 1
+    NumLabel.TextXAlignment = Enum.TextXAlignment.Left
+    NumLabel.Parent = RoomBtn
+
+    local InvisibleRealBtn = Instance.new("TextButton")
+    InvisibleRealBtn.Size = UDim2.new(1, 0, 1, 0)
+    InvisibleRealBtn.BackgroundTransparency = 1
+    InvisibleRealBtn.Text = ""
+    InvisibleRealBtn.Parent = RoomBtn
+
+    InvisibleRealBtn.MouseButton1Click:Connect(function()
+        if roomToggleState[roomIdx] == false then
+            roomToggleState[roomIdx] = true
+            
+            RoomBtn.BackgroundColor3 = Color3.fromRGB(0, 70, 35)
+            NumLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+            Stroke.Color = Color3.fromRGB(0, 255, 120)
+            
+            runOneShotTVGrab(roomIdx, RoomBtn, Stroke, NumLabel)
+        end
+    end)
+
+    roomButtonsTable[roomIdx] = {
+        Frame = RoomBtn,
+        Stroke = Stroke,
+        NumLabel = NumLabel,
+        TextLabel = TextLabel
+    }
+end
+
+-- 8. QUÉT ZONE TỪ ATTRIBUTES CỦA NHÂN VẬT
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        
+        local character = LocalPlayer.Character or Workspace:FindFirstChild(LocalPlayer.Name)
+        if character then
+            local currentZone = character:GetAttribute("Zone")
+            local activeRoomIndex = 0
+            
+            if currentZone and currentZone ~= "" then
+                ZoneStatusText.Text = "📍 VỊ TRÍ:\nĐANG Ở " .. string.upper(tostring(currentZone))
+                ZoneStatusText.TextColor3 = Color3.fromRGB(0, 255, 150)
+                
+                local cleanNum = tostring(currentZone):gsub("Room", "")
+                activeRoomIndex = tonumber(cleanNum) or 0
+            else
+                ZoneStatusText.Text = "📍 VỊ TRÍ:\nNGOÀI PHÒNG HÀNG RÀO"
+                ZoneStatusText.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
+            
+            for i = 1, 8 do
+                local btn = roomButtonsTable[i]
+                if btn and roomToggleState[i] == false then
+                    if i == activeRoomIndex then
+                        btn.Frame.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+                        btn.TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                        btn.NumLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                        btn.Stroke.Color = Color3.fromRGB(100, 200, 255)
+                    else
+                        btn.Frame.BackgroundColor3 = Color3.fromRGB(32, 38, 34)
+                        btn.TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                        btn.NumLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+                        btn.Stroke.Color = Color3.fromRGB(0, 180, 100)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- 9. Hệ Thống Nhấn Phím C Để Ẩn/Hiện GUI
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.C then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
+
+print("⚡ Kích hoạt quét thời gian thực thành công! Ảnh sẽ tự nạp động khi quét thấy dữ liệu game.")
