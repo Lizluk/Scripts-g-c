@@ -1,0 +1,34 @@
+local RunService = game:GetService("RunService")
+local LocalPlayer = game.Players.LocalPlayer
+
+-- Cấu hình số lượng bạn muốn khóa (Ví dụ: 100)
+local TARGET_CHARGES = 100
+
+-- Hàm tự động quét và ép số Charges
+local function scanAndLock()
+    -- 1. Tìm thư mục Balo của bạn dựa theo đúng tên trong ảnh Dex
+    local balo = LocalPlayer:FindFirstChild("Balo")
+    if balo then
+        for _, item in ipairs(balo:GetChildren()) do
+            -- Tự động kiểm tra xem vật phẩm có thuộc tính Charges hay không
+            if item:GetAttribute("Charges") and item:GetAttribute("Charges") ~= TARGET_CHARGES then
+                item:SetAttribute("Charges", TARGET_CHARGES)
+            end
+        end
+    end
+
+    -- 2. Quét nhân vật (Vì khi bạn cầm Bình chữa cháy lên tay, nó sẽ nhảy từ "Balo" vào "Character")
+    local char = LocalPlayer.Character
+    if char then
+        for _, item in ipairs(char:GetChildren()) do
+            if item:GetAttribute("Charges") and item:GetAttribute("Charges") ~= TARGET_CHARGES then
+                item:SetAttribute("Charges", TARGET_CHARGES)
+            end
+        end
+    end
+end
+
+-- Chạy vòng lặp quét liên tục mỗi khung hình (Cơ chế giống Godmode)
+RunService.Heartbeat:Connect(scanAndLock)
+
+print("Đã kích hoạt tự động quét và khóa Charges cho tất cả vũ khí trong Balo!")
