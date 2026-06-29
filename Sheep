@@ -1,0 +1,195 @@
+local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+
+-- Xóa GUI cũ nếu đã tồn tại để tránh trùng lặp giao diện
+if CoreGui:FindFirstChild("CustomCountQuestFarm_GUI") then
+    CoreGui.CustomCountQuestFarm_GUI:Destroy()
+end
+
+-- 1. Khởi Tạo Giao Diện Chính (GUI Frame)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CustomCountQuestFarm_GUI"
+ScreenGui.Parent = CoreGui
+ScreenGui.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 320, 0, 260) -- Tăng chiều cao để chứa thêm nút dừng
+MainFrame.Position = UDim2.new(0.4, 0, 0.4, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 9)
+FrameCorner.Parent = MainFrame
+
+-- Thanh Tiêu Đề
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "💰 QUANTITY COIN FARMER v2"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.SourceSansBold
+Title.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 9)
+TitleCorner.Parent = Title
+
+-- 2. Khung Nhập Số Lần Chạy (TextBox)
+local InputBox = Instance.new("TextBox")
+InputBox.Size = UDim2.new(1, -40, 0, 40)
+InputBox.Position = UDim2.new(0, 20, 0, 55)
+InputBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+InputBox.BorderSizePixel = 0
+InputBox.Text = "10000"
+InputBox.TextColor3 = Color3.fromRGB(255, 200, 0)
+InputBox.PlaceholderText = "Nhập số lần muốn chạy tại đây..."
+InputBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+InputBox.Font = Enum.Font.SourceSansBold
+InputBox.TextSize = 14
+InputBox.Parent = MainFrame
+
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 6)
+InputCorner.Parent = InputBox
+
+-- 3. Nút Bấm Để Kích Hoạt Chạy
+local StartBtn = Instance.new("TextButton")
+StartBtn.Size = UDim2.new(1, -40, 0, 40)
+StartBtn.Position = UDim2.new(0, 20, 0, 110)
+StartBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+StartBtn.Text = "🚀 BẮT ĐẦU CHẠY"
+StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+StartBtn.Font = Enum.Font.SourceSansBold
+StartBtn.TextSize = 14
+StartBtn.Parent = MainFrame
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 6)
+BtnCorner.Parent = StartBtn
+
+-- 4. NÚT DỪNG LẠI (MỚI bổ sung)
+local StopBtn = Instance.new("TextButton")
+StopBtn.Size = UDim2.new(1, -40, 0, 40)
+StopBtn.Position = UDim2.new(0, 20, 0, 160)
+StopBtn.BackgroundColor3 = Color3.fromRGB(120, 40, 40) -- Màu đỏ tối ban đầu
+StopBtn.Text = "🛑 DỪNG LẠI"
+StopBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+StopBtn.Font = Enum.Font.SourceSansBold
+StopBtn.TextSize = 14
+StopBtn.Parent = MainFrame
+
+local StopCorner = Instance.new("UICorner")
+StopCorner.CornerRadius = UDim.new(0, 6)
+StopCorner.Parent = StopBtn
+
+-- Dòng Trạng Thái / Hướng dẫn công cụ
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 0, 30)
+StatusLabel.Position = UDim2.new(0, 0, 0, 215)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "Nhấn phím 'J' để Ẩn/Hiện Menu nhanh"
+StatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+StatusLabel.TextSize = 11
+StatusLabel.Font = Enum.Font.SourceSansItalic
+StatusLabel.Parent = MainFrame
+
+-- Dữ liệu Quest gốc từ RemoteSpy của bạn
+local questData = {
+    ["Name"] = "Buy 5 sheep !",
+    ["RequiredLevel"] = 0,
+    ["MaxProgress"] = 5,
+    ["Description"] = "Buy a sheep",
+    ["Reward"] = {
+        ["Coins"] = 40
+    }
+}
+
+-- Biến kiểm soát trạng thái vòng lặp
+local isRunning = false 
+local stopRequested = false -- Tín hiệu báo dừng khẩn cấp
+
+StartBtn.MouseButton1Click:Connect(function()
+    if isRunning then return end -- Chặn bấm liên tục khi đang chạy
+    
+    local loopCount = tonumber(InputBox.Text)
+    
+    if loopCount and loopCount > 0 then
+        isRunning = true
+        stopRequested = false -- Reset trạng thái dừng
+        
+        -- Cập nhật giao diện nút Bắt đầu
+        StartBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+        StartBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        StartBtn.Text = "⌛ ĐANG CHẠY..."
+        
+        -- Làm sáng nút Dừng để báo hiệu có thể bấm được
+        StopBtn.BackgroundColor3 = Color3.fromRGB(220, 40, 40)
+        StopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        
+        task.spawn(function()
+            local remote = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("E_RewardQuest")
+            
+            if remote then
+                for i = 1, loopCount do
+                    -- Kiểm tra xem người dùng có bấm nút DỪNG hay không
+                    if stopRequested then 
+                        print("🛑 Đã dừng vòng lặp theo yêu cầu tại lượt thứ: " .. i)
+                        break 
+                    end
+                    
+                    pcall(function()
+                        remote:FireServer(questData)
+                    end)
+                    
+                    -- Nghỉ một chút sau mỗi 500 lần bắn gói tin để tránh crash
+                    if i % 500 == 0 then
+                        task.wait()
+                    end
+                end
+                if not stopRequested then
+                    print("✅ Hoàn thành chạy lệnh đủ " .. loopCount .. " lần!")
+                end
+            else
+                warn("❌ Không tìm thấy Remote Event 'E_RewardQuest'!")
+            end
+            
+            -- Khôi phục lại trạng thái ban đầu cho cả 2 nút bấm
+            isRunning = false
+            StartBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+            StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            StartBtn.Text = "🚀 BẮT ĐẦU CHẠY"
+            
+            StopBtn.BackgroundColor3 = Color3.fromRGB(120, 40, 40)
+            StopBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        end)
+    else
+        InputBox.Text = "Vui lòng nhập số hợp lệ!"
+        task.wait(1.5)
+        InputBox.Text = "10000"
+    end
+end)
+
+-- Sự kiện khi bấm nút DỪNG LẠI
+StopBtn.MouseButton1Click:Connect(function()
+    if isRunning then
+        stopRequested = true
+        StopBtn.Text = "⌛ ĐANG DỪNG..."
+        StopBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 40)
+    end
+end)
+
+-- Phím tắt ẩn giao diện nhanh
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.J then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
+
+print("🔥 Script Custom Count Farm v2 (Có nút Dừng) đã sẵn sàng!")
