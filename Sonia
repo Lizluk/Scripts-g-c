@@ -1,165 +1,397 @@
--- Khởi tạo thư viện Fluent GUI
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/main/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/main/Addons/InterfaceManager.lua"))()
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Window = Fluent:CreateWindow({
-    Title = "Hacks Hub | Auto Farm & Kill Aura",
-    SubTitle = "by Gemini",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580, 420),
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
-})
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Tạo các Tab
-local Tabs = {
-    Main = Window:CreateTab({ Title = "Chức Năng Chính", Icon = "home" }),
-    Settings = Window:CreateTab({ Title = "Cài Đặt", Icon = "settings" })
-}
+-- Các Remote của game
+local damageRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemote")
+local drinkRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DrinkRemote")
+local foodRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Food")
 
--- Khởi tạo biến trạng thái
-local Options = Fluent.Options
-local ToggleStates = {
-    KillAura = false,
-    AutoDrink = false,
-    AutoFood = false
-}
-local AuraDistance = 20 -- Khoảng cách mặc định cho Kill Aura
+-- Các đường dẫn Object trong Workspace
+local charactersFolder = workspace:WaitForChild("Characters")
+local interactionsFolder = workspace:WaitForChild("Interactions")
 
--- Các hàm xử lý Logic từ Remote của bạn
-local LocalPlayer = game:GetService("Players").LocalPlayer
+local targets = {} 
+local killAuraActive = true 
+local autoDrinkActive = false -- Mặc định tắt
+local autoEatActive = false -- Mặc định tắt
+local closestPlayerName = "" 
 
-local function getClosestPlayer()
-    local closestPlayer = nil
-    local shortestDistance = AuraDistance
+----------------------------------------------------------------
+-- 1. TẠO GIAO DIỆN (GUI)
+----------------------------------------------------------------
 
-    for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            -- Tìm mô hình nhân vật trong workspace dựa trên tên người chơi
-            local characterModel = workspace.Characters:FindFirstChild(player.Name)
-            if characterModel and characterModel:FindFirstChild("Humanoid") and characterModel.Humanoid.Health > 0 then
-                local distance = (LocalPlayer.Character.HumanoidRootPart.Position - characterModel.HumanoidRootPart.Position).Magnitude
-                if distance < shortestDistance then
-                    closestPlayer = characterModel
-                    shortestDistance = distance
+if PlayerGui:FindFirstChild("LizlukKillGUI") then
+    PlayerGui.LizlukKillGUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "LizlukKillGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+-- Khung Menu chính (Tăng chiều cao lên 390 để chứa thêm nút ăn uống)
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 220, 0, 390)
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+-- Tiêu đề Menu
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+Title.Text = "LIZLUK MENU [F]"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 16
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = Title
+
+-- Nhãn trạng thái Tấn công (E)
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, -10, 0, 25)
+StatusLabel.Position = UDim2.new(0, 5, 0, 40)
+StatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+StatusLabel.Text = "KILL AURA: RUNNING [E]"
+StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+StatusLabel.Font = Enum.Font.SourceSansBold
+StatusLabel.TextSize = 13
+StatusLabel.Parent = MainFrame
+
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 4)
+StatusCorner.Parent = StatusLabel
+
+-- Nút/Nhãn Trạng thái uống nước (L)
+local DrinkBtn = Instance.new("TextButton")
+DrinkBtn.Size = UDim2.new(1, -10, 0, 25)
+DrinkBtn.Position = UDim2.new(0, 5, 0, 70)
+DrinkBtn.Font = Enum.Font.SourceSansBold
+DrinkBtn.TextSize = 13
+DrinkBtn.Parent = MainFrame
+
+local DrinkCorner = Instance.new("UICorner")
+DrinkCorner.CornerRadius = UDim.new(0, 4)
+DrinkCorner.Parent = DrinkBtn
+
+-- Nút/Nhãn Trạng thái ăn uống (K)
+local EatBtn = Instance.new("TextButton")
+EatBtn.Size = UDim2.new(1, -10, 0, 25)
+EatBtn.Position = UDim2.new(0, 5, 0, 100)
+EatBtn.Font = Enum.Font.SourceSansBold
+EatBtn.TextSize = 13
+EatBtn.Parent = MainFrame
+
+local EatCorner = Instance.new("UICorner")
+EatCorner.CornerRadius = UDim.new(0, 4)
+EatCorner.Parent = EatBtn
+
+-- Vùng cuộn danh sách Player (Đẩy vị trí xuống dưới các nút tiện ích)
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -135)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 130)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.BorderSizePixel = 0
+ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollingFrame.ScrollBarThickness = 4
+ScrollingFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ScrollingFrame
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end)
+
+----------------------------------------------------------------
+-- HÀM CẬP NHẬT GIAO DIỆN TRẠNG THÁI (ĂN / UỐNG)
+----------------------------------------------------------------
+local function updateUtilityVisuals()
+    if autoDrinkActive then
+        DrinkBtn.BackgroundColor3 = Color3.fromRGB(30, 120, 180)
+        DrinkBtn.Text = "AUTO DRINK: ON [L]"
+        DrinkBtn.TextColor3 = Color3.fromRGB(100, 255, 255)
+    else
+        DrinkBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        DrinkBtn.Text = "AUTO DRINK: OFF [L]"
+        DrinkBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+
+    if autoEatActive then
+        EatBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 30)
+        EatBtn.Text = "AUTO EAT: ON [K]"
+        EatBtn.TextColor3 = Color3.fromRGB(255, 200, 100)
+    else
+        EatBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        EatBtn.Text = "AUTO EAT: OFF [K]"
+        EatBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end
+updateUtilityVisuals()
+
+-- Click chuột trực tiếp vào nút để bật/tắt
+DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
+EatBtn.MouseButton1Click:Connect(function() autoEatActive = not autoEatActive updateUtilityVisuals() end)
+
+----------------------------------------------------------------
+-- KẾT NỐI PHÍM BẤM
+----------------------------------------------------------------
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.F then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+    
+    if input.KeyCode == Enum.KeyCode.E then
+        killAuraActive = not killAuraActive
+        if killAuraActive then
+            StatusLabel.Text = "KILL AURA: RUNNING [E]"
+            StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+        else
+            StatusLabel.Text = "KILL AURA: PAUSED [E]"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+        end
+    end
+
+    -- Phím L: Bật/Tắt nước
+    if input.KeyCode == Enum.KeyCode.L then
+        autoDrinkActive = not autoDrinkActive
+        updateUtilityVisuals()
+    end
+
+    -- Phím K: Bật/Tắt ăn
+    if input.KeyCode == Enum.KeyCode.K then
+        autoEatActive = not autoEatActive
+        updateUtilityVisuals()
+    end
+end)
+
+----------------------------------------------------------------
+-- 2. HỆ THỐNG ESP TÊN TRÊN ĐẦU
+----------------------------------------------------------------
+
+local function createESP(player)
+    if player == LocalPlayer then return end
+
+    local function applyESP(character)
+        if not character then return end
+        local head = character:WaitForChild("Head", 5)
+        if not head then return end
+
+        if head:FindFirstChild("PlayerESP") then head.PlayerESP:Destroy() end
+
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "PlayerESP"
+        bb.Size = UDim2.new(0, 200, 0, 50)
+        bb.AlwaysOnTop = true
+        bb.ExtentsOffset = Vector3.new(0, 2.5, 0)
+        bb.Adornee = head
+        bb.Parent = head
+
+        local txt = Instance.new("TextLabel")
+        txt.Size = UDim2.new(1, 0, 1, 0)
+        txt.BackgroundTransparency = 1
+        txt.TextStrokeTransparency = 0
+        txt.Font = Enum.Font.SourceSansBold
+        txt.TextSize = 14
+        txt.Parent = bb
+
+        local connection
+        connection = RunService.RenderStepped:Connect(function()
+            if not character:IsDescendantOf(workspace) or not head:IsDescendantOf(character) or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                connection:Disconnect()
+                bb:Destroy()
+                return
+            end
+            local myRoot = LocalPlayer.Character.HumanoidRootPart
+            local distance = math.floor((myRoot.Position - head.Position).Magnitude)
+            
+            if targets[player.Name] then
+                if killAuraActive then
+                    txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
+                    txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                else
+                    txt.Text = string.format("[⏸️] %s\n[%d m]", player.Name, distance)
+                    txt.TextColor3 = Color3.fromRGB(255, 200, 50)
+                end
+            elseif player.Name == closestPlayerName then
+                txt.Text = string.format("[⭐ CHIẾT CẬN] %s\n[%d m]", player.Name, distance)
+                txt.TextColor3 = Color3.fromRGB(0, 255, 150)
+            else
+                txt.Text = string.format("%s\n[%d m]", player.Name, distance)
+                txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
+        end)
+    end
+
+    player.CharacterAdded:Connect(applyESP)
+    if player.Character then applyESP(player.Character) end
+end
+
+for _, p in pairs(Players:GetPlayers()) do createESP(p) end
+Players.PlayerAdded:Connect(createESP)
+
+----------------------------------------------------------------
+-- 3. ĐỒNG BỘ LOGIC QUÉT VÀ SẮP XẾP DANH SÁCH (REALTIME)
+----------------------------------------------------------------
+
+local buttons = {}
+
+local function buildButtons()
+    for _, child in pairs(ScrollingFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    buttons = {}
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local pName = player.Name
+            
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, 0, 0, 30)
+            Btn.Font = Enum.Font.SourceSansBold
+            Btn.TextSize = 14
+            Btn.BorderSizePixel = 0
+            Btn.Parent = ScrollingFrame
+
+            local BtnCorner = Instance.new("UICorner")
+            BtnCorner.CornerRadius = UDim.new(0, 4)
+            BtnCorner.Parent = Btn
+            
+            local UIStroke = Instance.new("UIStroke")
+            UIStroke.Thickness = 2
+            UIStroke.Color = Color3.fromRGB(0, 255, 150)
+            UIStroke.Enabled = false
+            UIStroke.Parent = Btn
+
+            Btn.MouseButton1Click:Connect(function()
+                targets[pName] = not targets[pName]
+            end)
+
+            buttons[pName] = {Button = Btn, Stroke = UIStroke}
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(buildButtons)
+Players.PlayerRemoving:Connect(function(player)
+    targets[player.Name] = nil
+    buildButtons()
+end)
+buildButtons()
+
+-- Vòng lặp quản lý Sắp xếp UI + Đấm + Ăn + Uống
+task.spawn(function()
+    while true do
+        local myCharacter = LocalPlayer.Character
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        
+        local minDistance = math.huge
+        local tempClosest = ""
+
+        -- 1. Tìm người gần nhất và sắp xếp danh sách GUI
+        if myRoot then
+            for pName, btnData in pairs(buttons) do
+                local p = Players:FindFirstChild(pName)
+                if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local dist = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
+                    if dist < minDistance then
+                        minDistance = dist
+                        tempClosest = pName
+                    end
+                    
+                    if targets[pName] then
+                        btnData.Button.LayoutOrder = math.floor(dist) - 100000
+                    else
+                        btnData.Button.LayoutOrder = math.floor(dist)
+                    end
+                else
+                    btnData.Button.LayoutOrder = 999999
                 end
             end
         end
-    end
-    return closestPlayer
-end
+        closestPlayerName = tempClosest
 
--- Vòng lặp chạy ngầm cho các chức năng (Sử dụng Task để tối ưu hóa)
-task.spawn(function()
-    while task.wait(0.1) do
-        -- 1. Xử lý Kill Aura
-        if ToggleStates.KillAura then
-            local target = getClosestPlayer()
-            if target then
-                local ohTable1 = { [1] = target }
-                game:GetService("ReplicatedStorage").Remotes.CharactersDamageRemote:FireServer(ohTable1)
+        -- 2. Cập nhật màu sắc nút danh sách
+        for pName, btnData in pairs(buttons) do
+            local Btn = btnData.Button
+            local Stroke = btnData.Stroke
+
+            if targets[pName] then
+                Stroke.Enabled = false
+                if killAuraActive then
+                    Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                    Btn.Text = pName .. " [KILLING]"
+                else
+                    Btn.BackgroundColor3 = Color3.fromRGB(160, 120, 30)
+                    Btn.Text = pName .. " [PAUSED]"
+                end
+                Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            elseif pName == closestPlayerName then
+                Btn.BackgroundColor3 = Color3.fromRGB(20, 50, 40) 
+                Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
+                Btn.TextColor3 = Color3.fromRGB(0, 255, 150)
+                Stroke.Enabled = true
+            else
+                Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+                Btn.Text = pName
+                Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                Stroke.Enabled = false
             end
         end
 
-        -- 2. Xử lý Tự động uống nước
-        if ToggleStates.AutoDrink then
-            local lake = workspace.Interactions.Lakes:FindFirstChild("Lake")
-            if lake then
-                game:GetService("ReplicatedStorage").Remotes.DrinkRemote:FireServer(lake)
+        -- 3. Xử lý Logic Tấn Công (Kill Aura)
+        if killAuraActive then
+            for pName, isTargeted in pairs(targets) do
+                if isTargeted then
+                    local targetCharacter = charactersFolder:FindFirstChild(pName)
+                    if targetCharacter then
+                        pcall(function()
+                            damageRemote:FireServer({[1] = targetCharacter})
+                        end)
+                    end
+                end
             end
         end
 
-        -- 3. Xử lý Tự động ăn thức ăn
-        if ToggleStates.AutoFood then
-            local fruit = workspace.Interactions.Food:FindFirstChild("Fruit")
-            if fruit then
-                game:GetService("ReplicatedStorage").Remotes.Food:FireServer(fruit)
-            end
+        -- 4. Xử lý Logic Tự động Uống Nước (L)
+        if autoDrinkActive then
+            pcall(function()
+                local lake = interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
+                if lake then
+                    drinkRemote:FireServer(lake)
+                end
+            end)
         end
+
+        -- 5. Xử lý Logic Tự động Ăn Sườn (K)
+        if autoEatActive then
+            pcall(function()
+                local ribs = interactionsFolder:FindFirstChild("Food") and interactionsFolder.Food:FindFirstChild("Ribs")
+                if ribs then
+                    foodRemote:FireServer(ribs)
+                end
+            end)
+        end
+
+        task.wait(0.1)
     end
 end)
-
---- Giao diện điều khiển (UI Elements) ---
-
--- Section: Kill Aura
-Tabs.Main:AddSection("Kill Aura thiết lập")
-
-local KillAuraToggle = Tabs.Main:AddToggle("KillAuraToggle", {Title = "Bật Kill Aura", Default = false})
-KillAuraToggle:OnChanged(function()
-    ToggleStates.KillAura = KillAuraToggle.Value
-end)
-
-Tabs.Main:AddSlider("AuraDistanceSlider", {
-    Title = "Khoảng cách Kill Aura",
-    Description = "Chỉnh bán kính tự động quét người chơi",
-    Default = 20,
-    Min = 5,
-    Max = 100,
-    Rounding = 0,
-    Callback = function(Value)
-        AuraDistance = Value
-    end
-})
-
-local KillAuraBind = Tabs.Main:AddKeybind("KillAuraBind", {
-    Title = "Phím tắt Kill Aura",
-    Mode = "Toggle",
-    Default = "K",
-    Callback = function(Value)
-        KillAuraToggle:SetValue(Value)
-    end
-})
-
-Tabs.Main:AddParagraph({
-    Title = "Lưu ý Kill Aura",
-    Content = "Hệ thống sẽ tự động quét những người chơi nằm trong thư mục 'workspace.Characters' gần bạn."
-})
-
--- Section: Sinh tồn (Food & Water)
-Tabs.Main:AddSection("Tự Động Sinh Tồn")
-
-local DrinkToggle = Tabs.Main:AddToggle("DrinkToggle", {Title = "Tự Động Uống Nước", Default = false})
-DrinkToggle:OnChanged(function()
-    ToggleStates.AutoDrink = DrinkToggle.Value
-end)
-
-Tabs.Main:AddKeybind("DrinkBind", {
-    Title = "Phím tắt Uống Nước",
-    Mode = "Toggle",
-    Default = "L",
-    Callback = function(Value)
-        DrinkToggle:SetValue(Value)
-    end
-})
-
-local FoodToggle = Tabs.Main:AddToggle("FoodToggle", {Title = "Tự Động Ăn Trái Cây", Default = false})
-FoodToggle:OnChanged(function()
-    ToggleStates.AutoFood = FoodToggle.Value
-end)
-
-Tabs.Main:AddKeybind("FoodBind", {
-    Title = "Phím tắt Ăn Uống",
-    Mode = "Toggle",
-    Default = "P",
-    Callback = function(Value)
-        FoodToggle:SetValue(Value)
-    end
-})
-
--- Quản lý cấu hình GUI
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetFolder("GeminiHub/configs")
-InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-SaveManager:BuildConfigSection(Tabs.Settings)
-
-Window:SelectTab(1)
-
-Fluent:Notify({
-    Title = "Thành công!",
-    Content = "Script đã được kích hoạt thành công. Nhấn Left Control để ẩn/hiện menu.",
-    Duration = 5
-})
