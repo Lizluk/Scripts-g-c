@@ -1,0 +1,165 @@
+-- Khởi tạo thư viện Fluent GUI
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/main/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/main/Addons/InterfaceManager.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "Hacks Hub | Auto Farm & Kill Aura",
+    SubTitle = "by Gemini",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 420),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+-- Tạo các Tab
+local Tabs = {
+    Main = Window:CreateTab({ Title = "Chức Năng Chính", Icon = "home" }),
+    Settings = Window:CreateTab({ Title = "Cài Đặt", Icon = "settings" })
+}
+
+-- Khởi tạo biến trạng thái
+local Options = Fluent.Options
+local ToggleStates = {
+    KillAura = false,
+    AutoDrink = false,
+    AutoFood = false
+}
+local AuraDistance = 20 -- Khoảng cách mặc định cho Kill Aura
+
+-- Các hàm xử lý Logic từ Remote của bạn
+local LocalPlayer = game:GetService("Players").LocalPlayer
+
+local function getClosestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = AuraDistance
+
+    for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            -- Tìm mô hình nhân vật trong workspace dựa trên tên người chơi
+            local characterModel = workspace.Characters:FindFirstChild(player.Name)
+            if characterModel and characterModel:FindFirstChild("Humanoid") and characterModel.Humanoid.Health > 0 then
+                local distance = (LocalPlayer.Character.HumanoidRootPart.Position - characterModel.HumanoidRootPart.Position).Magnitude
+                if distance < shortestDistance then
+                    closestPlayer = characterModel
+                    shortestDistance = distance
+                end
+            end
+        end
+    end
+    return closestPlayer
+end
+
+-- Vòng lặp chạy ngầm cho các chức năng (Sử dụng Task để tối ưu hóa)
+task.spawn(function()
+    while task.wait(0.1) do
+        -- 1. Xử lý Kill Aura
+        if ToggleStates.KillAura then
+            local target = getClosestPlayer()
+            if target then
+                local ohTable1 = { [1] = target }
+                game:GetService("ReplicatedStorage").Remotes.CharactersDamageRemote:FireServer(ohTable1)
+            end
+        end
+
+        -- 2. Xử lý Tự động uống nước
+        if ToggleStates.AutoDrink then
+            local lake = workspace.Interactions.Lakes:FindFirstChild("Lake")
+            if lake then
+                game:GetService("ReplicatedStorage").Remotes.DrinkRemote:FireServer(lake)
+            end
+        end
+
+        -- 3. Xử lý Tự động ăn thức ăn
+        if ToggleStates.AutoFood then
+            local fruit = workspace.Interactions.Food:FindFirstChild("Fruit")
+            if fruit then
+                game:GetService("ReplicatedStorage").Remotes.Food:FireServer(fruit)
+            end
+        end
+    end
+end)
+
+--- Giao diện điều khiển (UI Elements) ---
+
+-- Section: Kill Aura
+Tabs.Main:AddSection("Kill Aura thiết lập")
+
+local KillAuraToggle = Tabs.Main:AddToggle("KillAuraToggle", {Title = "Bật Kill Aura", Default = false})
+KillAuraToggle:OnChanged(function()
+    ToggleStates.KillAura = KillAuraToggle.Value
+end)
+
+Tabs.Main:AddSlider("AuraDistanceSlider", {
+    Title = "Khoảng cách Kill Aura",
+    Description = "Chỉnh bán kính tự động quét người chơi",
+    Default = 20,
+    Min = 5,
+    Max = 100,
+    Rounding = 0,
+    Callback = function(Value)
+        AuraDistance = Value
+    end
+})
+
+local KillAuraBind = Tabs.Main:AddKeybind("KillAuraBind", {
+    Title = "Phím tắt Kill Aura",
+    Mode = "Toggle",
+    Default = "K",
+    Callback = function(Value)
+        KillAuraToggle:SetValue(Value)
+    end
+})
+
+Tabs.Main:AddParagraph({
+    Title = "Lưu ý Kill Aura",
+    Content = "Hệ thống sẽ tự động quét những người chơi nằm trong thư mục 'workspace.Characters' gần bạn."
+})
+
+-- Section: Sinh tồn (Food & Water)
+Tabs.Main:AddSection("Tự Động Sinh Tồn")
+
+local DrinkToggle = Tabs.Main:AddToggle("DrinkToggle", {Title = "Tự Động Uống Nước", Default = false})
+DrinkToggle:OnChanged(function()
+    ToggleStates.AutoDrink = DrinkToggle.Value
+end)
+
+Tabs.Main:AddKeybind("DrinkBind", {
+    Title = "Phím tắt Uống Nước",
+    Mode = "Toggle",
+    Default = "L",
+    Callback = function(Value)
+        DrinkToggle:SetValue(Value)
+    end
+})
+
+local FoodToggle = Tabs.Main:AddToggle("FoodToggle", {Title = "Tự Động Ăn Trái Cây", Default = false})
+FoodToggle:OnChanged(function()
+    ToggleStates.AutoFood = FoodToggle.Value
+end)
+
+Tabs.Main:AddKeybind("FoodBind", {
+    Title = "Phím tắt Ăn Uống",
+    Mode = "Toggle",
+    Default = "P",
+    Callback = function(Value)
+        FoodToggle:SetValue(Value)
+    end
+})
+
+-- Quản lý cấu hình GUI
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetFolder("GeminiHub/configs")
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+Window:SelectTab(1)
+
+Fluent:Notify({
+    Title = "Thành công!",
+    Content = "Script đã được kích hoạt thành công. Nhấn Left Control để ẩn/hiện menu.",
+    Duration = 5
+})
