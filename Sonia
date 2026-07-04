@@ -17,9 +17,10 @@ local interactionsFolder = workspace:WaitForChild("Interactions")
 
 local targets = {} 
 local killAuraActive = true 
-local autoDrinkActive = false -- Mặc định tắt
-local autoEatActive = false -- Mặc định tắt
+local autoDrinkActive = false 
+local autoEatActive = false 
 local closestPlayerName = "" 
+local maxDetectDistance = 150 -- Khoảng cách nhận diện mặc định
 
 ----------------------------------------------------------------
 -- 1. TẠO GIAO DIỆN (GUI)
@@ -34,9 +35,9 @@ ScreenGui.Name = "LizlukKillGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
--- Khung Menu chính (Tăng chiều cao lên 390 để chứa thêm nút ăn uống)
+-- Khung Menu chính
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 390)
+MainFrame.Size = UDim2.new(0, 220, 0, 430)
 MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -77,7 +78,7 @@ local StatusCorner = Instance.new("UICorner")
 StatusCorner.CornerRadius = UDim.new(0, 4)
 StatusCorner.Parent = StatusLabel
 
--- Nút/Nhãn Trạng thái uống nước (L)
+-- Nút Trạng thái uống nước (L)
 local DrinkBtn = Instance.new("TextButton")
 DrinkBtn.Size = UDim2.new(1, -10, 0, 25)
 DrinkBtn.Position = UDim2.new(0, 5, 0, 70)
@@ -89,7 +90,7 @@ local DrinkCorner = Instance.new("UICorner")
 DrinkCorner.CornerRadius = UDim.new(0, 4)
 DrinkCorner.Parent = DrinkBtn
 
--- Nút/Nhãn Trạng thái ăn uống (K)
+-- Nút Trạng thái ăn uống (K)
 local EatBtn = Instance.new("TextButton")
 EatBtn.Size = UDim2.new(1, -10, 0, 25)
 EatBtn.Position = UDim2.new(0, 5, 0, 100)
@@ -101,10 +102,68 @@ local EatCorner = Instance.new("UICorner")
 EatCorner.CornerRadius = UDim.new(0, 4)
 EatCorner.Parent = EatBtn
 
--- Vùng cuộn danh sách Player (Đẩy vị trí xuống dưới các nút tiện ích)
+----------------------------------------------------------------
+-- KHU VỰC NHẬP SỐ KHOẢNG CÁCH (TEXTBOX)
+----------------------------------------------------------------
+local DistanceInputFrame = Instance.new("Frame")
+DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 130)
+DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+DistanceInputFrame.BorderSizePixel = 0
+DistanceInputFrame.Parent = MainFrame
+
+local InputFrameCorner = Instance.new("UICorner")
+InputFrameCorner.CornerRadius = UDim.new(0, 4)
+InputFrameCorner.Parent = DistanceInputFrame
+
+local DistanceLabel = Instance.new("TextLabel")
+DistanceLabel.Size = UDim2.new(0, 130, 1, 0)
+DistanceLabel.Position = UDim2.new(0, 5, 0, 0)
+DistanceLabel.BackgroundTransparency = 1
+DistanceLabel.Text = "Hạn mức khoảng cách:"
+DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+DistanceLabel.Font = Enum.Font.SourceSansBold
+DistanceLabel.TextSize = 12
+DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistanceLabel.Parent = DistanceInputFrame
+
+local DistanceBox = Instance.new("TextBox")
+DistanceBox.Size = UDim2.new(0, 65, 0, 23)
+DistanceBox.Position = UDim2.new(1, -70, 0.5, -11)
+DistanceBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+DistanceBox.BorderSizePixel = 0
+DistanceBox.Text = tostring(maxDetectDistance)
+DistanceBox.TextColor3 = Color3.fromRGB(0, 220, 255)
+DistanceBox.Font = Enum.Font.SourceSansBold
+DistanceBox.TextSize = 13
+DistanceBox.ClearTextOnFocus = false
+DistanceBox.PlaceholderText = "Số mét..."
+DistanceBox.Parent = DistanceInputFrame
+
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 4)
+InputCorner.Parent = DistanceBox
+
+-- Xử lý khi người dùng nhập số xong và nhấn Enter hoặc nhấn ra ngoài
+DistanceBox.FocusLost:Connect(function(enterPressed)
+    local text = DistanceBox.Text
+    local number = tonumber(text)
+    
+    if number and number >= 0 then
+        maxDetectDistance = number
+        DistanceBox.Text = tostring(number) -- Chuẩn hóa lại chuỗi số đã nhập
+    else
+        -- Nếu nhập sai ký tự hoặc để trống, hoàn tác về giá trị cũ cũ
+        DistanceBox.Text = tostring(maxDetectDistance)
+    end
+end)
+
+----------------------------------------------------------------
+
+-- Vùng cuộn danh sách Player
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -135)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 130)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -175)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 170)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -146,7 +205,6 @@ local function updateUtilityVisuals()
 end
 updateUtilityVisuals()
 
--- Click chuột trực tiếp vào nút để bật/tắt
 DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
 EatBtn.MouseButton1Click:Connect(function() autoEatActive = not autoEatActive updateUtilityVisuals() end)
 
@@ -154,12 +212,13 @@ EatBtn.MouseButton1Click:Connect(function() autoEatActive = not autoEatActive up
 -- KẾT NỐI PHÍM BẤM
 ----------------------------------------------------------------
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    -- Nếu đang gõ số trong hộp văn bản thì không kích hoạt phím tắt ẩn/bật tính năng
+    if UserInputService:GetFocusedTextBox() then return end
     if gameProcessed then return end
     
-    if input.KeyCode == Enum.KeyCode.F then
-        MainFrame.Visible = not MainFrame.Visible
-    end
-    
+    if input.KeyCode == Enum.KeyCode.F then MainFrame.Visible = not MainFrame.Visible end
+    if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.K then autoEatActive = not autoEatActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.E then
         killAuraActive = not killAuraActive
         if killAuraActive then
@@ -169,18 +228,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             StatusLabel.Text = "KILL AURA: PAUSED [E]"
             StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
         end
-    end
-
-    -- Phím L: Bật/Tắt nước
-    if input.KeyCode == Enum.KeyCode.L then
-        autoDrinkActive = not autoDrinkActive
-        updateUtilityVisuals()
-    end
-
-    -- Phím K: Bật/Tắt ăn
-    if input.KeyCode == Enum.KeyCode.K then
-        autoEatActive = not autoEatActive
-        updateUtilityVisuals()
     end
 end)
 
@@ -250,7 +297,7 @@ for _, p in pairs(Players:GetPlayers()) do createESP(p) end
 Players.PlayerAdded:Connect(createESP)
 
 ----------------------------------------------------------------
--- 3. ĐỒNG BỘ LOGIC QUÉT VÀ SẮP XẾP DANH SÁCH (REALTIME)
+-- 3. LOGIC SẮP XẾP VÀ THEO DÕI KHOẢNG CÁCH TÙY CHỈNH
 ----------------------------------------------------------------
 
 local buttons = {}
@@ -275,18 +322,12 @@ local function buildButtons()
             local BtnCorner = Instance.new("UICorner")
             BtnCorner.CornerRadius = UDim.new(0, 4)
             BtnCorner.Parent = Btn
-            
-            local UIStroke = Instance.new("UIStroke")
-            UIStroke.Thickness = 2
-            UIStroke.Color = Color3.fromRGB(0, 255, 150)
-            UIStroke.Enabled = false
-            UIStroke.Parent = Btn
 
             Btn.MouseButton1Click:Connect(function()
                 targets[pName] = not targets[pName]
             end)
 
-            buttons[pName] = {Button = Btn, Stroke = UIStroke}
+            buttons[pName] = {Button = Btn}
         end
     end
 end
@@ -298,7 +339,6 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 buildButtons()
 
--- Vòng lặp quản lý Sắp xếp UI + Đấm + Ăn + Uống
 task.spawn(function()
     while true do
         local myCharacter = LocalPlayer.Character
@@ -307,13 +347,15 @@ task.spawn(function()
         local minDistance = math.huge
         local tempClosest = ""
 
-        -- 1. Tìm người gần nhất và sắp xếp danh sách GUI
+        -- 1. Tìm người gần nhất dựa trên số mét tối đa đã cấu hình trong ô nhập
         if myRoot then
             for pName, btnData in pairs(buttons) do
                 local p = Players:FindFirstChild(pName)
                 if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     local dist = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
-                    if dist < minDistance then
+                    
+                    -- Kiểm tra điều kiện khoảng cách từ ô TextBox
+                    if dist <= maxDetectDistance and dist < minDistance then
                         minDistance = dist
                         tempClosest = pName
                     end
@@ -330,13 +372,11 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
-        -- 2. Cập nhật màu sắc nút danh sách
+        -- 2. Cập nhật màu nút và tên danh sách hiển thị
         for pName, btnData in pairs(buttons) do
             local Btn = btnData.Button
-            local Stroke = btnData.Stroke
 
             if targets[pName] then
-                Stroke.Enabled = false
                 if killAuraActive then
                     Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
                     Btn.Text = pName .. " [KILLING]"
@@ -346,15 +386,14 @@ task.spawn(function()
                 end
                 Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
             elseif pName == closestPlayerName then
-                Btn.BackgroundColor3 = Color3.fromRGB(20, 50, 40) 
+                -- Giữ nguyên thiết kế dịu mắt, chữ xanh sáng không lóa mờ tên
+                Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
                 Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
-                Btn.TextColor3 = Color3.fromRGB(0, 255, 150)
-                Stroke.Enabled = true
+                Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
             else
                 Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
                 Btn.Text = pName
                 Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-                Stroke.Enabled = false
             end
         end
 
@@ -372,7 +411,7 @@ task.spawn(function()
             end
         end
 
-        -- 4. Xử lý Logic Tự động Uống Nước (L)
+        -- 4. Xử lý Logic Tự động Uống Nước
         if autoDrinkActive then
             pcall(function()
                 local lake = interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
@@ -382,7 +421,7 @@ task.spawn(function()
             end)
         end
 
-        -- 5. Xử lý Logic Tự động Ăn Sườn (K)
+        -- 5. Xử lý Logic Tự động Ăn Sườn
         if autoEatActive then
             pcall(function()
                 local ribs = interactionsFolder:FindFirstChild("Food") and interactionsFolder.Food:FindFirstChild("Ribs")
