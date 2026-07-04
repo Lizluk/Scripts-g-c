@@ -6,8 +6,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Các Remote của game
+-- Các Remote của game (Giữ cả cũ và thêm mới)
 local damageRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemote")
+local damageRemoteBreath = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemoteBreath")
 local drinkRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DrinkRemote")
 local foodRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Food")
 
@@ -16,11 +17,17 @@ local charactersFolder = workspace:WaitForChild("Characters")
 local interactionsFolder = workspace:WaitForChild("Interactions")
 
 local targets = {} 
+local killAuraActive = true 
 local autoDrinkActive = false 
 local autoEatActive = false 
 local closestPlayerName = "" 
 local maxDetectDistance = 150 -- Khoảng cách nhận diện mặc định
-local spamCount = 10         -- Số lần spam mặc định khi bấm Q
+
+-- ================================================================
+-- CẤU HÌNH TỐC ĐỘ GỬI REMOTE DAMAGE (CHỐNG BAN)
+-- ================================================================
+local attackCooldown = 1.5 -- Khoảng thời gian chờ mặc định là 1.5 giây
+-- ================================================================
 
 ----------------------------------------------------------------
 -- 1. TẠO GIAO DIỆN (GUI)
@@ -36,7 +43,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 465)
+MainFrame.Size = UDim2.new(0, 220, 0, 430)
 MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -51,7 +58,7 @@ UICorner.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-Title.Text = "LIZLUK MENU [P]"
+Title.Text = "LIZLUK MENU [F]"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 16
@@ -65,8 +72,8 @@ local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -10, 0, 25)
 StatusLabel.Position = UDim2.new(0, 5, 0, 40)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-StatusLabel.Text = "BẤM [Q] ĐỂ ĐẤM ĐỒNG LOẠT"
-StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 255)
+StatusLabel.Text = "KILL AURA: RUNNING [E]"
+StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
 StatusLabel.Font = Enum.Font.SourceSansBold
 StatusLabel.TextSize = 13
 StatusLabel.Parent = MainFrame
@@ -98,11 +105,10 @@ EatCorner.CornerRadius = UDim.new(0, 4)
 EatCorner.Parent = EatBtn
 
 ----------------------------------------------------------------
--- KHU VỰC CÀI ĐẶT CÁC Ô NHẬP SỐ (TEXTBOX)
+-- KHU VỰC NHẬP SỐ KHOẢNG CÁCH (TEXTBOX)
 ----------------------------------------------------------------
-
 local DistanceInputFrame = Instance.new("Frame")
-DistanceInputFrame.Size = UDim2.new(1, -10, 0, 32)
+DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
 DistanceInputFrame.Position = UDim2.new(0, 5, 0, 130)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
@@ -124,7 +130,7 @@ DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
 DistanceLabel.Parent = DistanceInputFrame
 
 local DistanceBox = Instance.new("TextBox")
-DistanceBox.Size = UDim2.new(0, 65, 0, 22)
+DistanceBox.Size = UDim2.new(0, 65, 0, 23)
 DistanceBox.Position = UDim2.new(1, -70, 0.5, -11)
 DistanceBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
 DistanceBox.BorderSizePixel = 0
@@ -136,12 +142,13 @@ DistanceBox.ClearTextOnFocus = false
 DistanceBox.PlaceholderText = "Số mét..."
 DistanceBox.Parent = DistanceInputFrame
 
-local InputCorner1 = Instance.new("UICorner")
-InputCorner1.CornerRadius = UDim.new(0, 4)
-InputCorner1.Parent = DistanceBox
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 4)
+InputCorner.Parent = DistanceBox
 
 DistanceBox.FocusLost:Connect(function(enterPressed)
-    local number = tonumber(DistanceBox.Text)
+    local text = DistanceBox.Text
+    local number = tonumber(text)
     if number and number >= 0 then
         maxDetectDistance = number
         DistanceBox.Text = tostring(number)
@@ -150,60 +157,11 @@ DistanceBox.FocusLost:Connect(function(enterPressed)
     end
 end)
 
-local SpamInputFrame = Instance.new("Frame")
-SpamInputFrame.Size = UDim2.new(1, -10, 0, 32)
-SpamInputFrame.Position = UDim2.new(0, 5, 0, 167)
-SpamInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-SpamInputFrame.BorderSizePixel = 0
-SpamInputFrame.Parent = MainFrame
-
-local SpamFrameCorner = Instance.new("UICorner")
-SpamFrameCorner.CornerRadius = UDim.new(0, 4)
-SpamFrameCorner.Parent = SpamInputFrame
-
-local SpamLabel = Instance.new("TextLabel")
-SpamLabel.Size = UDim2.new(0, 130, 1, 0)
-SpamLabel.Position = UDim2.new(0, 5, 0, 0)
-SpamLabel.BackgroundTransparency = 1
-SpamLabel.Text = "Số lần đấm cùng lúc (Q):"
-SpamLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-SpamLabel.Font = Enum.Font.SourceSansBold
-SpamLabel.TextSize = 12
-SpamLabel.TextXAlignment = Enum.TextXAlignment.Left
-SpamLabel.Parent = SpamInputFrame
-
-local SpamBox = Instance.new("TextBox")
-SpamBox.Size = UDim2.new(0, 65, 0, 22)
-SpamBox.Position = UDim2.new(1, -70, 0.5, -11)
-SpamBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-SpamBox.BorderSizePixel = 0
-SpamBox.Text = tostring(spamCount)
-SpamBox.TextColor3 = Color3.fromRGB(255, 85, 85)
-SpamBox.Font = Enum.Font.SourceSansBold
-SpamBox.TextSize = 13
-SpamBox.ClearTextOnFocus = false
-SpamBox.PlaceholderText = "Số lần..."
-SpamBox.Parent = SpamInputFrame
-
-local InputCorner2 = Instance.new("UICorner")
-InputCorner2.CornerRadius = UDim.new(0, 4)
-InputCorner2.Parent = SpamBox
-
-SpamBox.FocusLost:Connect(function(enterPressed)
-    local number = tonumber(SpamBox.Text)
-    if number and number > 0 then
-        spamCount = math.floor(number)
-        SpamBox.Text = tostring(spamCount)
-    else
-        SpamBox.Text = tostring(spamCount)
-    end
-end)
-
 ----------------------------------------------------------------
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -210)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 205)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -175)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 170)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -245,9 +203,6 @@ updateUtilityVisuals()
 DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
 EatBtn.MouseButton1Click:Connect(function() autoEatActive = not autoEatActive updateUtilityVisuals() end)
 
-----------------------------------------------------------------
--- LẮNG NGHE PHÍM BẤM - BẮN ĐỒNG LOẠT Q
-----------------------------------------------------------------
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if UserInputService:GetFocusedTextBox() then return end
     if gameProcessed then return end
@@ -255,22 +210,14 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
     if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.K then autoEatActive = not autoEatActive updateUtilityVisuals() end
-    
-    -- Sử dụng task.spawn để ép game gửi đi toàn bộ dữ liệu tại cùng 1 thời điểm
     if input.KeyCode == Enum.KeyCode.Q then
-        for pName, isTargeted in pairs(targets) do
-            if isTargeted then
-                local targetCharacter = charactersFolder:FindFirstChild(pName)
-                if targetCharacter then
-                    for i = 1, spamCount do
-                        task.spawn(function()
-                            pcall(function()
-                                damageRemote:FireServer({[1] = targetCharacter})
-                            end)
-                        end)
-                    end
-                end
-            end
+        killAuraActive = not killAuraActive
+        if killAuraActive then
+            StatusLabel.Text = "KILL AURA: RUNNING [Q]"
+            StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+        else
+            StatusLabel.Text = "KILL AURA: PAUSED [E]"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
         end
     end
 end)
@@ -316,8 +263,13 @@ local function createESP(player)
             local distance = math.floor((myRoot.Position - head.Position).Magnitude)
             
             if targets[player.Name] then
-                txt.Text = string.format("[🎯 MỤC TIÊU] %s\n[%d m]", player.Name, distance)
-                txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                if killAuraActive then
+                    txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
+                    txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                else
+                    txt.Text = string.format("[⏸️] %s\n[%d m]", player.Name, distance)
+                    txt.TextColor3 = Color3.fromRGB(255, 200, 50)
+                end
             elseif player.Name == closestPlayerName then
                 txt.Text = string.format("[⭐ CHIẾT CẬN] %s\n[%d m]", player.Name, distance)
                 txt.TextColor3 = Color3.fromRGB(0, 255, 150)
@@ -409,8 +361,13 @@ task.spawn(function()
         for pName, btnData in pairs(buttons) do
             local Btn = btnData.Button
             if targets[pName] then
-                Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-                Btn.Text = pName .. " [TARGET]"
+                if killAuraActive then
+                    Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                    Btn.Text = pName .. " [KILLING]"
+                else
+                    Btn.BackgroundColor3 = Color3.fromRGB(160, 120, 30)
+                    Btn.Text = pName .. " [PAUSED]"
+                end
                 Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
             elseif pName == closestPlayerName then
                 Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
@@ -438,5 +395,47 @@ task.spawn(function()
         end
 
         task.wait(0.1)
+    end
+end)
+
+----------------------------------------------------------------
+-- 4. VÒNG LẶP CHO LỆNH TẤN CÔNG (REMOTE GỐC - COOLDOWN 1.5S)
+----------------------------------------------------------------
+task.spawn(function()
+    while true do
+        if killAuraActive then
+            for pName, isTargeted in pairs(targets) do
+                if isTargeted then
+                    local targetCharacter = charactersFolder:FindFirstChild(pName)
+                    if targetCharacter then
+                        pcall(function()
+                            damageRemote:FireServer({[1] = targetCharacter})
+                        end)
+                    end
+                end
+            end
+        end
+        task.wait(attackCooldown)
+    end
+end)
+
+----------------------------------------------------------------
+-- 5. VÒNG LẶP SONG SONG CHO LỆNH TẤN CÔNG MỚI (REMOTE BREATH - COOLDOWN 1.5S)
+----------------------------------------------------------------
+task.spawn(function()
+    while true do
+        if killAuraActive then
+            for pName, isTargeted in pairs(targets) do
+                if isTargeted then
+                    local targetCharacter = charactersFolder:FindFirstChild(pName)
+                    if targetCharacter then
+                        pcall(function()
+                            damageRemoteBreath:FireServer({[1] = targetCharacter})
+                        end)
+                    end
+                end
+            end
+        end
+        task.wait(attackCooldown)
     end
 end)
