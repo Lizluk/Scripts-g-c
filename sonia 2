@@ -1,0 +1,442 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Các Remote của game
+local damageRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemote")
+local drinkRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DrinkRemote")
+local foodRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Food")
+
+-- Các đường dẫn Object trong Workspace
+local charactersFolder = workspace:WaitForChild("Characters")
+local interactionsFolder = workspace:WaitForChild("Interactions")
+
+local targets = {} 
+local autoDrinkActive = false 
+local autoEatActive = false 
+local closestPlayerName = "" 
+local maxDetectDistance = 150 -- Khoảng cách nhận diện mặc định
+local spamCount = 10         -- Số lần spam mặc định khi bấm Q
+
+----------------------------------------------------------------
+-- 1. TẠO GIAO DIỆN (GUI)
+----------------------------------------------------------------
+
+if PlayerGui:FindFirstChild("LizlukKillGUI") then
+    PlayerGui.LizlukKillGUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "LizlukKillGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 220, 0, 465)
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+Title.Text = "LIZLUK MENU [P]"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 16
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = Title
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, -10, 0, 25)
+StatusLabel.Position = UDim2.new(0, 5, 0, 40)
+StatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+StatusLabel.Text = "BẤM [Q] ĐỂ ĐẤM ĐỒNG LOẠT"
+StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 255)
+StatusLabel.Font = Enum.Font.SourceSansBold
+StatusLabel.TextSize = 13
+StatusLabel.Parent = MainFrame
+
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 4)
+StatusCorner.Parent = StatusLabel
+
+local DrinkBtn = Instance.new("TextButton")
+DrinkBtn.Size = UDim2.new(1, -10, 0, 25)
+DrinkBtn.Position = UDim2.new(0, 5, 0, 70)
+DrinkBtn.Font = Enum.Font.SourceSansBold
+DrinkBtn.TextSize = 13
+DrinkBtn.Parent = MainFrame
+
+local DrinkCorner = Instance.new("UICorner")
+DrinkCorner.CornerRadius = UDim.new(0, 4)
+DrinkCorner.Parent = DrinkBtn
+
+local EatBtn = Instance.new("TextButton")
+EatBtn.Size = UDim2.new(1, -10, 0, 25)
+EatBtn.Position = UDim2.new(0, 5, 0, 100)
+EatBtn.Font = Enum.Font.SourceSansBold
+EatBtn.TextSize = 13
+EatBtn.Parent = MainFrame
+
+local EatCorner = Instance.new("UICorner")
+EatCorner.CornerRadius = UDim.new(0, 4)
+EatCorner.Parent = EatBtn
+
+----------------------------------------------------------------
+-- KHU VỰC CÀI ĐẶT CÁC Ô NHẬP SỐ (TEXTBOX)
+----------------------------------------------------------------
+
+local DistanceInputFrame = Instance.new("Frame")
+DistanceInputFrame.Size = UDim2.new(1, -10, 0, 32)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 130)
+DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+DistanceInputFrame.BorderSizePixel = 0
+DistanceInputFrame.Parent = MainFrame
+
+local InputFrameCorner = Instance.new("UICorner")
+InputFrameCorner.CornerRadius = UDim.new(0, 4)
+InputFrameCorner.Parent = DistanceInputFrame
+
+local DistanceLabel = Instance.new("TextLabel")
+DistanceLabel.Size = UDim2.new(0, 130, 1, 0)
+DistanceLabel.Position = UDim2.new(0, 5, 0, 0)
+DistanceLabel.BackgroundTransparency = 1
+DistanceLabel.Text = "Hạn mức khoảng cách:"
+DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+DistanceLabel.Font = Enum.Font.SourceSansBold
+DistanceLabel.TextSize = 12
+DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistanceLabel.Parent = DistanceInputFrame
+
+local DistanceBox = Instance.new("TextBox")
+DistanceBox.Size = UDim2.new(0, 65, 0, 22)
+DistanceBox.Position = UDim2.new(1, -70, 0.5, -11)
+DistanceBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+DistanceBox.BorderSizePixel = 0
+DistanceBox.Text = tostring(maxDetectDistance)
+DistanceBox.TextColor3 = Color3.fromRGB(0, 220, 255)
+DistanceBox.Font = Enum.Font.SourceSansBold
+DistanceBox.TextSize = 13
+DistanceBox.ClearTextOnFocus = false
+DistanceBox.PlaceholderText = "Số mét..."
+DistanceBox.Parent = DistanceInputFrame
+
+local InputCorner1 = Instance.new("UICorner")
+InputCorner1.CornerRadius = UDim.new(0, 4)
+InputCorner1.Parent = DistanceBox
+
+DistanceBox.FocusLost:Connect(function(enterPressed)
+    local number = tonumber(DistanceBox.Text)
+    if number and number >= 0 then
+        maxDetectDistance = number
+        DistanceBox.Text = tostring(number)
+    else
+        DistanceBox.Text = tostring(maxDetectDistance)
+    end
+end)
+
+local SpamInputFrame = Instance.new("Frame")
+SpamInputFrame.Size = UDim2.new(1, -10, 0, 32)
+SpamInputFrame.Position = UDim2.new(0, 5, 0, 167)
+SpamInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+SpamInputFrame.BorderSizePixel = 0
+SpamInputFrame.Parent = MainFrame
+
+local SpamFrameCorner = Instance.new("UICorner")
+SpamFrameCorner.CornerRadius = UDim.new(0, 4)
+SpamFrameCorner.Parent = SpamInputFrame
+
+local SpamLabel = Instance.new("TextLabel")
+SpamLabel.Size = UDim2.new(0, 130, 1, 0)
+SpamLabel.Position = UDim2.new(0, 5, 0, 0)
+SpamLabel.BackgroundTransparency = 1
+SpamLabel.Text = "Số lần đấm cùng lúc (Q):"
+SpamLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+SpamLabel.Font = Enum.Font.SourceSansBold
+SpamLabel.TextSize = 12
+SpamLabel.TextXAlignment = Enum.TextXAlignment.Left
+SpamLabel.Parent = SpamInputFrame
+
+local SpamBox = Instance.new("TextBox")
+SpamBox.Size = UDim2.new(0, 65, 0, 22)
+SpamBox.Position = UDim2.new(1, -70, 0.5, -11)
+SpamBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+SpamBox.BorderSizePixel = 0
+SpamBox.Text = tostring(spamCount)
+SpamBox.TextColor3 = Color3.fromRGB(255, 85, 85)
+SpamBox.Font = Enum.Font.SourceSansBold
+SpamBox.TextSize = 13
+SpamBox.ClearTextOnFocus = false
+SpamBox.PlaceholderText = "Số lần..."
+SpamBox.Parent = SpamInputFrame
+
+local InputCorner2 = Instance.new("UICorner")
+InputCorner2.CornerRadius = UDim.new(0, 4)
+InputCorner2.Parent = SpamBox
+
+SpamBox.FocusLost:Connect(function(enterPressed)
+    local number = tonumber(SpamBox.Text)
+    if number and number > 0 then
+        spamCount = math.floor(number)
+        SpamBox.Text = tostring(spamCount)
+    else
+        SpamBox.Text = tostring(spamCount)
+    end
+end)
+
+----------------------------------------------------------------
+
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -210)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 205)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.BorderSizePixel = 0
+ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollingFrame.ScrollBarThickness = 4
+ScrollingFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ScrollingFrame
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end)
+
+local function updateUtilityVisuals()
+    if autoDrinkActive then
+        DrinkBtn.BackgroundColor3 = Color3.fromRGB(30, 120, 180)
+        DrinkBtn.Text = "AUTO DRINK: ON [L]"
+        DrinkBtn.TextColor3 = Color3.fromRGB(100, 255, 255)
+    else
+        DrinkBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        DrinkBtn.Text = "AUTO DRINK: OFF [L]"
+        DrinkBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+
+    if autoEatActive then
+        EatBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 30)
+        EatBtn.Text = "AUTO EAT: ON [K]"
+        EatBtn.TextColor3 = Color3.fromRGB(255, 200, 100)
+    else
+        EatBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        EatBtn.Text = "AUTO EAT: OFF [K]"
+        EatBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end
+updateUtilityVisuals()
+
+DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
+EatBtn.MouseButton1Click:Connect(function() autoEatActive = not autoEatActive updateUtilityVisuals() end)
+
+----------------------------------------------------------------
+-- LẮNG NGHE PHÍM BẤM - BẮN ĐỒNG LOẠT Q
+----------------------------------------------------------------
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if UserInputService:GetFocusedTextBox() then return end
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
+    if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.K then autoEatActive = not autoEatActive updateUtilityVisuals() end
+    
+    -- Sử dụng task.spawn để ép game gửi đi toàn bộ dữ liệu tại cùng 1 thời điểm
+    if input.KeyCode == Enum.KeyCode.Q then
+        for pName, isTargeted in pairs(targets) do
+            if isTargeted then
+                local targetCharacter = charactersFolder:FindFirstChild(pName)
+                if targetCharacter then
+                    for i = 1, spamCount do
+                        task.spawn(function()
+                            pcall(function()
+                                damageRemote:FireServer({[1] = targetCharacter})
+                            end)
+                        end)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+----------------------------------------------------------------
+-- 2. HỆ THỐNG ESP TÊN TRÊN ĐẦU
+----------------------------------------------------------------
+
+local function createESP(player)
+    if player == LocalPlayer then return end
+
+    local function applyESP(character)
+        if not character then return end
+        local head = character:WaitForChild("Head", 5)
+        if not head then return end
+
+        if head:FindFirstChild("PlayerESP") then head.PlayerESP:Destroy() end
+
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "PlayerESP"
+        bb.Size = UDim2.new(0, 200, 0, 50)
+        bb.AlwaysOnTop = true
+        bb.ExtentsOffset = Vector3.new(0, 2.5, 0)
+        bb.Adornee = head
+        bb.Parent = head
+
+        local txt = Instance.new("TextLabel")
+        txt.Size = UDim2.new(1, 0, 1, 0)
+        txt.BackgroundTransparency = 1
+        txt.TextStrokeTransparency = 0
+        txt.Font = Enum.Font.SourceSansBold
+        txt.TextSize = 14
+        txt.Parent = bb
+
+        local connection
+        connection = RunService.RenderStepped:Connect(function()
+            if not character:IsDescendantOf(workspace) or not head:IsDescendantOf(character) or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                connection:Disconnect()
+                bb:Destroy()
+                return
+            end
+            local myRoot = LocalPlayer.Character.HumanoidRootPart
+            local distance = math.floor((myRoot.Position - head.Position).Magnitude)
+            
+            if targets[player.Name] then
+                txt.Text = string.format("[🎯 MỤC TIÊU] %s\n[%d m]", player.Name, distance)
+                txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+            elseif player.Name == closestPlayerName then
+                txt.Text = string.format("[⭐ CHIẾT CẬN] %s\n[%d m]", player.Name, distance)
+                txt.TextColor3 = Color3.fromRGB(0, 255, 150)
+            else
+                txt.Text = string.format("%s\n[%d m]", player.Name, distance)
+                txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
+        end)
+    end
+
+    player.CharacterAdded:Connect(applyESP)
+    if player.Character then applyESP(player.Character) end
+end
+
+for _, p in pairs(Players:GetPlayers()) do createESP(p) end
+Players.PlayerAdded:Connect(createESP)
+
+----------------------------------------------------------------
+-- 3. VÒNG LẶP CHÍNH QUẢN LÝ GIAO DIỆN & TIỆN ÍCH (MƯỢT MÀ - 0.1s)
+----------------------------------------------------------------
+
+local buttons = {}
+
+local function buildButtons()
+    for _, child in pairs(ScrollingFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    buttons = {}
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local pName = player.Name
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, 0, 0, 30)
+            Btn.Font = Enum.Font.SourceSansBold
+            Btn.TextSize = 14
+            Btn.BorderSizePixel = 0
+            Btn.Parent = ScrollingFrame
+
+            local BtnCorner = Instance.new("UICorner")
+            BtnCorner.CornerRadius = UDim.new(0, 4)
+            BtnCorner.Parent = Btn
+
+            Btn.MouseButton1Click:Connect(function()
+                targets[pName] = not targets[pName]
+            end)
+
+            buttons[pName] = {Button = Btn}
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(buildButtons)
+Players.PlayerRemoving:Connect(function(player)
+    targets[player.Name] = nil
+    buildButtons()
+end)
+buildButtons()
+
+task.spawn(function()
+    while true do
+        local myCharacter = LocalPlayer.Character
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        
+        local minDistance = math.huge
+        local tempClosest = ""
+
+        if myRoot then
+            for pName, btnData in pairs(buttons) do
+                local p = Players:FindFirstChild(pName)
+                if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local dist = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
+                    if dist <= maxDetectDistance and dist < minDistance then
+                        minDistance = dist
+                        tempClosest = pName
+                    end
+                    if targets[pName] then
+                        btnData.Button.LayoutOrder = math.floor(dist) - 100000
+                    else
+                        btnData.Button.LayoutOrder = math.floor(dist)
+                    end
+                else
+                    btnData.Button.LayoutOrder = 999999
+                end
+            end
+        end
+        closestPlayerName = tempClosest
+
+        for pName, btnData in pairs(buttons) do
+            local Btn = btnData.Button
+            if targets[pName] then
+                Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                Btn.Text = pName .. " [TARGET]"
+                Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            elseif pName == closestPlayerName then
+                Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
+                Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
+                Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
+            else
+                Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+                Btn.Text = pName
+                Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+            end
+        end
+
+        if autoDrinkActive then
+            pcall(function()
+                local lake = interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
+                if lake then drinkRemote:FireServer(lake) end
+            end)
+        end
+
+        if autoEatActive then
+            pcall(function()
+                local ribs = interactionsFolder:FindFirstChild("Food") and interactionsFolder.Food:FindFirstChild("Ribs")
+                if ribs then foodRemote:FireServer(ribs) end
+            end)
+        end
+
+        task.wait(0.1)
+    end
+end)
