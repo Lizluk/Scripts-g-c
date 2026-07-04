@@ -206,13 +206,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if UserInputService:GetFocusedTextBox() then return end
     if gameProcessed then return end
     
-    if input.KeyCode == Enum.KeyCode.F then MainFrame.Visible = not MainFrame.Visible end
+    if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
     if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.K then autoEatActive = not autoEatActive updateUtilityVisuals() end
-    if input.KeyCode == Enum.KeyCode.E then
+    if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
         if killAuraActive then
-            StatusLabel.Text = "KILL AURA: RUNNING [E]"
+            StatusLabel.Text = "KILL AURA: RUNNING [Q]"
             StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
         else
             StatusLabel.Text = "KILL AURA: PAUSED [E]"
