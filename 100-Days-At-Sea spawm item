@@ -1,0 +1,251 @@
+-- =============================================================================
+-- CONFIG GỐC & BIẾN TOÀN CỤC
+-- =============================================================================
+local soLuongKeo = 10
+local thoiGianCho = 1.5
+local ohNumber1 = 757712
+local ohString2 = "ToolReplicator"
+local ohString3 = "~sFishing Rod"
+local ohString4 = "~sFishPoof"
+
+local currentPositionString = "~f166.3319,151.6902,-552.1445:-0.8641,-0,-0.5035Z-0"
+
+-- Tên file sẽ lưu trong thư mục workspace của phần mềm cheat
+local FILE_NAME = "fishing_saved_positions.json" 
+local HttpService = game:GetService("HttpService")
+local SavedPositions = {}
+
+local Player = game:GetService("Players").LocalPlayer
+local remote = game:GetService("LocalizationService").RemoteFunction
+
+-- =============================================================================
+-- HÀM LƯU VÀ ĐỌC FILE TỪ MÁY TÍNH (AUTO-SAVE)
+-- =============================================================================
+local function SaveToFile()
+    -- Kiểm tra xem phần mềm của bạn có hỗ trợ ghi file không
+    if writefile then
+        -- Chuyển bảng dữ liệu thành chuỗi văn bản JSON để lưu
+        local success, jsonStr = pcall(function()
+            return HttpService:JSONEncode(SavedPositions)
+        end)
+        if success then
+            writefile(FILE_NAME, jsonStr)
+        end
+    end
+end
+
+local function LoadFromFile()
+    -- Kiểm tra xem có file cũ đã lưu trước đó không
+    if readfile and isfile and isfile(FILE_NAME) then
+        local success, content = pcall(function()
+            return readfile(FILE_NAME)
+        end)
+        if success and content ~= "" then
+            local decodeSuccess, data = pcall(function()
+                return HttpService:JSONDecode(content)
+            end)
+            if decodeSuccess and type(data) == "table" then
+                SavedPositions = data
+                return
+            end
+        end
+    end
+    
+    -- Nếu không có file cũ, tạo mặc định một cái ban đầu
+    SavedPositions = {
+        {Name = "Vị trí mặc định", Value = "~f166.3319,151.6902,-552.1445:-0.8641,-0,-0.5035Z-0"}
+    }
+end
+
+-- Tải dữ liệu cũ lên ngay khi vừa chạy script
+LoadFromFile()
+
+-- Hàm tự động quét vị trí nhân vật
+local function GetCurrentPositionString()
+    local character = Player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return nil
+    end
+    
+    local pos = character.HumanoidRootPart.Position
+    local look = character.HumanoidRootPart.CFrame.LookVector
+    
+    return string.format("~f%.4f,%.4f,%.4f:%.4f,%.4f,%.4fZ-0", 
+        pos.X, pos.Y, pos.Z, 
+        look.X, look.Y, look.Z
+    )
+end
+
+-- =============================================================================
+-- GIAO DIỆN (GUI)
+-- =============================================================================
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local NameInput = Instance.new("TextBox")
+local GetPosBtn = Instance.new("TextButton")
+local ListScroll = Instance.new("ScrollingFrame")
+local UIListLayout = Instance.new("UIListLayout")
+local StatusLabel = Instance.new("TextLabel")
+local StartBtn = Instance.new("TextButton")
+
+ScreenGui.Name = "AutoFishingPosManager"
+ScreenGui.Parent = game:GetService("CoreGui") or Player:WaitForChild("PlayerGui")
+ScreenGui.ResetOnSpawn = false
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Position = UDim2.new(0.3, 0, 0.25, 0)
+MainFrame.Size = UDim2.new(0, 350, 0, 420)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Title.Text = "💾 AUTO-SAVE FISHING MANAGER"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 16
+
+NameInput.Parent = MainFrame
+NameInput.PlaceholderText = "Đặt tên cho vị trí đang đứng..."
+NameInput.Text = ""
+NameInput.Size = UDim2.new(0, 180, 0, 35)
+NameInput.Position = UDim2.new(0, 15, 0, 55)
+NameInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+NameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+GetPosBtn.Parent = MainFrame
+GetPosBtn.Text = "LẤY VỊ TRÍ ĐANG ĐỨNG"
+GetPosBtn.Size = UDim2.new(0, 135, 0, 35)
+GetPosBtn.Position = UDim2.new(0, 200, 0, 55)
+GetPosBtn.BackgroundColor3 = Color3.fromRGB(38, 105, 153)
+GetPosBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+GetPosBtn.Font = Enum.Font.SourceSansBold
+GetPosBtn.TextSize = 12
+
+ListScroll.Parent = MainFrame
+ListScroll.Size = UDim2.new(0, 320, 0, 210)
+ListScroll.Position = UDim2.new(0, 15, 0, 105)
+ListScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+ListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+ListScroll.ScrollBarThickness = 6
+
+UIListLayout.Parent = ListScroll
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+
+StatusLabel.Parent = MainFrame
+StatusLabel.Size = UDim2.new(0, 320, 0, 30)
+StatusLabel.Position = UDim2.new(0, 15, 0, 325)
+StatusLabel.Text = "Đang chọn: " .. (SavedPositions[1] and SavedPositions[1].Name or "Chưa chọn")
+StatusLabel.TextColor3 = Color3.fromRGB(235, 177, 52)
+StatusLabel.TextSize = 14
+StatusLabel.Font = Enum.Font.SourceSansItalic
+
+StartBtn.Parent = MainFrame
+StartBtn.Text = "BẮT ĐẦU CÂU TẠI VỊ TRÍ CHỌN"
+StartBtn.Size = UDim2.new(0, 320, 0, 40)
+StartBtn.Position = UDim2.new(0, 15, 0, 360)
+StartBtn.BackgroundColor3 = Color3.fromRGB(163, 61, 61)
+StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+StartBtn.Font = Enum.Font.SourceSansBold
+StartBtn.TextSize = 16
+
+-- Thiết lập lại vị trí mặc định ban đầu dựa theo phần tử đầu tiên của file đã lưu
+if SavedPositions[1] then
+    currentPositionString = SavedPositions[1].Value
+end
+
+-- =============================================================================
+-- LOGIC XỬ LÝ UI
+-- =============================================================================
+local function UpdateListUI()
+    for _, child in pairs(ListScroll:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+
+    ListScroll.CanvasSize = UDim2.new(0, 0, 0, #SavedPositions * 40)
+
+    for index, data in ipairs(SavedPositions) do
+        local ItemFrame = Instance.new("Frame")
+        local SelectBtn = Instance.new("TextButton")
+        local DeleteBtn = Instance.new("TextButton")
+
+        ItemFrame.Parent = ListScroll
+        ItemFrame.Size = UDim2.new(1, 0, 0, 35)
+        ItemFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+
+        SelectBtn.Parent = ItemFrame
+        SelectBtn.Size = UDim2.new(0, 270, 1, 0)
+        SelectBtn.Text = " 📍 " .. data.Name
+        SelectBtn.TextXAlignment = Enum.TextXAlignment.Left
+        SelectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        SelectBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        SelectBtn.BorderSizePixel = 0
+        SelectBtn.TextSize = 14
+
+        SelectBtn.MouseButton1Click:Connect(function()
+            currentPositionString = data.Value
+            StatusLabel.Text = "Đang chọn: " .. data.Name
+        end)
+
+        DeleteBtn.Parent = ItemFrame
+        DeleteBtn.Size = UDim2.new(0, 40, 1, 0)
+        DeleteBtn.Position = UDim2.new(1, -40, 0, 0)
+        DeleteBtn.Text = "X"
+        DeleteBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+        DeleteBtn.BackgroundColor3 = Color3.fromRGB(60, 30, 30)
+        DeleteBtn.Font = Enum.Font.SourceSansBold
+        DeleteBtn.BorderSizePixel = 0
+
+        DeleteBtn.MouseButton1Click:Connect(function()
+            table.remove(SavedPositions, index)
+            SaveToFile() -- Cập nhật lại file lưu sau khi xóa
+            UpdateListUI()
+        end)
+    end
+end
+
+-- Sự kiện bấm nút lấy vị trí tự động
+GetPosBtn.MouseButton1Click:Connect(function()
+    local generatedString = GetCurrentPositionString()
+    
+    if generatedString then
+        local name = NameInput.Text
+        if name == "" then 
+            name = "Vị trí " .. os.date("%X")
+        end
+        
+        table.insert(SavedPositions, {Name = name, Value = generatedString})
+        NameInput.Text = "" 
+        
+        SaveToFile() -- Tiến hành lưu ngay vào máy tính
+        UpdateListUI()
+        
+        currentPositionString = generatedString
+        StatusLabel.Text = "Đang chọn: " .. name
+    else
+        StatusLabel.Text = "❌ Lỗi: Không tìm thấy nhân vật!"
+    end
+end)
+
+-- Sự kiện bấm nút câu
+StartBtn.MouseButton1Click:Connect(function()
+    StartBtn.Text = "ĐANG THỰC THI..."
+    StartBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    
+    for i = 1, soLuongKeo do
+        task.spawn(function()
+            remote:InvokeServer(ohNumber1, ohString2, ohString3, ohString4, currentPositionString)
+        end)
+    end
+    
+    task.wait(thoiGianCho)
+    StartBtn.Text = "BẮT ĐẦU CÂU TẠI VỊ TRÍ CHỌN"
+    StartBtn.BackgroundColor3 = Color3.fromRGB(163, 61, 61)
+end)
+
+UpdateListUI()
