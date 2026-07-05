@@ -4,7 +4,6 @@
 local Player = game:GetService("Players").LocalPlayer
 local TargetGuiParent = Player:WaitForChild("PlayerGui")
 
--- Xóa GUI cũ nếu lỡ chạy trước đó
 if TargetGuiParent:FindFirstChild("AutoFishingPosManager") then
     TargetGuiParent["AutoFishingPosManager"]:Destroy()
 end
@@ -12,13 +11,19 @@ end
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
-local NameInput = Instance.new("TextBox")
-local GetPosBtn = Instance.new("TextButton")
 
--- Khung thiết lập Số lượng & Thời gian mới
+-- Khung cấu hình Số lượng & Thời gian
 local ConfigFrame = Instance.new("Frame")
 local CountInput = Instance.new("TextBox")
 local DelayInput = Instance.new("TextBox")
+
+-- Ô NHẬP CODE SPY 
+local SpyCodeInput = Instance.new("TextBox")
+local ParseBtn = Instance.new("TextButton")
+
+-- Tên vị trí và lấy vị trí bằng tọa độ nhân vật
+local NameInput = Instance.new("TextBox")
+local GetPosBtn = Instance.new("TextButton")
 
 local ListScroll = Instance.new("ScrollingFrame")
 local UIListLayout = Instance.new("UIListLayout")
@@ -33,63 +38,81 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 MainFrame.Name = "MainFrame"
 MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MainFrame.Position = UDim2.new(0.5, -175, 0.5, -240)
-MainFrame.Size = UDim2.new(0, 350, 0, 480) -- Mở rộng khung để chứa thêm ô nhập
+MainFrame.Position = UDim2.new(0.5, -175, 0.5, -270)
+MainFrame.Size = UDim2.new(0, 350, 0, 550) 
 MainFrame.Active = true
 MainFrame.Draggable = true
 
 Title.Parent = MainFrame
 Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-Title.Text = "💾 AUTO-SAVE FISHING MANAGER"
+Title.Text = "🎣 SMART SPY FISHING MANAGER"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 16
+Title.TextSize = 15
 
--- Thiết lập các ô nhập Số lượng & Thời gian chờ
 ConfigFrame.Parent = MainFrame
 ConfigFrame.Size = UDim2.new(0, 320, 0, 35)
 ConfigFrame.Position = UDim2.new(0, 15, 0, 50)
 ConfigFrame.BackgroundTransparency = 1
 
 CountInput.Parent = ConfigFrame
-CountInput.PlaceholderText = "Số lượng kéo (Vd: 10)"
+CountInput.PlaceholderText = "Số lượng kéo"
 CountInput.Text = "10"
 CountInput.Size = UDim2.new(0, 150, 1, 0)
-CountInput.Position = UDim2.new(0, 0, 0, 0)
 CountInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 CountInput.TextColor3 = Color3.fromRGB(255, 255, 255)
 
 DelayInput.Parent = ConfigFrame
-DelayInput.PlaceholderText = "Thời gian chờ (Vd: 1.5)"
+DelayInput.PlaceholderText = "Thời gian chờ"
 DelayInput.Text = "1.5"
 DelayInput.Size = UDim2.new(0, 160, 1, 0)
 DelayInput.Position = UDim2.new(0, 160, 0, 0)
 DelayInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 DelayInput.TextColor3 = Color3.fromRGB(255, 255, 255)
 
--- Ô nhập tên vị trí
+-- THIẾT KẾ Ô DÁN CODE SPY
+SpyCodeInput.Parent = MainFrame
+SpyCodeInput.PlaceholderText = "Dán nguyên cụm code Hydroxide RemoteSpy vào đây..."
+SpyCodeInput.Text = ""
+SpyCodeInput.ClearTextOnFocus = false
+SpyCodeInput.MultiLine = true 
+SpyCodeInput.Size = UDim2.new(0, 220, 0, 50)
+SpyCodeInput.Position = UDim2.new(0, 15, 0, 95)
+SpyCodeInput.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+SpyCodeInput.TextColor3 = Color3.fromRGB(150, 255, 150)
+SpyCodeInput.TextSize = 11
+SpyCodeInput.Font = Enum.Font.Code
+
+ParseBtn.Parent = MainFrame
+ParseBtn.Text = "PHÂN TÍCH\nDATA"
+ParseBtn.Size = UDim2.new(0, 95, 0, 50)
+ParseBtn.Position = UDim2.new(0, 240, 0, 95)
+ParseBtn.BackgroundColor3 = Color3.fromRGB(156, 91, 19)
+ParseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ParseBtn.Font = Enum.Font.SourceSansBold
+ParseBtn.TextSize = 13
+
 NameInput.Parent = MainFrame
-NameInput.PlaceholderText = "Đặt tên cho vị trí đang đứng..."
+NameInput.PlaceholderText = "Đặt tên cho vị trí này..."
 NameInput.Text = ""
 NameInput.Size = UDim2.new(0, 180, 0, 35)
-NameInput.Position = UDim2.new(0, 15, 0, 95)
+NameInput.Position = UDim2.new(0, 15, 0, 155)
 NameInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 NameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
 
 GetPosBtn.Parent = MainFrame
-GetPosBtn.Text = "LẤY VỊ TRÍ ĐANG ĐỨNG"
+GetPosBtn.Text = "LẤY VỊ TRÍ ĐỨNG"
 GetPosBtn.Size = UDim2.new(0, 135, 0, 35)
-GetPosBtn.Position = UDim2.new(0, 200, 0, 95)
+GetPosBtn.Position = UDim2.new(0, 200, 0, 155)
 GetPosBtn.BackgroundColor3 = Color3.fromRGB(38, 105, 153)
 GetPosBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 GetPosBtn.Font = Enum.Font.SourceSansBold
 GetPosBtn.TextSize = 11
 
--- Danh sách cuộn
 ListScroll.Parent = MainFrame
-ListScroll.Size = UDim2.new(0, 320, 0, 210)
-ListScroll.Position = UDim2.new(0, 15, 0, 145)
+ListScroll.Size = UDim2.new(0, 320, 0, 220)
+ListScroll.Position = UDim2.new(0, 15, 0, 205)
 ListScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 ListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 ListScroll.ScrollBarThickness = 6
@@ -98,86 +121,56 @@ UIListLayout.Parent = ListScroll
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Padding = UDim.new(0, 5)
 
--- Trạng thái chọn vị trí
 StatusLabel.Parent = MainFrame
 StatusLabel.Size = UDim2.new(0, 320, 0, 30)
-StatusLabel.Position = UDim2.new(0, 15, 0, 365)
-StatusLabel.Text = "Đang tải file lưu..."
+StatusLabel.Position = UDim2.new(0, 15, 0, 440)
+StatusLabel.Text = "Nhập dữ liệu gốc hoặc dán code Spy..."
 StatusLabel.TextColor3 = Color3.fromRGB(235, 177, 52)
-StatusLabel.TextSize = 14
-StatusLabel.Font = Enum.Font.SourceSansItalic
+StatusLabel.TextSize = 13
+StatusLabel.Font = Enum.Font.SourceSansBold
 
--- Nút câu cá
 StartBtn.Parent = MainFrame
 StartBtn.Text = "BẮT ĐẦU CÂU TẠI VỊ TRÍ CHỌN"
-StartBtn.Size = UDim2.new(0, 320, 0, 40)
-StartBtn.Position = UDim2.new(0, 15, 0, 405)
+StartBtn.Size = UDim2.new(0, 320, 0, 45)
+StartBtn.Position = UDim2.new(0, 15, 0, 480)
 StartBtn.BackgroundColor3 = Color3.fromRGB(163, 61, 61)
 StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 StartBtn.Font = Enum.Font.SourceSansBold
 StartBtn.TextSize = 16
 
 -- =============================================================================
--- LOGIC KHỞI TẠO DỮ LIỆU & LƯU TRỮ VĨNH VIỄN
+-- KHỞI TẠO BIẾN DỮ LIỆU
 -- =============================================================================
-local ohNumber1 = 757712
+local ohNumber1 = 479918
 local ohString2 = "ToolReplicator"
 local ohString3 = "~sFishing Rod"
 local ohString4 = "~sFishPoof"
-local currentPositionString = "~f166.3319,151.6902,-552.1445:-0.8641,-0,-0.5035Z-0"
+local currentPositionString = "" 
+local targetServiceName = "Chat" -- Mặc định ban đầu theo code mới của bạn
 
 local FILE_NAME = "fishing_saved_positions.json" 
 local HttpService = game:GetService("HttpService")
 local SavedPositions = {}
 
--- Hàm ghi file vào máy tính
 local function SaveToFile()
-    if writefile then
-        pcall(function()
-            writefile(FILE_NAME, HttpService:JSONEncode(SavedPositions))
-        end)
-    end
+    if writefile then pcall(function() writefile(FILE_NAME, HttpService:JSONEncode(SavedPositions)) end) end
 end
 
--- Hàm đọc file khi mở game
-local function LoadFromFile()
-    if readfile and isfile and isfile(FILE_NAME) then
-        local success, content = pcall(function() return readfile(FILE_NAME) end)
-        if success and content ~= "" then
-            local decodeSuccess, data = pcall(function() return HttpService:JSONDecode(content) end)
-            if decodeSuccess and type(data) == "table" then
-                SavedPositions = data
-                return
-            end
-        end
-    end
-    -- Danh sách mặc định ban đầu nếu chưa từng lưu file
-    SavedPositions = {
-        {Name = "Vị trí mặc định", Value = "~f166.3319,151.6902,-552.1445:-0.8641,-0,-0.5035Z-0"}
-    }
-end
-
-LoadFromFile()
-if SavedPositions[1] then currentPositionString = SavedPositions[1].Value end
-StatusLabel.Text = "Đang chọn: " .. (SavedPositions[1] and SavedPositions[1].Name or "Mặc định")
-
--- Hàm dịch tọa độ nhân vật sang chuỗi của game
 local function GetCurrentPositionString()
     local character = Player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
     local pos = character.HumanoidRootPart.Position
     local look = character.HumanoidRootPart.CFrame.LookVector
-    return string.format("~f%.4f,%.4f,%.4f:%.4f,%.4f,%.4fZ-0", pos.X, pos.Y, pos.Z, look.X, look.Y, look.Z)
+    return string.format("~f%.4f,%.4f,%.4f:%.4f,%.4f,%.4fZ0", pos.X, pos.Y, pos.Z, look.X, look.Y, look.Z)
 end
 
--- =============================================================================
--- ĐỒ HỌA & ĐIỀU KHIỂN DANH SÁCH
--- =============================================================================
+-- QUẢN LÝ GIAO DIỆN DANH SÁCH VỊ TRÍ
 local function UpdateListUI()
     for _, child in pairs(ListScroll:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
     ListScroll.CanvasSize = UDim2.new(0, 0, 0, #SavedPositions * 40)
+    
     for index, data in ipairs(SavedPositions) do
         local ItemFrame = Instance.new("Frame")
         local SelectBtn = Instance.new("TextButton")
@@ -194,11 +187,12 @@ local function UpdateListUI()
         SelectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         SelectBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
         SelectBtn.BorderSizePixel = 0
-        SelectBtn.TextSize = 14
+        SelectBtn.TextSize = 13
 
         SelectBtn.MouseButton1Click:Connect(function()
             currentPositionString = data.Value
-            StatusLabel.Text = "Đang chọn: " .. data.Name
+            StatusLabel.Text = "📍 Đang chọn vị trí: " .. data.Name
+            StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 255)
         end)
 
         DeleteBtn.Parent = ItemFrame
@@ -212,58 +206,144 @@ local function UpdateListUI()
 
         DeleteBtn.MouseButton1Click:Connect(function()
             table.remove(SavedPositions, index)
-            SaveToFile() -- Cập nhật file ngay sau khi xóa
+            SaveToFile()
             UpdateListUI()
         end)
     end
 end
 
--- Xử lý lấy vị trí hiện tại
+local function LoadFromFile()
+    if readfile and isfile and isfile(FILE_NAME) then
+        local success, content = pcall(function() return readfile(FILE_NAME) end)
+        if success and content ~= "" then
+            local decodeSuccess, data = pcall(function() return HttpService:JSONDecode(content) end)
+            if decodeSuccess and type(data) == "table" then
+                SavedPositions = data
+                return
+            end
+        end
+    end
+    SavedPositions = {{Name = "Vị trí gốc mặc định", Value = "~f251.0864,151.4342,-277.7505:-0.3796,-0,0.9251Z0"}}
+end
+
+LoadFromFile()
+if SavedPositions[1] then currentPositionString = SavedPositions[1].Value end
+UpdateListUI()
+
+-- =============================================================================
+-- BƯỚC 1: PHÂN TÍCH CODE (TỰ ĐỘNG BÓC TÁCH MỌI SERVICE)
+-- =============================================================================
+ParseBtn.MouseButton1Click:Connect(function()
+    local text = SpyCodeInput.Text
+    if text == "" then
+        StatusLabel.Text = "❌ Ô nhập đang trống!"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        return
+    end
+    
+    -- Phân tách tham số cơ bản
+    local num1 = text:match("ohNumber1%s*=%s*(%d+)")
+    local str2 = text:match('ohString2%s*=%s*"([^"]+)"')
+    local str3 = text:match('ohString3%s*=%s*"([^"]+)"')
+    local str4 = text:match('ohString4%s*=%s*"([^"]+)"')
+    local str5 = text:match('ohString5%s*=%s*"([^"]+)"')
+    
+    -- THUẬT TOÁN MỚI: Tự động quét tìm GetService("...") bất kỳ
+    local detectedService = text:match('game:GetService%("([^"]+)"%)') or text:match("game:GetService%('([^']+)'%)")
+
+    if detectedService then
+        targetServiceName = detectedService
+    else
+        -- Dự phòng nếu không tìm thấy chuỗi GetService chuẩn
+        targetServiceName = "Chat"
+    end
+
+    if num1 and str2 and str3 and str4 then
+        ohNumber1 = tonumber(num1)
+        ohString2 = str2
+        ohString3 = str3
+        ohString4 = str4
+        
+        if str5 and str5 ~= "" then
+            currentPositionString = str5
+            local name = "Spy Pos " .. os.date("%X")
+            table.insert(SavedPositions, 1, {Name = name, Value = str5})
+            SaveToFile()
+            UpdateListUI()
+        end
+        
+        StatusLabel.Text = "✅ Bước 1: Nạp xong! Service nhận dạng: " .. targetServiceName
+        StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        SpyCodeInput.Text = "" 
+    else
+        StatusLabel.Text = "❌ Code không đúng cấu trúc Hydroxide!"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
+end)
+
+-- =============================================================================
+-- BƯỚC 2: LẤY VỊ TRÍ THỰC TẾ SAU
+-- =============================================================================
 GetPosBtn.MouseButton1Click:Connect(function()
     local generatedString = GetCurrentPositionString()
     if generatedString then
         local name = NameInput.Text
         if name == "" then name = "Vị trí " .. os.date("%X") end
-        table.insert(SavedPositions, {Name = name, Value = generatedString})
-        NameInput.Text = "" 
-        SaveToFile() -- Ghi nhớ ngay vào bộ nhớ máy tính
-        UpdateListUI()
+        
         currentPositionString = generatedString
-        StatusLabel.Text = "Đang chọn: " .. name
+        table.insert(SavedPositions, 1, {Name = name, Value = generatedString})
+        NameInput.Text = "" 
+        
+        SaveToFile()
+        UpdateListUI()
+        
+        StatusLabel.Text = "✅ Bước 2: Đã khóa vị trí thực tế!"
+        StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 255)
     else
         StatusLabel.Text = "❌ Lỗi: Không tìm thấy nhân vật!"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
     end
 end)
 
--- Xử lý nút kích hoạt câu cá
+-- =============================================================================
+-- NÚT BẮT ĐẦU CÂU (CHẠY THEO SERVICE ĐÃ ĐƯỢC PHÂN TÍCH TỰ ĐỘNG)
+-- =============================================================================
 StartBtn.MouseButton1Click:Connect(function()
-    -- Đọc cấu hình động từ 2 ô nhập mới
-    local runCount = tonumber(CountInput.Text) or 10
-    local waitDelay = tonumber(DelayInput.Text) or 1.5
+    local soLuongKeo = tonumber(CountInput.Text) or 10
+    local thoiGianCho = tonumber(DelayInput.Text) or 1.5
 
-    StartBtn.Text = "ĐANG THỰC THI..."
+    StartBtn.Text = "ĐANG AUTOMATION..."
     StartBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
     
-    -- Phòng chống lỗi LocalizationService không có RemoteFunction (Bọc pcall an toàn)
-    local success, remoteService = pcall(function()
-        return game:GetService("LocalizationService"):FindFirstChild("RemoteFunction") or game:GetService("LocalizationService").RemoteFunction
+    -- Lấy đúng Service đã bốc tách được khi phân tích (Ví dụ: game:GetService("Chat"))
+    local successService, TargetService = pcall(function()
+        return game:GetService(targetServiceName)
     end)
     
-    if success and remoteService then
-        for i = 1, runCount do
-            task.spawn(function()
-                pcall(function()
-                    remoteService:InvokeServer(ohNumber1, ohString2, ohString3, ohString4, currentPositionString)
-                end)
-            end)
-        end
-    else
-        StatusLabel.Text = "❌ Lỗi: Game chặn hoặc đổi vị trí Remote!"
+    local remote = nil
+    if successService and TargetService then
+        remote = TargetService:FindFirstChild("RemoteFunction")
     end
-    
-    task.wait(waitDelay)
-    StartBtn.Text = "BẮT ĐẦU CÂU TẠI VỊ TRÍ CHỌN"
-    StartBtn.BackgroundColor3 = Color3.fromRGB(163, 61, 61)
-end)
 
-UpdateListUI()
+    task.spawn(function()
+        if remote then
+            StatusLabel.Text = "🎣 Đang câu tại Service: " .. targetServiceName
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
+            
+            for i = 1, soLuongKeo do
+                pcall(function()
+                    remote:InvokeServer(ohNumber1, ohString2, ohString3, ohString4, currentPositionString)
+                end)
+                task.wait(thoiGianCho)
+            end
+            StatusLabel.Text = "✅ Hoàn thành câu!"
+            StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        else
+            StatusLabel.Text = "❌ Không tìm thấy RemoteFunction trong " .. targetServiceName .. "!"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        end
+        
+        StartBtn.Text = "BẮT ĐẦU CÂU TẠI VỊ TRÍ CHỌN"
+        StartBtn.BackgroundColor3 = Color3.fromRGB(163, 61, 61)
+    end)
+end)
