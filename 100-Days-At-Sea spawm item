@@ -10,7 +10,6 @@ local ohString4 = "~sFishPoof"
 
 local currentPositionString = "~f166.3319,151.6902,-552.1445:-0.8641,-0,-0.5035Z-0"
 
--- Tên file sẽ lưu trong thư mục workspace của phần mềm cheat
 local FILE_NAME = "fishing_saved_positions.json" 
 local HttpService = game:GetService("HttpService")
 local SavedPositions = {}
@@ -19,12 +18,10 @@ local Player = game:GetService("Players").LocalPlayer
 local remote = game:GetService("LocalizationService").RemoteFunction
 
 -- =============================================================================
--- HÀM LƯU VÀ ĐỌC FILE TỪ MÁY TÍNH (AUTO-SAVE)
+-- HÀM LƯU VÀ ĐỌC FILE (Tự động bỏ qua nếu phần mềm không hỗ trợ ghi file)
 -- =============================================================================
 local function SaveToFile()
-    -- Kiểm tra xem phần mềm của bạn có hỗ trợ ghi file không
     if writefile then
-        -- Chuyển bảng dữ liệu thành chuỗi văn bản JSON để lưu
         local success, jsonStr = pcall(function()
             return HttpService:JSONEncode(SavedPositions)
         end)
@@ -35,7 +32,6 @@ local function SaveToFile()
 end
 
 local function LoadFromFile()
-    -- Kiểm tra xem có file cũ đã lưu trước đó không
     if readfile and isfile and isfile(FILE_NAME) then
         local success, content = pcall(function()
             return readfile(FILE_NAME)
@@ -51,16 +47,14 @@ local function LoadFromFile()
         end
     end
     
-    -- Nếu không có file cũ, tạo mặc định một cái ban đầu
+    -- Mặc định nếu chưa có file lưu
     SavedPositions = {
         {Name = "Vị trí mặc định", Value = "~f166.3319,151.6902,-552.1445:-0.8641,-0,-0.5035Z-0"}
     }
 end
 
--- Tải dữ liệu cũ lên ngay khi vừa chạy script
 LoadFromFile()
 
--- Hàm tự động quét vị trí nhân vật
 local function GetCurrentPositionString()
     local character = Player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then
@@ -77,8 +71,15 @@ local function GetCurrentPositionString()
 end
 
 -- =============================================================================
--- GIAO DIỆN (GUI)
+-- SỬA LỖI HIỂN THỊ: ÉP GUI VÀO PLAYERGUI ĐỂ CHẮC CHẮN HIỂN THỊ
 -- =============================================================================
+local TargetGuiParent = Player:WaitForChild("PlayerGui")
+
+-- Xóa bản GUI cũ nếu lỡ chạy trước đó mà bị kẹt
+if TargetGuiParent:FindFirstChild("AutoFishingPosManager") then
+    TargetGuiParent["AutoFishingPosManager"]:Destroy()
+end
+
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
@@ -90,13 +91,15 @@ local StatusLabel = Instance.new("TextLabel")
 local StartBtn = Instance.new("TextButton")
 
 ScreenGui.Name = "AutoFishingPosManager"
-ScreenGui.Parent = game:GetService("CoreGui") or Player:WaitForChild("PlayerGui")
+ScreenGui.Parent = TargetGuiParent
 ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 MainFrame.Name = "MainFrame"
 MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MainFrame.Position = UDim2.new(0.3, 0, 0.25, 0)
+-- Đặt UI ra chính giữa màn hình để dễ nhìn thấy
+MainFrame.Position = UDim2.new(0.5, -175, 0.5, -210)
 MainFrame.Size = UDim2.new(0, 350, 0, 420)
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -154,7 +157,6 @@ StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 StartBtn.Font = Enum.Font.SourceSansBold
 StartBtn.TextSize = 16
 
--- Thiết lập lại vị trí mặc định ban đầu dựa theo phần tử đầu tiên của file đã lưu
 if SavedPositions[1] then
     currentPositionString = SavedPositions[1].Value
 end
@@ -203,13 +205,12 @@ local function UpdateListUI()
 
         DeleteBtn.MouseButton1Click:Connect(function()
             table.remove(SavedPositions, index)
-            SaveToFile() -- Cập nhật lại file lưu sau khi xóa
+            SaveToFile()
             UpdateListUI()
         end)
     end
 end
 
--- Sự kiện bấm nút lấy vị trí tự động
 GetPosBtn.MouseButton1Click:Connect(function()
     local generatedString = GetCurrentPositionString()
     
@@ -222,7 +223,7 @@ GetPosBtn.MouseButton1Click:Connect(function()
         table.insert(SavedPositions, {Name = name, Value = generatedString})
         NameInput.Text = "" 
         
-        SaveToFile() -- Tiến hành lưu ngay vào máy tính
+        SaveToFile()
         UpdateListUI()
         
         currentPositionString = generatedString
@@ -232,7 +233,6 @@ GetPosBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Sự kiện bấm nút câu
 StartBtn.MouseButton1Click:Connect(function()
     StartBtn.Text = "ĐANG THỰC THI..."
     StartBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
@@ -249,3 +249,4 @@ StartBtn.MouseButton1Click:Connect(function()
 end)
 
 UpdateListUI()
+print("Sccript loaded successfully inside PlayerGui!")
