@@ -10,6 +10,11 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local damageRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemote")
 local drinkRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DrinkRemote")
 local foodRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Food")
+local foodChunkRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("FoodChunk") -- Remote nhặt mới
+
+-- Đối tượng phục vụ cho Auto Eat và Auto Pick
+local grassChunkObj = workspace:WaitForChild("Interactions"):WaitForChild("Food"):WaitForChild("GrassChunk")
+local grassObj = workspace:WaitForChild("Interactions"):WaitForChild("Food"):WaitForChild("Grass")
 
 -- Các đường dẫn Object trong Workspace
 local charactersFolder = workspace:WaitForChild("Characters")
@@ -19,13 +24,14 @@ local targets = {}
 local killAuraActive = true 
 local autoDrinkActive = false 
 local autoEatActive = false 
+local autoPickActive = false -- Trạng thái Auto Pick mới
 local closestPlayerName = "" 
 local maxDetectDistance = 150 -- Khoảng cách nhận diện mặc định
 
 -- ================================================================
 -- CẤU HÌNH TỐC ĐỘ GỬI REMOTE DAMAGE (CHỐNG BAN)
 -- ================================================================
-local attackCooldown = 1.2 -- Khoảng thời gian chờ giữa mỗi lần đấm (giây).
+local attackCooldown = 1.2 
 -- ================================================================
 
 ----------------------------------------------------------------
@@ -41,8 +47,9 @@ ScreenGui.Name = "LizlukKillGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
+-- Tăng chiều cao Frame lên 460 để chứa thêm nút mới vừa vặn
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 430)
+MainFrame.Size = UDim2.new(0, 220, 0, 460)
 MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -103,12 +110,24 @@ local EatCorner = Instance.new("UICorner")
 EatCorner.CornerRadius = UDim.new(0, 4)
 EatCorner.Parent = EatBtn
 
+-- Nút bấm AUTO PICK (Nhặt) mới thêm vào GUI
+local PickBtn = Instance.new("TextButton")
+PickBtn.Size = UDim2.new(1, -10, 0, 25)
+PickBtn.Position = UDim2.new(0, 5, 0, 130)
+PickBtn.Font = Enum.Font.SourceSansBold
+PickBtn.TextSize = 13
+PickBtn.Parent = MainFrame
+
+local PickCorner = Instance.new("UICorner")
+PickCorner.CornerRadius = UDim.new(0, 4)
+PickCorner.Parent = PickBtn
+
 ----------------------------------------------------------------
--- KHU VỰC NHẬP SỐ KHOẢNG CÁCH (TEXTBOX)
+-- KHU VỰC NHẬP SỐ KHOẢNG CÁCH (TEXTBOX) - ĐẨY XUỐNG DƯỚI NÚT NHẶT
 ----------------------------------------------------------------
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 130)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 160)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -159,8 +178,8 @@ end)
 ----------------------------------------------------------------
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -175)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 170)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -205)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 200)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -196,11 +215,23 @@ local function updateUtilityVisuals()
         EatBtn.Text = "AUTO EAT: OFF [K]"
         EatBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
     end
+
+    -- Cập nhật màu sắc hiển thị cho nút Nhặt mới thêm
+    if autoPickActive then
+        PickBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 80)
+        PickBtn.Text = "AUTO PICK: ON [H]"
+        PickBtn.TextColor3 = Color3.fromRGB(120, 255, 120)
+    else
+        PickBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        PickBtn.Text = "AUTO PICK: OFF [H]"
+        PickBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
 end
 updateUtilityVisuals()
 
 DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
 EatBtn.MouseButton1Click:Connect(function() autoEatActive = not autoEatActive updateUtilityVisuals() end)
+PickBtn.MouseButton1Click:Connect(function() autoPickActive = not autoPickActive updateUtilityVisuals() end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if UserInputService:GetFocusedTextBox() then return end
@@ -209,13 +240,14 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
     if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.K then autoEatActive = not autoEatActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.H then autoPickActive = not autoPickActive updateUtilityVisuals() end -- Phím tắt H cho Nhặt
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
         if killAuraActive then
             StatusLabel.Text = "KILL AURA: RUNNING [Q]"
             StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
         else
-            StatusLabel.Text = "KILL AURA: PAUSED [E]"
+            StatusLabel.Text = "KILL AURA: PAUSED [Q]"
             StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
         end
     end
@@ -386,11 +418,21 @@ task.spawn(function()
             end)
         end
 
-        -- Cập nhật logic Auto Eat theo yêu cầu (Ăn Grass thay vì Ribs)
+        -- Tự động ăn vật phẩm GrassChunk
         if autoEatActive then
             pcall(function()
-                local grass = interactionsFolder:FindFirstChild("Food") and interactionsFolder.Food:FindFirstChild("Grass")
-                if grass then foodRemote:FireServer(grass) end
+                if grassChunkObj then 
+                    foodRemote:FireServer(grassChunkObj) 
+                end
+            end)
+        end
+
+        -- PHẦN NHẶT: Tự động gửi lệnh InvokeServer khi nút AUTO PICK bật
+        if autoPickActive then
+            pcall(function()
+                if grassObj then
+                    foodChunkRemote:InvokeServer(grassObj)
+                end
             end)
         end
 
