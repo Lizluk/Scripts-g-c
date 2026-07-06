@@ -26,7 +26,7 @@ local maxDetectDistance = 150 -- Khoảng cách nhận diện mặc định
 -- ================================================================
 -- CẤU HÌNH TỐC ĐỘ GỬI REMOTE DAMAGE (CHỐNG BAN)
 -- ================================================================
-local attackCooldown = 1.5 -- Khoảng thời gian chờ mặc định là 1.5 giây
+local attackCooldown = 1 -- Khoảng thời gian chờ mặc định là 1.5 giây
 -- ================================================================
 
 ----------------------------------------------------------------
