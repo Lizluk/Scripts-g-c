@@ -1,0 +1,175 @@
+-- Khởi tạo dịch vụ Roblox
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+
+-- Biến lưu trạng thái bật/tắt Auto
+local autoAddEnabled = false
+local autoSellEnabled = false
+
+-- Đường dẫn đến các Service Knit (sử dụng InvokeServer)
+local FishService = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index")["sleitnick_knit@1.7.0"].knit.Services.FishService.RF.AddToInventory
+local MarketService = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index")["sleitnick_knit@1.7.0"].knit.Services.MarketService.RF.Sell
+
+-- Tạo Giao diện (GUI)
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+
+-- Các thành phần chức năng
+local FishInputTitle = Instance.new("TextLabel")
+local FishInputBox = Instance.new("TextBox")
+
+local AutoAddStatus = Instance.new("TextLabel")
+local AutoSellStatus = Instance.new("TextLabel")
+local FooterInfo = Instance.new("TextLabel")
+
+-- Nạp GUI lên màn hình (Hỗ trợ mọi Executor)
+ScreenGui.Name = "KnitFishManager"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
+
+-- Cấu hình Khung chính
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.Position = UDim2.new(0.5, -135, 0.4, -100)
+MainFrame.Size = UDim2.new(0, 270, 0, 210)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+-- Thanh tiêu đề
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Title.Text = "FISH & MARKET MANAGER"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.SourceSansBold
+Title.BorderSizePixel = 0
+
+-- Nhãn ô nhập tên cá
+FishInputTitle.Parent = MainFrame
+FishInputTitle.Position = UDim2.new(0.05, 0, 0.22, 0)
+FishInputTitle.Size = UDim2.new(0.9, 0, 0, 15)
+FishInputTitle.BackgroundTransparency = 1
+FishInputTitle.Text = "Nhập tên loại cá muốn Add:"
+FishInputTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+FishInputTitle.TextXAlignment = Enum.TextXAlignment.Left
+FishInputTitle.TextSize = 12
+
+-- Ô nhập tên cá (TextBox)
+FishInputBox.Parent = MainFrame
+FishInputBox.Position = UDim2.new(0.05, 0, 0.32, 0)
+FishInputBox.Size = UDim2.new(0.9, 0, 0, 30)
+FishInputBox.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+FishInputBox.Text = "BlueDottyBlack" -- Điền sẵn tên cá mặc định
+FishInputBox.PlaceholderText = "Tên cá..."
+FishInputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+FishInputBox.TextSize = 14
+FishInputBox.BorderSizePixel = 0
+
+-- Trạng thái Auto Add (Phím G)
+AutoAddStatus.Parent = MainFrame
+AutoAddStatus.Position = UDim2.new(0.05, 0, 0.52, 0)
+AutoAddStatus.Size = UDim2.new(0.9, 0, 0, 20)
+AutoAddStatus.BackgroundTransparency = 1
+AutoAddStatus.Text = "[G] Auto Add Cá: OFF"
+AutoAddStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+AutoAddStatus.TextXAlignment = Enum.TextXAlignment.Left
+AutoAddStatus.TextSize = 13
+AutoAddStatus.Font = Enum.Font.SourceSansBold
+
+-- Trạng thái Auto Sell (Phím H)
+AutoSellStatus.Parent = MainFrame
+AutoSellStatus.Position = UDim2.new(0.05, 0, 0.64, 0)
+AutoSellStatus.Size = UDim2.new(0.9, 0, 0, 20)
+AutoSellStatus.BackgroundTransparency = 1
+AutoSellStatus.Text = "[H] Auto Bán Cá: OFF"
+AutoSellStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+AutoSellStatus.TextXAlignment = Enum.TextXAlignment.Left
+AutoSellStatus.TextSize = 13
+AutoSellStatus.Font = Enum.Font.SourceSansBold
+
+-- Chú thích hướng dẫn ẩn giao diện dưới chân GUI
+FooterInfo.Parent = MainFrame
+FooterInfo.Position = UDim2.new(0, 0, 0.82, 0)
+FooterInfo.Size = UDim2.new(1, 0, 0, 30)
+FooterInfo.BackgroundTransparency = 1
+FooterInfo.Text = "Bấm phím [P] để Ẩn / Hiện bảng Menu này"
+FooterInfo.TextColor3 = Color3.fromRGB(150, 150, 150)
+FooterInfo.TextSize = 11
+
+----------------------------------------------------------------
+-- HỆ THỐNG VÒNG LẶP CHẠY AUTO (BACKGROUND THREADS)
+----------------------------------------------------------------
+
+-- Vòng lặp Auto Add Cá (Phím G)
+task.spawn(function()
+    while true do
+        if autoAddEnabled then
+            local fishName = FishInputBox.Text
+            if fishName ~= "" then
+                pcall(function()
+                    -- Gửi yêu cầu Add cá lên Server thông qua InvokeServer
+                    FishService:InvokeServer(fishName, "Catch")
+                end)
+            end
+            task.wait(0.05) -- Tốc độ add cá (Giảm xuống nếu muốn nhanh hơn, tăng lên nếu bị lag)
+        else
+            task.wait(0.2)
+        end
+    end
+end)
+
+-- Vòng lặp Auto Bán Cá (Phím H)
+task.spawn(function()
+    while true do
+        if autoSellEnabled then
+            pcall(function()
+                -- Gửi yêu cầu bán toàn bộ cá lên Server thông qua InvokeServer
+                MarketService:InvokeServer()
+            end)
+            task.wait(0.5) -- Tốc độ bán (0.5 giây một lần để đảm bảo server nhận kịp lệnh)
+        else
+            task.wait(0.2)
+        end
+    end
+end)
+
+----------------------------------------------------------------
+-- LẮNG NGHE PHÍM TẮT TỪ BÀN PHÍM (KEYBINDS)
+----------------------------------------------------------------
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    -- Nếu đang chat hoặc đang gõ chữ đổi tên cá trong ô nhập thì không kích hoạt phím tắt
+    if gameProcessed then return end 
+    
+    -- Phím G: Bật/Tắt Auto Add Cá
+    if input.KeyCode == Enum.KeyCode.G then
+        autoAddEnabled = not autoAddEnabled
+        if autoAddEnabled then
+            AutoAddStatus.Text = "[G] Auto Add Cá: ON (" .. FishInputBox.Text .. ")"
+            AutoAddStatus.TextColor3 = Color3.fromRGB(100, 255, 100)
+        else
+            AutoAddStatus.Text = "[G] Auto Add Cá: OFF"
+            AutoAddStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+        end
+        
+    -- Phím H: Bật/Tắt Auto Bán Cá
+    elseif input.KeyCode == Enum.KeyCode.H then
+        autoSellEnabled = not autoSellEnabled
+        if autoSellEnabled then
+            AutoSellStatus.Text = "[H] Auto Bán Cá: ON"
+            AutoSellStatus.TextColor3 = Color3.fromRGB(100, 255, 100)
+        else
+            AutoSellStatus.Text = "[H] Auto Bán Cá: OFF"
+            AutoSellStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+        end
+        
+    -- Phím P: Ẩn hoặc Hiện bảng Menu trên màn hình
+    elseif input.KeyCode == Enum.KeyCode.P then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
