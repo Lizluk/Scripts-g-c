@@ -1,4 +1,4 @@
---// LIZLUK ALL-IN-ONE PREMIUM MENU (STANDARDIZED COMPILER FIX)
+--// LIZLUK PREMIUM CORE (STRICT COMPILER COMPATIBILITY FIX)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -8,7 +8,7 @@ local Workspace = game:GetService("Workspace")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 10)
 
 --======================================================================
 -- CẤU HÌNH & TRẠNG THÁI KHỞI TẠO
@@ -38,6 +38,21 @@ local activeNpcEsps = {}
 --======================================================================
 -- 1. GIAO DIỆN HỢP NHẤT (LIZLUK STYLE)
 --======================================================================
+if not PlayerGui then
+    local startTime = os.time()
+    while not PlayerGui do
+        if (os.time() - startTime) > 5 then
+            break
+        end
+        PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        task.wait(0.2)
+    end
+end
+
+if not PlayerGui then 
+    PlayerGui = game:GetService("CoreGui") 
+end
+
 if PlayerGui:FindFirstChild("LizlukKillGUI") then
     PlayerGui.LizlukKillGUI:Destroy()
 end
@@ -158,9 +173,13 @@ DistanceBoxCorner.Parent = DistanceBox
 
 DistanceBox.FocusLost:Connect(function()
     local number = tonumber(DistanceBox.Text)
-    if number and number >= 0 then
-        maxDetectDistance = number
-        DistanceBox.Text = tostring(number)
+    if number then
+        if number >= 0 then
+            maxDetectDistance = number
+            DistanceBox.Text = tostring(number)
+        else
+            DistanceBox.Text = tostring(maxDetectDistance)
+        end
     else
         DistanceBox.Text = tostring(maxDetectDistance)
     end
@@ -205,8 +224,12 @@ local function createLockerInput(name, placeholder, posY)
     boxStroke.Thickness = 1
     boxStroke.Parent = box
     
-    box.Focused:Connect(function() boxStroke.Color = Color3.fromRGB(255, 255, 255) end)
-    box.FocusLost:Connect(function() boxStroke.Color = Color3.fromRGB(45, 45, 45) end)
+    box.Focused:Connect(function() 
+        boxStroke.Color = Color3.fromRGB(255, 255, 255) 
+    end)
+    box.FocusLost:Connect(function() 
+        boxStroke.Color = Color3.fromRGB(45, 45, 45) 
+    end)
     
     return box
 end
@@ -300,8 +323,10 @@ local function updateUtilityVisuals()
     end
     
     for _, gui in pairs(activeNpcEsps) do
-        if gui and gui:IsA("BillboardGui") then
-            gui.Enabled = npcEspActive
+        if gui then
+            if gui:IsA("BillboardGui") then
+                gui.Enabled = npcEspActive
+            end
         end
     end
 end
@@ -341,22 +366,24 @@ ToggleLockBtn.MouseButton1Click:Connect(function()
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if UserInputService:GetFocusedTextBox() or gameProcessed then return end
+    if UserInputService:GetFocusedTextBox() or gameProcessed then 
+        return 
+    end
     if input.KeyCode == Enum.KeyCode.P then 
         MainFrame.Visible = not MainFrame.Visible 
     end
     if input.KeyCode == Enum.KeyCode.F then 
         autoPounceActive = not autoPounceActive 
         updateUtilityVisuals() 
-end
+    end
     if input.KeyCode == Enum.KeyCode.L then 
         autoDrinkActive = not autoDrinkActive 
         updateUtilityVisuals() 
-end
+    end
     if input.KeyCode == Enum.KeyCode.K then 
         npcEspActive = not npcEspActive 
         updateUtilityVisuals() 
-end
+    end
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
         if killAuraActive then
@@ -372,26 +399,61 @@ end
 end)
 
 --======================================================================
--- KẾT NỐI REMOTES VÀ FOLDERS
+-- KẾT NỐI REMOTES VÀ FOLDERS AN TOÀN (KHÔNG CHỜ CỨNG)
 --======================================================================
-local eventsFolder = ReplicatedStorage:WaitForChild("Events", 5)
-local attackRemote = eventsFolder and eventsFolder:WaitForChild("Attack", 5)
-local attackNPCRemote = eventsFolder and eventsFolder:WaitForChild("AttackNPC", 5)
+local eventsFolder = ReplicatedStorage:FindFirstChild("Events")
+local attackRemote = nil
+local attackNPCRemote = nil
+if eventsFolder then
+    attackRemote = eventsFolder:FindFirstChild("Attack")
+    attackNPCRemote = eventsFolder:FindFirstChild("AttackNPC")
+end
 
-local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 3)
-local drinkRemote = remotesFolder and remotesFolder:WaitForChild("DrinkRemote", 3)
-local interactionsFolder = workspace:WaitForChild("Interactions", 3)
-local charactersFolder = workspace:WaitForChild("Characters", 5)
-local npcsFolder = workspace:WaitForChild("NPCs", 5)
+local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
+local drinkRemote = nil
+if remotesFolder then
+    drinkRemote = remotesFolder:FindFirstChild("DrinkRemote")
+end
+
+local interactionsFolder = workspace:FindFirstChild("Interactions")
+local charactersFolder = workspace:FindFirstChild("Characters")
+local npcsFolder = workspace:FindFirstChild("NPCs")
+
+task.spawn(function()
+    while true do
+        if eventsFolder and remotesFolder and charactersFolder then
+            break
+        end
+        eventsFolder = ReplicatedStorage:FindFirstChild("Events")
+        if eventsFolder then
+            attackRemote = eventsFolder:FindFirstChild("Attack")
+            attackNPCRemote = eventsFolder:FindFirstChild("AttackNPC")
+        end
+        remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
+        if remotesFolder then 
+            drinkRemote = remotesFolder:FindFirstChild("DrinkRemote") 
+        end
+        interactionsFolder = workspace:FindFirstChild("Interactions")
+        charactersFolder = workspace:FindFirstChild("Characters")
+        npcsFolder = workspace:FindFirstChild("NPCs")
+        task.wait(1)
+    end
+end)
 
 --======================================================================
 -- HỆ THỐNG ESP (PLAYER & NPC)
 --======================================================================
 local function applyESP(character, playerName)
-    if not character then return end
-    local head = character:WaitForChild("Head", 5)
-    if not head then return end
-    if head:FindFirstChild("PlayerESP") then head.PlayerESP:Destroy() end
+    if not character then 
+        return 
+    end
+    local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 5)
+    if not head then 
+        return 
+    end
+    if head:FindFirstChild("PlayerESP") then 
+        head.PlayerESP:Destroy() 
+    end
 
     local bb = Instance.new("BillboardGui")
     bb.Name = "PlayerESP"
@@ -411,14 +473,30 @@ local function applyESP(character, playerName)
 
     local connection
     connection = RunService.RenderStepped:Connect(function()
-        if not charactersFolder or not character:IsDescendantOf(charactersFolder) or not head:IsDescendantOf(character) or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        if not charactersFolder then
             connection:Disconnect()
             bb:Destroy()
             return
         end
-        local myRoot = LocalPlayer.Character.HumanoidRootPart
-        local distance = math.floor((myRoot.Position - head.Position).Magnitude)
+        if not character:IsDescendantOf(charactersFolder) then
+            connection:Disconnect()
+            bb:Destroy()
+            return
+        end
+        if not head:IsDescendantOf(character) then
+            connection:Disconnect()
+            bb:Destroy()
+            return
+        end
+        if not LocalPlayer.Character then
+            return
+        end
+        local myRoot = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not myRoot then
+            return
+        end
         
+        local distance = math.floor((myRoot.Position - head.Position).Magnitude)
         if targets[playerName] then
             if killAuraActive then
                 txt.Text = string.format("[🎯] %s\n[%d m]", playerName, distance)
@@ -440,23 +518,45 @@ local function applyESP(character, playerName)
 end
 
 task.spawn(function()
-    if charactersFolder then
-        for _, child in pairs(charactersFolder:GetChildren()) do
-            if child:IsA("Model") and child.Name ~= LocalPlayer.Name and child.Name ~= "Lubakixa" and Players:GetPlayerFromCharacter(child) then applyESP(child, child.Name) end
-        end
-        charactersFolder.ChildAdded:Connect(function(child)
-            if child:IsA("Model") and child.Name ~= LocalPlayer.Name and child.Name ~= "Lubakixa" then
-                task.wait(0.5)
-                if Players:GetPlayerFromCharacter(child) then applyESP(child, child.Name) end
-            end
-        end)
+    while not charactersFolder do 
+        task.wait(0.5) 
     end
+    for _, child in pairs(charactersFolder:GetChildren()) do
+        if child:IsA("Model") then
+            if child.Name ~= LocalPlayer.Name then
+                if child.Name ~= "Lubakixa" then
+                    if Players:GetPlayerFromCharacter(child) then 
+                        applyESP(child, child.Name) 
+                    end
+                end
+            end
+        end
+    end
+    charactersFolder.ChildAdded:Connect(function(child)
+        if child:IsA("Model") then
+            if child.Name ~= LocalPlayer.Name then
+                if child.Name ~= "Lubakixa" then
+                    task.wait(0.5)
+                    if Players:GetPlayerFromCharacter(child) then 
+                        applyESP(child, child.Name) 
+                    end
+                end
+            end
+        end
+    end)
 end)
 
 local function applyNPCEsp(npcModel, typeName)
-    if not npcModel or npcModel:FindFirstChild("NpcESP_Holder") then return end
+    if not npcModel then 
+        return 
+    end
+    if npcModel:FindFirstChild("NpcESP_Holder") then 
+        return 
+    end
     local targetPart = npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChild("Head") or npcModel:FindFirstChildOfClass("MeshPart") or npcModel:FindFirstChildOfClass("Part")
-    if not targetPart then return end
+    if not targetPart then 
+        return 
+    end
 
     local bb = Instance.new("BillboardGui")
     bb.Name = "NpcESP_Holder"
@@ -479,15 +579,25 @@ local function applyNPCEsp(npcModel, typeName)
 
     local connection
     connection = RunService.RenderStepped:Connect(function()
-        local myCharacter = charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")) or LocalPlayer.Character
-        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        local myCharacter = LocalPlayer.Character
+        if charactersFolder then
+            myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or LocalPlayer.Character
+        end
+        local myRoot = nil
+        if myCharacter then
+            myRoot = myCharacter:FindFirstChild("HumanoidRootPart")
+        end
+        
         if not npcModel:IsDescendantOf(workspace) or not targetPart:IsDescendantOf(npcModel) or not myRoot then
             connection:Disconnect()
             local idx = table.find(activeNpcEsps, bb)
-            if idx then table.remove(activeNpcEsps, idx) end
+            if idx then 
+                table.remove(activeNpcEsps, idx) 
+            end
             bb:Destroy()
             return
         end
+        
         local distance = math.floor((myRoot.Position - targetPart.Position).Magnitude)
         if typeName == "Peccary" and peccaryTargets[npcModel.Name] then
             txt.Text = string.format("🐷 [🎯 MỤC TIÊU]\n%s (%dm)", npcModel.Name, distance)
@@ -507,30 +617,41 @@ local function scanNpcFolders()
     local mainNpcs = workspace:FindFirstChild("NPCs")
     if mainNpcs then
         local birdFolder = mainNpcs:FindFirstChild("Bird")
-        if birdFolder then for _, c in pairs(birdFolder:GetChildren()) do applyNPCEsp(c, "Bird") end end
+        if birdFolder then 
+            for _, c in pairs(birdFolder:GetChildren()) do 
+                applyNPCEsp(c, "Bird") 
+            end 
+        end
         local smallFolder = mainNpcs:FindFirstChild("Small")
-        if smallFolder then for _, c in pairs(smallFolder:GetChildren()) do applyNPCEsp(c, "Small") end end
+        if smallFolder then 
+            for _, c in pairs(smallFolder:GetChildren()) do 
+                applyNPCEsp(c, "Small") 
+            end 
+        end
         local peccaryFolder = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
-        if peccaryFolder then for _, c in pairs(peccaryFolder:GetChildren()) do if c:IsA("Model") then applyNPCEsp(c, "Peccary") end end end
+        if peccaryFolder then 
+            for _, c in pairs(peccaryFolder:GetChildren()) do 
+                if c:IsA("Model") then 
+                    applyNPCEsp(c, "Peccary") 
+                end 
+            end 
+        end
     end
     local barrierFolder = workspace:FindFirstChild("NpcBarriers")
-    if barrierFolder then for _, c in pairs(barrierFolder:GetChildren()) do applyNPCEsp(c, "Barrier") end end
+    if barrierFolder then 
+        for _, c in pairs(barrierFolder:GetChildren()) do 
+            applyNPCEsp(c, "Barrier") 
+        end 
+    end
 end
 
 task.spawn(function()
-    task.wait(1) scanNpcFolders()
-    pcall(function()
-        local mainNpcs = workspace:WaitForChild("NPCs", 10)
-        if mainNpcs then
-            local bird = mainNpcs:WaitForChild("Bird", 5)
-            if bird then bird.ChildAdded:Connect(function(c) task.wait(0.1) applyNPCEsp(c, "Bird") end) end
-            local small = mainNpcs:WaitForChild("Small", 5)
-            if small then small.ChildAdded:Connect(function(c) task.wait(0.1) applyNPCEsp(c, "Small") end) end
-            local peccary = mainNpcs:WaitForChild("FlatHeadedPeccary61", 5)
-            if peccary then peccary.ChildAdded:Connect(function(c) task.wait(0.1) applyNPCEsp(c, "Peccary") end) end
-        end
-    end)
-    while true do scanNpcFolders() task.wait(4) end
+    task.wait(1) 
+    scanNpcFolders()
+    while true do 
+        scanNpcFolders() 
+        task.wait(4) 
+    end
 end)
 
 --======================================================================
@@ -540,30 +661,43 @@ local playerButtons = {}
 local peccaryButtons = {}
 
 local function updateUIList()
-    for _, child in pairs(ScrollingFrame:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+    for _, child in pairs(ScrollingFrame:GetChildren()) do 
+        if child:IsA("TextButton") then 
+            child:Destroy() 
+        end 
+    end
     playerButtons = {}
     peccaryButtons = {}
 
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Name ~= "Lubakixa" then
-            local pName = player.Name
-            local Btn = Instance.new("TextButton")
-            Btn.Size = UDim2.new(1, 0, 0, 28)
-            Btn.Font = Enum.Font.SourceSansBold
-            Btn.TextSize = 12
-            Btn.BorderSizePixel = 0
-            Btn.Parent = ScrollingFrame
+        if player ~= LocalPlayer then
+            if player.Name ~= "Lubakixa" then
+                local pName = player.Name
+                local Btn = Instance.new("TextButton")
+                Btn.Size = UDim2.new(1, 0, 0, 28)
+                Btn.Font = Enum.Font.SourceSansBold
+                Btn.TextSize = 12
+                Btn.BorderSizePixel = 0
+                Btn.Parent = ScrollingFrame
 
-            local BtnCorner = Instance.new("UICorner")
-            BtnCorner.CornerRadius = UDim.new(0, 5)
-            BtnCorner.Parent = Btn
+                local BtnCorner = Instance.new("UICorner")
+                BtnCorner.CornerRadius = UDim.new(0, 5)
+                BtnCorner.Parent = Btn
 
-            Btn.MouseButton1Click:Connect(function() targets[pName] = not targets[pName] end)
-            playerButtons[pName] = Btn
+                Btn.MouseButton1Click:Connect(function() 
+                    targets[pName] = not targets[pName] 
+                end)
+                playerButtons[pName] = Btn
+            end
         end
     end
 
-    local peccaryFolder = workspace:FindFirstChild("NPCs") and workspace.NPCs:FindFirstChild("FlatHeadedPeccary61")
+    local mainNpcs = workspace:FindFirstChild("NPCs")
+    local peccaryFolder = nil
+    if mainNpcs then
+        peccaryFolder = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
+    end
+    
     if peccaryFolder then
         for _, pci in pairs(peccaryFolder:GetChildren()) do
             if pci:IsA("Model") then
@@ -579,7 +713,9 @@ local function updateUIList()
                 BtnCorner.CornerRadius = UDim.new(0, 5)
                 BtnCorner.Parent = Btn
 
-                Btn.MouseButton1Click:Connect(function() peccaryTargets[npcName] = not peccaryTargets[npcName] end)
+                Btn.MouseButton1Click:Connect(function() 
+                    peccaryTargets[npcName] = not peccaryTargets[npcName] 
+                end)
                 peccaryButtons[npcName] = Btn
             end
         end
@@ -587,47 +723,71 @@ local function updateUIList()
 end
 
 Players.PlayerAdded:Connect(updateUIList)
-Players.PlayerRemoving:Connect(function(player) targets[player.Name] = nil updateUIList() end)
-task.spawn(function() while true do updateUIList() task.wait(5) end)
+Players.PlayerRemoving:Connect(function(player) 
+    targets[player.Name] = nil 
+    updateUIList() 
+end)
+
+task.spawn(function() 
+    while true do 
+        updateUIList() 
+        task.wait(5) 
+    end 
+end)
 
 --======================================================================
--- 3. VÒNG LẶP HỆ THỐNG GIAO DIỆN & KHÓA CHỈ SỐ
+-- 3. VÒNG LẶP HỆ THỐNG GIAO DIỆN & KHÓA CHỈ SỐ [ĐÃ SỬA DÒNG 613+]
 --======================================================================
 task.spawn(function()
     while true do
-        local myCharacter = charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")) or LocalPlayer.Character
-        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        local myCharacter = LocalPlayer.Character
+        if charactersFolder then
+            myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or LocalPlayer.Character
+        end
+        local myRoot = nil
+        if myCharacter then
+            myRoot = myCharacter:FindFirstChild("HumanoidRootPart")
+        end
         
-        if isLocking and myCharacter then
-            local realAttributesFolder = myCharacter:FindFirstChild("Attributes")
-            if realAttributesFolder then
-                pcall(function()
-                    realAttributesFolder:SetAttribute("Hunger", targetHunger)
-                    realAttributesFolder:SetAttribute("Thirst", targetThirst)
-                    realAttributesFolder:SetAttribute("Stamina", targetStamina)
-                end)
+        if isLocking then
+            if myCharacter then
+                local realAttributesFolder = myCharacter:FindFirstChild("Attributes")
+                if realAttributesFolder then
+                    pcall(function()
+                        realAttributesFolder:SetAttribute("Hunger", targetHunger)
+                        realAttributesFolder:SetAttribute("Thirst", targetThirst)
+                        realAttributesFolder:SetAttribute("Stamina", targetStamina)
+                    end)
+                end
             end
         end
 
         local minDistance = math.huge
         local tempClosest = ""
-        if myRoot and charactersFolder then
-            for pName, Btn in pairs(playerButtons) do
-                local pChar = charactersFolder:FindFirstChild(pName)
-                local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
-                if pRoot then
-                    local dist = (myRoot.Position - pRoot.Position).Magnitude
-                    if dist <= maxDetectDistance and dist < minDistance then
-                        minDistance = dist
-                        tempClosest = pName
+        if myRoot then
+            if charactersFolder then
+                for pName, Btn in pairs(playerButtons) do
+                    local pChar = charactersFolder:FindFirstChild(pName)
+                    local pRoot = nil
+                    if pChar then
+                        pRoot = pChar:FindFirstChild("HumanoidRootPart")
                     end
-                    if targets[pName] then
-                        Btn.LayoutOrder = math.floor(dist) - 100000
+                    if pRoot then
+                        local dist = (myRoot.Position - pRoot.Position).Magnitude
+                        if dist <= maxDetectDistance then
+                            if dist < minDistance then
+                                minDistance = dist
+                                tempClosest = pName
+                            end
+                        end
+                        if targets[pName] then
+                            Btn.LayoutOrder = math.floor(dist) - 100000
+                        else
+                            Btn.LayoutOrder = math.floor(dist)
+                        end
                     else
-                        Btn.LayoutOrder = math.floor(dist)
+                        Btn.LayoutOrder = 999999
                     end
-                else
-                    Btn.LayoutOrder = 999999
                 end
             end
         end
@@ -656,22 +816,40 @@ task.spawn(function()
             end
         end
 
-        local peccaryFolder = workspace:FindFirstChild("NPCs") and workspace.NPCs:FindFirstChild("FlatHeadedPeccary61")
+        local mainNpcs = workspace:FindFirstChild("NPCs")
+        local peccaryFolder = nil
+        if mainNpcs then
+            peccaryFolder = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
+        end
+        
         for npcName, Btn in pairs(peccaryButtons) do
-            local npcModel = peccaryFolder and peccaryFolder:FindFirstChild(npcName)
-            local body = npcModel and (npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChildOfClass("Part"))
-            if body and myRoot then
-                local dist = (myRoot.Position - body.Position).Magnitude
-                if peccaryTargets[npcName] then
-                    Btn.LayoutOrder = math.floor(dist) - 50000
-                    Btn.BackgroundColor3 = Color3.fromRGB(230, 50, 120)
-                    Btn.Text = "🐷 " .. npcName .. " [KILL TARGET]"
-                    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            local npcModel = nil
+            if peccaryFolder then
+                npcModel = peccaryFolder:FindFirstChild(npcName)
+            end
+            local body = nil
+            if npcModel then
+                body = npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChildOfClass("Part")
+            end
+            if body then
+                if myRoot then
+                    local dist = (myRoot.Position - body.Position).Magnitude
+                    if peccaryTargets[npcName] then
+                        Btn.LayoutOrder = math.floor(dist) - 50000
+                        Btn.BackgroundColor3 = Color3.fromRGB(230, 50, 120)
+                        Btn.Text = "🐷 " .. npcName .. " [KILL TARGET]"
+                        Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    else
+                        Btn.LayoutOrder = math.floor(dist) + 50000
+                        Btn.BackgroundColor3 = Color3.fromRGB(25, 35, 45)
+                        Btn.Text = "🐷 " .. npcName .. string.format(" (%dm)", math.floor(dist))
+                        Btn.TextColor3 = Color3.fromRGB(200, 220, 245)
+                    end
                 else
-                    Btn.LayoutOrder = math.floor(dist) + 50000
-                    Btn.BackgroundColor3 = Color3.fromRGB(25, 35, 45)
-                    Btn.Text = "🐷 " .. npcName .. string.format(" (%dm)", math.floor(dist))
-                    Btn.TextColor3 = Color3.fromRGB(200, 220, 245)
+                    Btn.LayoutOrder = 999999
+                    Btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+                    Btn.Text = "❌ " .. npcName .. " (DEAD/FAR)"
+                    Btn.TextColor3 = Color3.fromRGB(100, 100, 100)
                 end
             else
                 Btn.LayoutOrder = 999999
@@ -681,11 +859,22 @@ task.spawn(function()
             end
         end
 
-        if autoDrinkActive and drinkRemote then
-            pcall(function()
-                local lake = interactionsFolder and interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
-                if lake then drinkRemote:FireServer(lake) end
-            end)
+        if autoDrinkActive then
+            if drinkRemote then
+                pcall(function()
+                    local lakesFolder = nil
+                    if interactionsFolder then
+                        lakesFolder = interactionsFolder:FindFirstChild("Lakes")
+                    end
+                    local lake = nil
+                    if lakesFolder then
+                        lake = lakesFolder:FindFirstChild("Lake")
+                    end
+                    if lake then 
+                        drinkRemote:FireServer(lake) 
+                    end
+                end)
+            end
         end
         task.wait(0.1)
     end
@@ -696,22 +885,40 @@ end)
 --======================================================================
 task.spawn(function()
     while true do
-        if killAuraActive and attackRemote and charactersFolder then
-            local myCharacter = charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")) or LocalPlayer.Character
-            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        if killAuraActive then
+            if attackRemote then
+                if charactersFolder then
+                    local myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or LocalPlayer.Character
+                    local myRoot = nil
+                    if myCharacter then
+                        myRoot = myCharacter:FindFirstChild("HumanoidRootPart")
+                    end
 
-            if myRoot then
-                for pName, isTargeted in pairs(targets) do
-                    if isTargeted then 
-                        local targetCharacter = charactersFolder:FindFirstChild(pName)
-                        local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-                        local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
-                        local targetHitbox = targetCharacter and targetCharacter:FindFirstChild("BodyHitbox")
-                        
-                        if targetRoot and targetHumanoid and targetHitbox then
-                            local distance = (myRoot.Position - targetRoot.Position).Magnitude
-                            if distance <= maxDetectDistance then
-                                pcall(function() attackRemote:FireServer(targetHumanoid, targetHitbox, 1) end)
+                    if myRoot then
+                        for pName, isTargeted in pairs(targets) do
+                            if isTargeted then 
+                                local targetCharacter = charactersFolder:FindFirstChild(pName)
+                                local targetRoot = nil
+                                local targetHumanoid = nil
+                                local targetHitbox = nil
+                                if targetCharacter then
+                                    targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+                                    targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+                                    targetHitbox = targetCharacter:FindFirstChild("BodyHitbox")
+                                end
+                                
+                                if targetRoot then
+                                    if targetHumanoid then
+                                        if targetHitbox then
+                                            local distance = (myRoot.Position - targetRoot.Position).Magnitude
+                                            if distance <= maxDetectDistance then
+                                                pcall(function() 
+                                                    attackRemote:FireServer(targetHumanoid, targetHitbox, 1) 
+                                                end)
+                                            end
+                                        end
+                                    end
+                                end
                             end
                         end
                     end
@@ -727,28 +934,49 @@ end)
 --======================================================================
 task.spawn(function()
     while true do
-        if autoPounceActive and attackRemote and charactersFolder then
-            local myCharacter = charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")) or LocalPlayer.Character
-            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        if autoPounceActive then
+            if attackRemote then
+                if charactersFolder then
+                    local myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or LocalPlayer.Character
+                    local myRoot = nil
+                    if myCharacter then
+                        myRoot = myCharacter:FindFirstChild("HumanoidRootPart")
+                    end
 
-            if myRoot then
-                for pName, isTargeted in pairs(targets) do
-                    if isTargeted then
-                        local targetCharacter = charactersFolder:FindFirstChild(pName)
-                        local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-                        local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
-                        local targetHitbox = targetCharacter and targetCharacter:FindFirstChild("BodyHitbox")
-                        
-                        if targetRoot and targetHumanoid and targetHitbox then
-                            local distance = (myRoot.Position - targetRoot.Position).Magnitude
-                            if distance <= maxDetectDistance then
-                                local rootPart = targetCharacter:FindFirstChild("RootPart")
-                                local torso = rootPart and rootPart:FindFirstChild("Torso")
-                                if torso then
-                                    local children = torso:GetChildren()
-                                    local latchPoint = torso:FindFirstChild("LatchPoint2.R") or children[1]
-                                    if latchPoint then
-                                        pcall(function() attackRemote:FireServer(targetHumanoid, targetHitbox, 2, latchPoint) end)
+                    if myRoot then
+                        for pName, isTargeted in pairs(targets) do
+                            if isTargeted then
+                                local targetCharacter = charactersFolder:FindFirstChild(pName)
+                                local targetRoot = nil
+                                local targetHumanoid = nil
+                                local targetHitbox = nil
+                                if targetCharacter then
+                                    targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+                                    targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+                                    targetHitbox = targetCharacter:FindFirstChild("BodyHitbox")
+                                end
+                                
+                                if targetRoot then
+                                    if targetHumanoid then
+                                        if targetHitbox then
+                                            local distance = (myRoot.Position - targetRoot.Position).Magnitude
+                                            if distance <= maxDetectDistance then
+                                                local rootPart = targetCharacter:FindFirstChild("RootPart")
+                                                local torso = nil
+                                                if rootPart then
+                                                    torso = rootPart:FindFirstChild("Torso")
+                                                end
+                                                if torso then
+                                                    local children = torso:GetChildren()
+                                                    local latchPoint = torso:FindFirstChild("LatchPoint2.R") or children[1]
+                                                    if latchPoint then
+                                                        pcall(function() 
+                                                            attackRemote:FireServer(targetHumanoid, targetHitbox, 2, latchPoint) 
+                                                        end)
+                                                    end
+                                                end
+                                            end
+                                        end
                                     end
                                 end
                             end
@@ -766,44 +994,58 @@ end)
 --======================================================================
 task.spawn(function()
     while true do
-        if killAuraActive and attackNPCRemote and npcsFolder then
-            local myCharacter = charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")) or LocalPlayer.Character
-            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        if killAuraActive then
+            if attackNPCRemote then
+                if npcsFolder then
+                    local myCharacter = LocalPlayer.Character
+                    if charactersFolder then
+                        myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or LocalPlayer.Character
+                    end
+                    local myRoot = nil
+                    if myCharacter then
+                        myRoot = myCharacter:FindFirstChild("HumanoidRootPart")
+                    end
 
-            if myRoot then
-                for _, folder in pairs(npcsFolder:GetChildren()) do
-                    if folder:IsA("Folder") or folder:IsA("Model") then
-                        
-                        if folder.Name == "FlatHeadedPeccary61" then
-                            for _, deepNpc in pairs(folder:GetChildren()) do
-                                if deepNpc:IsA("Model") and peccaryTargets[deepNpc.Name] then 
-                                    local bodyPart = deepNpc:FindFirstChild("Body_m")
-                                    if bodyPart then
-                                        local distance = (myRoot.Position - bodyPart.Position).Magnitude
-                                        if distance <= maxDetectDistance then
-                                            pcall(function() attackNPCRemote:FireServer(bodyPart, 1) end)
+                    if myRoot then
+                        for _, folder in pairs(npcsFolder:GetChildren()) do
+                            if folder:IsA("Folder") or folder:IsA("Model") then
+                                if folder.Name == "FlatHeadedPeccary61" then
+                                    for _, deepNpc in pairs(folder:GetChildren()) do
+                                        if deepNpc:IsA("Model") then
+                                            if peccaryTargets[deepNpc.Name] then 
+                                                local bodyPart = deepNpc:FindFirstChild("Body_m")
+                                                if bodyPart then
+                                                    local distance = (myRoot.Position - bodyPart.Position).Magnitude
+                                                    if distance <= maxDetectDistance then
+                                                        pcall(function() 
+                                                            attackNPCRemote:FireServer(bodyPart, 1) 
+                                                        end)
+                                                    end
+                                                end
+                                            end
                                         end
                                     end
-                                end
-                            end
-                        else
-                            local targetsList = folder:GetChildren()
-                            if folder:IsA("Model") then
-                                targetsList = {folder}
-                            end
-                            for _, npcModel in pairs(targetsList) do
-                                if npcModel:IsA("Model") then
-                                    local bodyPart = npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChildOfClass("MeshPart") or npcModel:FindFirstChildOfClass("Part")
-                                    if bodyPart then
-                                        local distance = (myRoot.Position - bodyPart.Position).Magnitude
-                                        if distance <= maxDetectDistance then
-                                            pcall(function() attackNPCRemote:FireServer(bodyPart, 1) end)
+                                else
+                                    local targetsList = folder:GetChildren()
+                                    if folder:IsA("Model") then
+                                        targetsList = {folder}
+                                    end
+                                    for _, npcModel in pairs(targetsList) do
+                                        if npcModel:IsA("Model") then
+                                            local bodyPart = npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChildOfClass("MeshPart") or npcModel:FindFirstChildOfClass("Part")
+                                            if bodyPart then
+                                                local distance = (myRoot.Position - bodyPart.Position).Magnitude
+                                                if distance <= maxDetectDistance then
+                                                    pcall(function() 
+                                                        attackNPCRemote:FireServer(bodyPart, 1) 
+                                                    end)
+                                                end
+                                            end
                                         end
                                     end
                                 end
                             end
                         end
-
                     end
                 end
             end
@@ -817,24 +1059,34 @@ end)
 --======================================================================
 task.spawn(function()
     while true do
-        local statsGui = PlayerGui:FindFirstChild("Stats")
-        if statsGui and statsGui:FindFirstChild("Frame") then
-            local minigameFrame = statsGui.Frame:FindFirstChild("Minigame")
-            if minigameFrame and minigameFrame.Visible == true then
-                pcall(function()
-                    local movingRing = minigameFrame:FindFirstChild("Ring") or minigameFrame:FindFirstChild("Indicator") or minigameFrame:FindFirstChildOfClass("ImageLabel")
-                    local targetRing = minigameFrame:FindFirstChild("Target") or minigameFrame:FindFirstChild("Zone") or minigameFrame:FindFirstChild("LeafRing")
-                    if movingRing and targetRing then
-                        local currentScale = movingRing.Size.X.Scale
-                        local targetScale = targetRing.Size.X.Scale
-                        if math.abs(currentScale - targetScale) <= 0.05 then
-                            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-                            task.wait(0.01)
-                            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-                            task.wait(0.3)
+        if PlayerGui then
+            local statsGui = PlayerGui:FindFirstChild("Stats")
+            local minigameFrame = nil
+            if statsGui then
+                if statsGui:FindFirstChild("Frame") then
+                    minigameFrame = statsGui.Frame:FindFirstChild("Minigame")
+                end
+            end
+            if minigameFrame then
+                if minigameFrame.Visible == true then
+                    pcall(function()
+                        local movingRing = minigameFrame:FindFirstChild("Ring") or minigameFrame:FindFirstChild("Indicator") or minigameFrame:FindFirstChildOfClass("ImageLabel")
+                        local targetRing = minigameFrame:FindFirstChild("Target") or minigameFrame:FindFirstChild("Zone") or minigameFrame:FindFirstChild("LeafRing")
+                        if movingRing then
+                            if targetRing then
+                                local currentScale = movingRing.Size.X.Scale
+                                local targetScale = targetRing.Size.X.Scale
+                                local diff = math.abs(currentScale - targetScale)
+                                if diff <= 0.05 then
+                                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                                    task.wait(0.01)
+                                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+                                    task.wait(0.3)
+                                end
+                            end
                         end
-                    end
-                end)
+                    end)
+                end
             end
         end
         RunService.Heartbeat:Wait()
@@ -842,4 +1094,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK PREMIUM CORE LOADED SUCCESSFUL 🦋")
+print("🦋 LIZLUK COMPILER SAFE PRESET LOADED SUCCESSFUL 🦋")
