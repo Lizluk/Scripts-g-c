@@ -260,12 +260,12 @@ end)
 local function updateUtilityVisuals()
     if autoPounceActive then
         PounceBtn.BackgroundColor3 = Color3.fromRGB(130, 25, 130)
-        PounceBtn.Text = "AUTO POUNCE: ON [F]" -- Đổi text hiển thị sang [F]
+        PounceBtn.Text = "AUTO POUNCE: ON [F]" 
         PounceBtn.TextColor3 = Color3.fromRGB(255, 180, 255)
         PounceStroke.Color = Color3.fromRGB(200, 50, 200)
     else
         PounceBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        PounceBtn.Text = "AUTO POUNCE: OFF [F]" -- Đổi text hiển thị sang [F]
+        PounceBtn.Text = "AUTO POUNCE: OFF [F]" 
         PounceBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
         PounceStroke.Color = Color3.fromRGB(50, 50, 50)
     end
@@ -297,7 +297,7 @@ end
 updateUtilityVisuals()
 
 --======================================================================
--- ĐIỀU KHIỂN & SỰ KIỆN TỪ NGƯỜI DÙNG (THAY ĐỔI PHÍM TẮT TẠI ĐÂY)
+-- ĐIỀU KHIỂN & SỰ KIỆN TỪ NGƯỜI DÙNG
 --======================================================================
 PounceBtn.MouseButton1Click:Connect(function() autoPounceActive = not autoPounceActive updateUtilityVisuals() end)
 DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
@@ -330,11 +330,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if UserInputService:GetFocusedTextBox() then return end
     if gameProcessed then return end
     
-    -- Đổi đóng/mở Menu từ F -> P
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
-    -- Đổi kích hoạt Pounce từ R -> F
     if input.KeyCode == Enum.KeyCode.F then autoPounceActive = not autoPounceActive updateUtilityVisuals() end
-    
     if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.K then autoEatActive = not autoEatActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.Q then
@@ -366,7 +363,7 @@ local charactersFolder = workspace:WaitForChild("Characters", 5)
 local npcsFolder = workspace:WaitForChild("NPCs", 5)
 
 --======================================================================
--- 2. HỆ THỐNG ESP QUÉT TRONG CHARACTERS FOLDER
+-- 2. HỆ THỐNG ESP QUÉT TRONG CHARACTERS FOLDER (PLAYER ESP)
 --======================================================================
 local function applyESP(character, playerName)
     if not character then return end
@@ -439,6 +436,80 @@ local function trackCharacters()
     end
 end
 task.spawn(trackCharacters)
+
+------------------------------------------------------------------------
+-- PHẦN MỚI THÊM: HỆ THỐNG ESP CHO CÁC MỤC NPC ĐƯỢC CHỈ ĐỊNH
+------------------------------------------------------------------------
+local function applyNPCEsp(npcModel, typeName)
+    if not npcModel then return end
+    
+    -- Tìm điểm hiển thị ESP phù hợp trên Model của NPC
+    local targetPart = npcModel:FindFirstChild("Head") 
+        or npcModel:FindFirstChild("Body_m") 
+        or npcModel:FindFirstChildOfClass("MeshPart") 
+        or npcModel:FindFirstChildOfClass("Part")
+        
+    if not targetPart then return end
+    if targetPart:FindFirstChild("NpcESP") then targetPart.NpcESP:Destroy() end
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "NpcESP"
+    bb.Size = UDim2.new(0, 180, 0, 40)
+    bb.AlwaysOnTop = true
+    bb.ExtentsOffset = Vector3.new(0, 2, 0)
+    bb.Adornee = targetPart
+    bb.Parent = targetPart
+
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.TextStrokeTransparency = 0
+    txt.Font = Enum.Font.SourceSansBold
+    txt.TextSize = 12
+    txt.TextColor3 = Color3.fromRGB(0, 220, 255) -- Màu xanh Neon đặc trưng cho NPC
+    txt.Parent = bb
+
+    local connection
+    connection = RunService.RenderStepped:Connect(function()
+        local myCharacter = charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")) or LocalPlayer.Character
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        
+        if not npcModel:IsDescendantOf(workspace) or not targetPart:IsDescendantOf(npcModel) or not myRoot then
+            connection:Disconnect()
+            bb:Destroy()
+            return
+        end
+
+        local distance = math.floor((myRoot.Position - targetPart.Position).Magnitude)
+        txt.Text = string.format("👾 [%s]\n%s (%dm)", typeName, npcModel.Name, distance)
+    end)
+end
+
+local function startNpcEspTracking()
+    -- Cấu hình danh sách các folder cần quét theo yêu cầu
+    local npcPaths = {
+        {Path = workspace:WaitForChild("NPCs", 5):WaitForChild("Bird", 5), Name = "Bird"},
+        {Path = workspace:WaitForChild("NPCs", 5):WaitForChild("Small", 5), Name = "Small"},
+        {Path = workspace:WaitForChild("NpcBarriers", 5), Name = "Barrier"}
+    }
+
+    for _, config in pairs(npcPaths) do
+        if config.Path then
+            -- Quét các NPC đang có sẵn
+            for _, child in pairs(config.Path:GetChildren()) do
+                if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
+                    applyNPCEsp(child, config.Name)
+                end
+            end
+            -- Quét khi có NPC mới xuất hiện (Respawn)
+            config.Path.ChildAdded:Connect(function(child)
+                task.wait(0.2)
+                applyNPCEsp(child, config.Name)
+            end)
+        end
+    end
+end
+task.spawn(startNpcEspTracking)
 
 --======================================================================
 -- 3. XÂY DỰNG DANH SÁCH TARGET TRÊN SCROLLING MENU
@@ -729,4 +800,4 @@ task.spawn(function()
     end
 end)
 
-print("⚡ Cập nhật phím tắt thành công! Nhấn 'P' để đóng/mở Menu. Nhấn 'F' để Bật/Tắt Auto Pounce.")
+print("⚡ Tích hợp NPC ESP thành công! Giao diện Lizluk hoạt động: [P] Đóng/Mở | [F] Auto Pounce")
