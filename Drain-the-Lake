@@ -1,0 +1,256 @@
+-- Khởi tạo dịch vụ
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+
+-- Biến lưu trạng thái Auto
+local autoEnabled = false
+
+-- Tạo Giao diện (GUI)
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local StatusLabel = Instance.new("TextLabel")
+
+-- Row 1: VDT_Bucket.Used
+local Row1_Title = Instance.new("TextLabel")
+local InputBox1 = Instance.new("TextBox")
+local SendButton1 = Instance.new("TextButton")
+
+-- Row 2: VDT_Bucket.Poured
+local Row2_Title = Instance.new("TextLabel")
+local InputBox2 = Instance.new("TextBox")
+local SendButton2 = Instance.new("TextButton")
+
+-- Row 3: VDT_Tokens.Take
+local Row3_Title = Instance.new("TextLabel")
+local InputBox3 = Instance.new("TextBox")
+local SendButton3 = Instance.new("TextButton")
+
+-- Tối ưu hóa nạp GUI trên mọi Executor
+ScreenGui.Name = "VerdantControlSystem"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
+
+-- Cấu hình Menu chính (Chiều cao 360)
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Position = UDim2.new(0.5, -150, 0.4, -180)
+MainFrame.Size = UDim2.new(0, 300, 0, 370)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Title.Text = "Verdant Manager [G: Ẩn | H: Fire Cả 3 | J: Auto]"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 12
+Title.Font = Enum.Font.SourceSansBold
+Title.BorderSizePixel = 0
+
+-- Nhãn trạng thái Auto
+StatusLabel.Parent = MainFrame
+StatusLabel.Position = UDim2.new(0, 0, 0.1, 0)
+StatusLabel.Size = UDim2.new(1, 0, 0, 20)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "AUTO STATUS: OFF"
+StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+StatusLabel.TextSize = 13
+StatusLabel.Font = Enum.Font.SourceSansBold
+
+----------------------------------------------------------------
+-- CẤU HÌNH HÀNG 1 (VDT_Bucket.Used)
+----------------------------------------------------------------
+Row1_Title.Parent = MainFrame
+Row1_Title.Position = UDim2.new(0.05, 0, 0.17, 0)
+Row1_Title.Size = UDim2.new(0.9, 0, 0, 20)
+Row1_Title.BackgroundTransparency = 1
+Row1_Title.Text = "1. Bucket Used Remote"
+Row1_Title.TextColor3 = Color3.fromRGB(200, 200, 200)
+Row1_Title.TextXAlignment = Enum.TextXAlignment.Left
+Row1_Title.TextSize = 13
+
+InputBox1.Parent = MainFrame
+InputBox1.Position = UDim2.new(0.05, 0, 0.23, 0)
+InputBox1.Size = UDim2.new(0.4, 0, 0, 30)
+InputBox1.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+InputBox1.Text = "1" -- Đặt sẵn giá trị mặc định là 1
+InputBox1.PlaceholderText = "Số lần..."
+InputBox1.TextColor3 = Color3.fromRGB(255, 255, 255)
+InputBox1.TextSize = 14
+InputBox1.BorderSizePixel = 0
+
+SendButton1.Parent = MainFrame
+SendButton1.Position = UDim2.new(0.5, 0, 0.23, 0)
+SendButton1.Size = UDim2.new(0.45, 0, 0, 30)
+SendButton1.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+SendButton1.Text = "FIRE USED"
+SendButton1.TextColor3 = Color3.fromRGB(255, 255, 255)
+SendButton1.TextSize = 13
+SendButton1.Font = Enum.Font.SourceSansBold
+SendButton1.BorderSizePixel = 0
+
+----------------------------------------------------------------
+-- CẤU HÌNH HÀNG 2 (VDT_Bucket.Poured)
+----------------------------------------------------------------
+Row2_Title.Parent = MainFrame
+Row2_Title.Position = UDim2.new(0.05, 0, 0.37, 0)
+Row2_Title.Size = UDim2.new(0.9, 0, 0, 20)
+Row2_Title.BackgroundTransparency = 1
+Row2_Title.Text = "2. Bucket Poured Remote"
+Row2_Title.TextColor3 = Color3.fromRGB(200, 200, 200)
+Row2_Title.TextXAlignment = Enum.TextXAlignment.Left
+Row2_Title.TextSize = 13
+
+InputBox2.Parent = MainFrame
+InputBox2.Position = UDim2.new(0.05, 0, 0.43, 0)
+InputBox2.Size = UDim2.new(0.4, 0, 0, 30)
+InputBox2.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+InputBox2.Text = "1"
+InputBox2.PlaceholderText = "Số lần..."
+InputBox2.TextColor3 = Color3.fromRGB(255, 255, 255)
+InputBox2.TextSize = 14
+InputBox2.BorderSizePixel = 0
+
+SendButton2.Parent = MainFrame
+SendButton2.Position = UDim2.new(0.5, 0, 0.43, 0)
+SendButton2.Size = UDim2.new(0.45, 0, 0, 30)
+SendButton2.BackgroundColor3 = Color3.fromRGB(180, 80, 0)
+SendButton2.Text = "FIRE POURED"
+SendButton2.TextColor3 = Color3.fromRGB(255, 255, 255)
+SendButton2.TextSize = 13
+SendButton2.Font = Enum.Font.SourceSansBold
+SendButton2.BorderSizePixel = 0
+
+----------------------------------------------------------------
+-- CẤU HÌNH HÀNG 3 (VDT_Tokens.Take)
+----------------------------------------------------------------
+Row3_Title.Parent = MainFrame
+Row3_Title.Position = UDim2.new(0.05, 0, 0.57, 0)
+Row3_Title.Size = UDim2.new(0.9, 0, 0, 20)
+Row3_Title.BackgroundTransparency = 1
+Row3_Title.Text = "3. Tokens Take Remote"
+Row3_Title.TextColor3 = Color3.fromRGB(200, 200, 200)
+Row3_Title.TextXAlignment = Enum.TextXAlignment.Left
+Row3_Title.TextSize = 13
+
+InputBox3.Parent = MainFrame
+InputBox3.Position = UDim2.new(0.05, 0, 0.63, 0)
+InputBox3.Size = UDim2.new(0.4, 0, 0, 30)
+InputBox3.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+InputBox3.Text = "1"
+InputBox3.PlaceholderText = "Số lần..."
+InputBox3.TextColor3 = Color3.fromRGB(255, 255, 255)
+InputBox3.TextSize = 14
+InputBox3.BorderSizePixel = 0
+
+SendButton3.Parent = MainFrame
+SendButton3.Position = UDim2.new(0.5, 0, 0.63, 0)
+SendButton3.Size = UDim2.new(0.45, 0, 0, 30)
+SendButton3.BackgroundColor3 = Color3.fromRGB(140, 20, 180)
+SendButton3.Text = "FIRE TOKENS"
+SendButton3.TextColor3 = Color3.fromRGB(255, 255, 255)
+SendButton3.TextSize = 13
+SendButton3.Font = Enum.Font.SourceSansBold
+SendButton3.BorderSizePixel = 0
+
+-- Chú thích dưới chân GUI
+local Footer = Instance.new("TextLabel")
+Footer.Parent = MainFrame
+Footer.Position = UDim2.new(0, 0, 0.82, 0)
+Footer.Size = UDim2.new(1, 0, 0, 40)
+Footer.BackgroundTransparency = 1
+Footer.Text = "[G] Ẩn/Hiện Menu | [H] Fire Cả 3 Theo Số Ô\n[J] Bật/Tắt Auto Vòng Lặp Siêu Tốc"
+Footer.TextColor3 = Color3.fromRGB(160, 160, 160)
+Footer.TextSize = 11
+
+----------------------------------------------------------------
+-- HÀM TÌM KIẾM OBJECT VÀ LOGIC KÍCH HOẠT
+----------------------------------------------------------------
+local function getPrompt()
+    return workspace:FindFirstChild("Scripted") 
+        and workspace.Scripted:FindFirstChild("CheckpointParts") 
+        and workspace.Scripted.CheckpointParts:FindFirstChild("1")
+        and workspace.Scripted.CheckpointParts["1"]:FindFirstChild("Drain")
+        and workspace.Scripted.CheckpointParts["1"].Drain:FindFirstChild("Scripted")
+        and workspace.Scripted.CheckpointParts["1"].Drain.Scripted:FindFirstChild("ProximityPosition")
+        and workspace.Scripted.CheckpointParts["1"].Drain.Scripted.ProximityPosition:FindFirstChild("ProximityPrompt")
+end
+
+local function fireUsed()
+    local count = tonumber(InputBox1.Text) or 0
+    if count > 0 then
+        local remote = ReplicatedStorage:WaitForChild("VerdantRemotes"):WaitForChild("VDT_Bucket.Used")
+        for i = 1, count do remote:FireServer() end
+    end
+end
+
+local function firePoured()
+    local count = tonumber(InputBox2.Text) or 0
+    if count > 0 then
+        local p = getPrompt()
+        if p then
+            local remote = ReplicatedStorage:WaitForChild("VerdantRemotes"):WaitForChild("VDT_Bucket.Poured")
+            for i = 1, count do remote:FireServer(p) end
+        end
+    end
+end
+
+local function fireTokens()
+    local count = tonumber(InputBox3.Text) or 0
+    if count > 0 then
+        local p = getPrompt()
+        if p then
+            local remote = ReplicatedStorage:WaitForChild("VerdantRemotes"):WaitForChild("VDT_Tokens.Take")
+            for i = 1, count do remote:FireServer(p) end
+        end
+    end
+end
+
+local function fireAll()
+    task.spawn(fireUsed)
+    task.spawn(firePoured)
+    task.spawn(fireTokens)
+end
+
+-- Gán sự kiện nút bấm trên giao diện
+SendButton1.MouseButton1Click:Connect(fireUsed)
+SendButton2.MouseButton1Click:Connect(firePoured)
+SendButton3.MouseButton1Click:Connect(fireTokens)
+
+----------------------------------------------------------------
+-- VÒNG LẶP AUTO SIÊU TỐC (Vừa chạy nhanh vừa nhận số từ ô)
+----------------------------------------------------------------
+task.spawn(function()
+    while true do
+        if autoEnabled then
+            -- Chạy đồng thời cả 3 hàm theo đúng số lượng trong ô nhập
+            fireAll() 
+            -- Độ trễ tối thiểu để engine nhận lệnh, thay đổi nếu muốn chậm lại
+            task.wait(0.01) 
+        else
+            task.wait(0.1)
+        end
+    end
+end)
+
+----------------------------------------------------------------
+-- LẮNG NGHE PHÍM TẮT (KEYBINDS)
+----------------------------------------------------------------
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end 
+    
+    if input.KeyCode == Enum.KeyCode.G then
+        MainFrame.Visible = not MainFrame.Visible
+    elseif input.KeyCode == Enum.KeyCode.H then
+        fireAll()
+    elseif input.KeyCode == Enum.KeyCode.J then
+        autoEnabled = not autoEnabled
+        StatusLabel.Text = autoEnabled and "AUTO STATUS: ON" or "AUTO STATUS: OFF"
+        StatusLabel.TextColor3 = autoEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
+    end
+end)
