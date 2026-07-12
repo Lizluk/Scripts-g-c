@@ -27,9 +27,9 @@ local autoDrinkActive = false
 local npcEspActive = true 
 
 local closestPlayerName = "" 
-local maxDetectDistance = 150 
+local maxDetectDistance = 60 
 
-local attackCooldown = 1.4
+local attackCooldown = 1
 local pounceCooldown = 2.0
 local npcAttackCooldown = 0.5
 
