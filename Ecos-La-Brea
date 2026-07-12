@@ -320,7 +320,7 @@ end
 task.spawn(trackCharacters)
 
 ----------------------------------------------------------------
--- 3. VÒNG LẶP CHÍNH QUẢN LÝ GIAO DIỆN, KHHOẢNG CÁCH & KHÓA STATS
+-- 3. VÒNG LẶP CHÍNH KHÓA CHỈ SỐ TRÊN CHARACTER MODEL & QUẢN LÝ KHOẢNG CÁCH
 ----------------------------------------------------------------
 
 local buttons = {}
@@ -363,14 +363,25 @@ buildButtons()
 
 task.spawn(function()
     while true do
-        local myCharacter = charactersFolder and charactersFolder:FindFirstChild("Lubakixa") or LocalPlayer.Character
+        -- SỬA ĐỔI CHÍNH XÁC: Tìm nhân vật của bạn trong workspace.Characters (Ví dụ: Lizliz7770)
+        local myCharacter = nil
+        if charactersFolder then
+            myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")
+        end
+        if not myCharacter then
+            myCharacter = LocalPlayer.Character
+        end
+        
         local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
         
-        pcall(function()
-            if LocalPlayer:GetAttribute("Stamina") then LocalPlayer:SetAttribute("Stamina", 80) end
-            if LocalPlayer:GetAttribute("Thirst") then LocalPlayer:SetAttribute("Thirst", 80) end
-            if LocalPlayer:GetAttribute("Hunger") then LocalPlayer:SetAttribute("Hunger", 80) end
-        end)
+        -- Khóa Stamina, Thirst, Hunger ngay tại Character Model Attributes theo ảnh mẫu của bạn
+        if myCharacter then
+            pcall(function()
+                if myCharacter:GetAttribute("Stamina") then myCharacter:SetAttribute("Stamina", 100) end
+                if myCharacter:GetAttribute("Thirst") then myCharacter:SetAttribute("Thirst", 100) end
+                if myCharacter:GetAttribute("Hunger") then myCharacter:SetAttribute("Hunger", 100) end
+            end)
+        end
 
         local minDistance = math.huge
         local tempClosest = ""
@@ -451,7 +462,6 @@ task.spawn(function()
                     
                     if targetHumanoid and targetHitbox then
                         pcall(function()
-                            -- Cập nhật đồng bộ theo gói Spy mới (Attack với 3 tham số)
                             attackRemote:FireServer(targetHumanoid, targetHitbox, 1)
                         end)
                     end
@@ -463,7 +473,7 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- 5. VÒNG LẶP CHO LỆNH SKILL CẮN/VỒ CỦA CÁC THÚ ĂN THỊT (CODE 2)
+-- 5. VÒNG LẶP SKILL CẮN/VỒ CỦA THÚ ĂN THỊT (CODE 2)
 ----------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -475,16 +485,14 @@ task.spawn(function()
                     local targetHitbox = targetCharacter and targetCharacter:FindFirstChild("BodyHitbox")
                     
                     if targetHumanoid and targetHitbox then
-                        -- Tự động quét tìm điểm bám (Hỗ trợ cả 2 dòng thú ăn thịt khác nhau)
                         local rootPart = targetCharacter:FindFirstChild("RootPart")
                         local torso = rootPart and rootPart:FindFirstChild("Torso")
                         
                         local latchPoint = nil
                         if torso then
-                            -- Kiểm tra dòng thú cũ (LatchPoint2.R) hoặc dòng thú mới (GrapplePoint2 nằm sâu bên trong Waist -> Hips)
                             latchPoint = torso:FindFirstChild("LatchPoint2.R") 
                                 or (torso:FindFirstChild("Waist") and torso.Waist:FindFirstChild("Hips") and torso.Waist.Hips:FindFirstChild("GrapplePoint2"))
-                                or torso:GetChildren()[1] -- Điểm dự phòng nếu không tìm thấy cụ thể
+                                or torso:GetChildren()[1]
                         end
                         
                         if latchPoint then
@@ -506,7 +514,12 @@ end)
 task.spawn(function()
     while true do
         if killAuraActive and attackNPCRemote and npcsFolder then
-            local myCharacter = charactersFolder and charactersFolder:FindFirstChild("Lubakixa") or LocalPlayer.Character
+            local myCharacter = nil
+            if charactersFolder then
+                myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")
+            end
+            if not myCharacter then myCharacter = LocalPlayer.Character end
+            
             local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
             if myRoot then
@@ -533,5 +546,57 @@ task.spawn(function()
             end
         end
         task.wait(npcAttackCooldown)
+    end
+end)
+
+----------------------------------------------------------------
+-- 7. AUTO WIN MINIGAME - CĂN KHỚP VÒNG VÀNG VÀ VÒNG LÁ (SPACE)
+----------------------------------------------------------------
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+task.spawn(function()
+    while true do
+        local statsGui = PlayerGui:FindFirstChild("Stats")
+        if statsGui and statsGui:FindFirstChild("Frame") then
+            local minigameFrame = statsGui.Frame:FindFirstChild("Minigame")
+            
+            if minigameFrame and minigameFrame.Visible == true then
+                pcall(function()
+                    local movingRing = minigameFrame:FindFirstChild("Ring") 
+                        or minigameFrame:FindFirstChild("Indicator") 
+                        or minigameFrame:FindFirstChildOfClass("ImageLabel")
+                    
+                    local targetRing = minigameFrame:FindFirstChild("Target") 
+                        or minigameFrame:FindFirstChild("Zone") 
+                        or minigameFrame:FindFirstChild("LeafRing")
+                    
+                    if movingRing and targetRing then
+                        local currentScale = movingRing.Size.X.Scale
+                        local targetScale = targetRing.Size.X.Scale
+                        
+                        if math.abs(currentScale - targetScale) <= 0.05 then
+                            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                            task.wait(0.01)
+                            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+                            task.wait(0.3)
+                        end
+                    else
+                        for _, obj in pairs(minigameFrame:GetChildren()) do
+                            if obj:IsA("ImageLabel") and obj.Name ~= "Background" then
+                                local sizeX = obj.Size.X.Scale
+                                if sizeX >= 0.35 and sizeX <= 0.48 then
+                                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                                    task.wait(0.01)
+                                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+                                    task.wait(0.3)
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end)
+            end
+        end
+        RunService.Heartbeat:Wait()
     end
 end)
