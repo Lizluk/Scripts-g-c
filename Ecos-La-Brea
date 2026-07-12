@@ -1,4 +1,4 @@
---// LIZLUK ALL-IN-ONE PREMIUM MENU (INTEGRATED SYSTEM)
+--// LIZLUK ALL-IN-ONE PREMIUM MENU (UPDATED INTEGRATION)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -22,13 +22,17 @@ local targets = {}
 local killAuraActive = true 
 local autoPounceActive = false 
 local autoDrinkActive = false 
-local autoEatActive = false 
+local npcEspActive = true -- Trạng thái bật/tắt NPC ESP mặc định
+
 local closestPlayerName = "" 
 local maxDetectDistance = 150
 
 local attackCooldown = 1.4
 local pounceCooldown = 2.0
 local npcAttackCooldown = 0.5
+
+-- Danh sách lưu trữ các đối tượng BillboardGui của NPC để dễ quản lý bật/tắt
+local activeNpcEsps = {}
 
 --======================================================================
 -- 1. THIẾT KẾ GIAO DIỆN HỢP NHẤT (LIZLUK WHITE AESTHETIC STYLE)
@@ -110,7 +114,7 @@ end
 
 local PounceBtn, PounceStroke = createUtilityButton(1, "")
 local DrinkBtn, DrinkStroke = createUtilityButton(2, "")
-local EatBtn, EatStroke = createUtilityButton(3, "")
+local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "") -- THAY THẾ AUTO EAT THÀNH NPC ESP BUTTON
 
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -20, 0, 35)
@@ -282,26 +286,32 @@ local function updateUtilityVisuals()
         DrinkStroke.Color = Color3.fromRGB(50, 50, 50)
     end
 
-    if autoEatActive then
-        EatBtn.BackgroundColor3 = Color3.fromRGB(150, 80, 20)
-        EatBtn.Text = "AUTO EAT: ON [K]"
-        EatBtn.TextColor3 = Color3.fromRGB(255, 200, 120)
-        EatStroke.Color = Color3.fromRGB(255, 130, 0)
+    if npcEspActive then
+        NpcEspBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 150)
+        NpcEspBtn.Text = "NPC ESP: ENABLED [K]"
+        NpcEspBtn.TextColor3 = Color3.fromRGB(150, 255, 255)
+        NpcEspStroke.Color = Color3.fromRGB(0, 230, 255)
     else
-        EatBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        EatBtn.Text = "AUTO EAT: OFF [K]"
-        EatBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-        EatStroke.Color = Color3.fromRGB(50, 50, 50)
+        NpcEspBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        NpcEspBtn.Text = "NPC ESP: DISABLED [K]"
+        NpcEspBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        NpcEspStroke.Color = Color3.fromRGB(50, 50, 50)
+    end
+    
+    -- Cập nhật trực quan ẩn/hiện các ESP thực tế trên màn hình
+    for _, gui in pairs(activeNpcEsps) do
+        if gui and gui:IsA("BillboardGui") then
+            gui.Enabled = npcEspActive
+        end
     end
 end
-updateUtilityVisuals()
 
 --======================================================================
 -- ĐIỀU KHIỂN & SỰ KIỆN TỪ NGƯỜI DÙNG
 --======================================================================
 PounceBtn.MouseButton1Click:Connect(function() autoPounceActive = not autoPounceActive updateUtilityVisuals() end)
 DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
-EatBtn.MouseButton1Click:Connect(function() autoEatActive = not autoEatActive updateUtilityVisuals() end)
+NpcEspBtn.MouseButton1Click:Connect(function() npcEspActive = not npcEspActive updateUtilityVisuals() end)
 
 ToggleLockBtn.MouseButton1Click:Connect(function()
     isLocking = not isLocking
@@ -333,7 +343,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
     if input.KeyCode == Enum.KeyCode.F then autoPounceActive = not autoPounceActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
-    if input.KeyCode == Enum.KeyCode.K then autoEatActive = not autoEatActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.K then npcEspActive = not npcEspActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
         if killAuraActive then
@@ -357,7 +367,6 @@ local attackNPCRemote = eventsFolder and eventsFolder:WaitForChild("AttackNPC", 
 
 local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 3)
 local drinkRemote = remotesFolder and remotesFolder:WaitForChild("DrinkRemote", 3)
-local foodRemote = remotesFolder and remotesFolder:WaitForChild("Food", 3)
 local interactionsFolder = workspace:WaitForChild("Interactions", 3)
 local charactersFolder = workspace:WaitForChild("Characters", 5)
 local npcsFolder = workspace:WaitForChild("NPCs", 5)
@@ -438,27 +447,32 @@ end
 task.spawn(trackCharacters)
 
 ------------------------------------------------------------------------
--- PHẦN MỚI THÊM: HỆ THỐNG ESP CHO CÁC MỤC NPC ĐƯỢC CHỈ ĐỊNH
+-- PHẦN CẬP NHẬT CHUẨN: HỆ THỐNG AN TOÀN QUÉT NPC ESP (KHÔNG LO BỊ KẸT LOADING)
 ------------------------------------------------------------------------
 local function applyNPCEsp(npcModel, typeName)
     if not npcModel then return end
     
-    -- Tìm điểm hiển thị ESP phù hợp trên Model của NPC
+    -- Tránh trùng lặp ESP trên cùng 1 đối tượng
+    if npcModel:FindFirstChild("NpcESP_Holder") then return end
+    
     local targetPart = npcModel:FindFirstChild("Head") 
         or npcModel:FindFirstChild("Body_m") 
         or npcModel:FindFirstChildOfClass("MeshPart") 
         or npcModel:FindFirstChildOfClass("Part")
         
     if not targetPart then return end
-    if targetPart:FindFirstChild("NpcESP") then targetPart.NpcESP:Destroy() end
 
     local bb = Instance.new("BillboardGui")
-    bb.Name = "NpcESP"
+    bb.Name = "NpcESP_Holder"
     bb.Size = UDim2.new(0, 180, 0, 40)
     bb.AlwaysOnTop = true
     bb.ExtentsOffset = Vector3.new(0, 2, 0)
     bb.Adornee = targetPart
+    bb.Enabled = npcEspActive -- Đồng bộ trạng thái UI lúc tạo ra
     bb.Parent = targetPart
+    
+    -- Lưu vào danh sách quản lý chung
+    table.insert(activeNpcEsps, bb)
 
     local txt = Instance.new("TextLabel")
     txt.Size = UDim2.new(1, 0, 1, 0)
@@ -466,7 +480,7 @@ local function applyNPCEsp(npcModel, typeName)
     txt.TextStrokeTransparency = 0
     txt.Font = Enum.Font.SourceSansBold
     txt.TextSize = 12
-    txt.TextColor3 = Color3.fromRGB(0, 220, 255) -- Màu xanh Neon đặc trưng cho NPC
+    txt.TextColor3 = Color3.fromRGB(0, 220, 255) -- Màu xanh Neon
     txt.Parent = bb
 
     local connection
@@ -476,6 +490,9 @@ local function applyNPCEsp(npcModel, typeName)
         
         if not npcModel:IsDescendantOf(workspace) or not targetPart:IsDescendantOf(npcModel) or not myRoot then
             connection:Disconnect()
+            -- Dọn dẹp bảng quản lý khi NPC chết/biến mất
+            local idx = table.find(activeNpcEsps, bb)
+            if idx then table.remove(activeNpcEsps, idx) end
             bb:Destroy()
             return
         end
@@ -485,31 +502,63 @@ local function applyNPCEsp(npcModel, typeName)
     end)
 end
 
-local function startNpcEspTracking()
-    -- Cấu hình danh sách các folder cần quét theo yêu cầu
-    local npcPaths = {
-        {Path = workspace:WaitForChild("NPCs", 5):WaitForChild("Bird", 5), Name = "Bird"},
-        {Path = workspace:WaitForChild("NPCs", 5):WaitForChild("Small", 5), Name = "Small"},
-        {Path = workspace:WaitForChild("NpcBarriers", 5), Name = "Barrier"}
-    }
-
-    for _, config in pairs(npcPaths) do
-        if config.Path then
-            -- Quét các NPC đang có sẵn
-            for _, child in pairs(config.Path:GetChildren()) do
-                if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
-                    applyNPCEsp(child, config.Name)
-                end
+-- Cơ chế quét lặp an toàn, không lo thư mục chưa kịp load
+local function scanNpcFolders()
+    -- 1. Kiểm tra mục NPCs con bên trong Workspace
+    local mainNpcs = workspace:FindFirstChild("NPCs")
+    if mainNpcs then
+        local birdFolder = mainNpcs:FindFirstChild("Bird")
+        if birdFolder then
+            for _, c in pairs(birdFolder:GetChildren()) do
+                applyNPCEsp(c, "Bird")
             end
-            -- Quét khi có NPC mới xuất hiện (Respawn)
-            config.Path.ChildAdded:Connect(function(child)
-                task.wait(0.2)
-                applyNPCEsp(child, config.Name)
-            end)
+        end
+        local smallFolder = mainNpcs:FindFirstChild("Small")
+        if smallFolder then
+            for _, c in pairs(smallFolder:GetChildren()) do
+                applyNPCEsp(c, "Small")
+            end
+        end
+    end
+    
+    -- 2. Kiểm tra mục NpcBarriers trực tiếp bên ngoài Workspace
+    local barrierFolder = workspace:FindFirstChild("NpcBarriers")
+    if barrierFolder then
+        for _, c in pairs(barrierFolder:GetChildren()) do
+            applyNPCEsp(c, "Barrier")
         end
     end
 end
-task.spawn(startNpcEspTracking)
+
+-- Vòng lặp liên tục quét lắng nghe các NPC mới xuất hiện mà không bị block script
+task.spawn(function()
+    -- Quét loạt đầu tiên ngay lập tức
+    task.wait(1)
+    scanNpcFolders()
+    
+    -- Kết nối sự kiện ChildAdded linh hoạt để khi quái hồi sinh là bắt được luôn
+    pcall(function()
+        local mainNpcs = workspace:WaitForChild("NPCs", 10)
+        if mainNpcs then
+            local bird = mainNpcs:WaitForChild("Bird", 5)
+            if bird then bird.ChildAdded:Connect(function(c) task.wait(0.1) applyNPCEsp(c, "Bird") end) end
+            
+            local small = mainNpcs:WaitForChild("Small", 5)
+            if small then small.ChildAdded:Connect(function(c) task.wait(0.1) applyNPCEsp(c, "Small") end) end
+        end
+        
+        local barriers = workspace:WaitForChild("NpcBarriers", 10)
+        if barriers then
+            barriers.ChildAdded:Connect(function(c) task.wait(0.1) applyNPCEsp(c, "Barrier") end)
+        end
+    end)
+    
+    -- Vòng lặp dự phòng quét định kỳ (mỗi 5 giây kiểm tra lại một lần bảo đảm không sót)
+    while true do
+        scanNpcFolders()
+        task.wait(5)
+    end
+end)
 
 --======================================================================
 -- 3. XÂY DỰNG DANH SÁCH TARGET TRÊN SCROLLING MENU
@@ -635,13 +684,6 @@ task.spawn(function()
             pcall(function()
                 local lake = interactionsFolder and interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
                 if lake then drinkRemote:FireServer(lake) end
-            end)
-        end
-
-        if autoEatActive and foodRemote then
-            pcall(function()
-                local ribs = interactionsFolder and interactionsFolder:FindFirstChild("Food") and interactionsFolder.Food:FindFirstChild("Ribs")
-                if ribs then foodRemote:FireServer(ribs) end
             end)
         end
 
@@ -800,4 +842,6 @@ task.spawn(function()
     end
 end)
 
-print("⚡ Tích hợp NPC ESP thành công! Giao diện Lizluk hoạt động: [P] Đóng/Mở | [F] Auto Pounce")
+-- Khởi tạo trạng thái màu sắc nút bấm lần đầu tiên
+updateUtilityVisuals()
+print("⚡ Đã cập nhật nút bấm: Thêm NPC ESP [K] | Phím [P] ẩn/hiện menu.")
