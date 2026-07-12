@@ -1,4 +1,4 @@
---// LIZLUK ALL-IN-ONE PREMIUM MENU (UPDATED INTEGRATION WITH DEEP NPC SCAN)
+--// LIZLUK ALL-IN-ONE PREMIUM MENU (SELECTABLE PECCARY KILL INTEGRATION)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -13,12 +13,14 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 --======================================================================
 -- CẤU HÌNH & TRẠNG THÁI KHỞI TẠO
 --======================================================================
-local targetHunger = 80
-local targetThirst = 80
+local targetHunger = 100
+local targetThirst = 100
 local targetStamina = 100
 local isLocking = false 
 
-local targets = {} 
+local targets = {}         -- Lưu trữ Player mục tiêu
+local peccaryTargets = {}  -- CẬP NHẬT: Lưu trữ riêng các con Heo được chọn để giết
+
 local killAuraActive = true 
 local autoPounceActive = false 
 local autoDrinkActive = false 
@@ -27,9 +29,9 @@ local npcEspActive = true
 local closestPlayerName = "" 
 local maxDetectDistance = 150
 
-local attackCooldown = 1.5
+local attackCooldown = 1.4
 local pounceCooldown = 2.0
-local npcAttackCooldown = 1.5
+local npcAttackCooldown = 0.1
 
 local activeNpcEsps = {}
 
@@ -239,6 +241,7 @@ Divider2.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 Divider2.BorderSizePixel = 0
 Divider2.Parent = MainFrame
 
+-- KHU VỰC DANH SÁCH CUỘN CHUNG
 local ScrollingFrame = Instance.new("ScrollingFrame")
 ScrollingFrame.Size = UDim2.new(1, -20, 1, -420)
 ScrollingFrame.Position = UDim2.new(0, 10, 0, 410)
@@ -445,7 +448,7 @@ end
 task.spawn(trackCharacters)
 
 ------------------------------------------------------------------------
--- CẬP NHẬT: HỆ THỐNG AN TOÀN QUÉT NPC ESP (HỖ TRỢ LOÀI MỚI FLATHEADEDPECCARY)
+-- CẬP NHẬT: HỆ THỐNG AN TOÀN QUÉT NPC ESP (PHÂN LOẠI HIỂN THỊ PECCARY MỤC TIÊU)
 ------------------------------------------------------------------------
 local function applyNPCEsp(npcModel, typeName)
     if not npcModel then return end
@@ -492,35 +495,37 @@ local function applyNPCEsp(npcModel, typeName)
         end
 
         local distance = math.floor((myRoot.Position - targetPart.Position).Magnitude)
-        txt.Text = string.format("👾 [%s]\n%s (%dm)", typeName, npcModel.Name, distance)
+        
+        -- Cập nhật trực quan ESP: Nếu con heo này đang được nhắm bắn, đổi màu ESP đỏ rực
+        if typeName == "Peccary" and peccaryTargets[npcModel.Name] then
+            txt.Text = string.format("🐷 [🎯 TÂN CÔNG]\n%s (%dm)", npcModel.Name, distance)
+            txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+        else
+            txt.Text = string.format("👾 [%s]\n%s (%dm)", typeName, npcModel.Name, distance)
+            txt.TextColor3 = (typeName == "Peccary") and Color3.fromRGB(255, 180, 220) or Color3.fromRGB(0, 220, 255)
+        end
     end)
 end
 
 local function scanNpcFolders()
     local mainNpcs = workspace:FindFirstChild("NPCs")
     if mainNpcs then
-        -- 1. Mục Bird
         local birdFolder = mainNpcs:FindFirstChild("Bird")
         if birdFolder then
             for _, c in pairs(birdFolder:GetChildren()) do applyNPCEsp(c, "Bird") end
         end
-        -- 2. Mục Small
         local smallFolder = mainNpcs:FindFirstChild("Small")
         if smallFolder then
             for _, c in pairs(smallFolder:GetChildren()) do applyNPCEsp(c, "Small") end
         end
-        -- 3. Cập nhật: Mục FlatHeadedPeccary61 (Quét sâu các con vật bên trong)
         local peccaryFolder = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
         if peccaryFolder then
             for _, c in pairs(peccaryFolder:GetChildren()) do
-                if c:IsA("Model") or c:IsA("Part") then
-                    applyNPCEsp(c, "Peccary")
-                end
+                if c:IsA("Model") then applyNPCEsp(c, "Peccary") end
             end
         end
     end
     
-    -- 4. Mục NpcBarriers
     local barrierFolder = workspace:FindFirstChild("NpcBarriers")
     if barrierFolder then
         for _, c in pairs(barrierFolder:GetChildren()) do applyNPCEsp(c, "Barrier") end
@@ -540,40 +545,39 @@ task.spawn(function()
             local small = mainNpcs:WaitForChild("Small", 5)
             if small then small.ChildAdded:Connect(function(c) task.wait(0.1) applyNPCEsp(c, "Small") end) end
 
-            -- Lắng nghe sinh quái loài mới
             local peccary = mainNpcs:WaitForChild("FlatHeadedPeccary61", 5)
             if peccary then peccary.ChildAdded:Connect(function(c) task.wait(0.1) applyNPCEsp(c, "Peccary") end) end
-        end
-        
-        local barriers = workspace:WaitForChild("NpcBarriers", 10)
-        if barriers then
-            barriers.ChildAdded:Connect(function(c) task.wait(0.1) applyNPCEsp(c, "Barrier") end)
         end
     end)
     
     while true do
         scanNpcFolders()
-        task.wait(5)
+        task.wait(4)
     end
 end)
 
 --======================================================================
--- 3. XÂY DỰNG DANH SÁCH TARGET TRÊN SCROLLING MENU
+-- 3. CẬP NHẬT: XÂY DỰNG DANH SÁCH CUỘN CHUNG (GỒM PLAYER VÀ 10 CON HEO)
 --======================================================================
-local buttons = {}
-local function buildButtons()
+local playerButtons = {}
+local peccaryButtons = {}
+
+local function updateUIList()
+    -- Xóa toàn bộ nút cũ để render lại sạch sẽ
     for _, child in pairs(ScrollingFrame:GetChildren()) do
         if child:IsA("TextButton") then child:Destroy() end
     end
-    buttons = {}
+    playerButtons = {}
+    peccaryButtons = {}
 
+    -- 1. Thêm các dòng Player vào danh sách
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Name ~= "Lubakixa" then
             local pName = player.Name
             local Btn = Instance.new("TextButton")
-            Btn.Size = UDim2.new(1, 0, 0, 30)
+            Btn.Size = UDim2.new(1, 0, 0, 28)
             Btn.Font = Enum.Font.SourceSansBold
-            Btn.TextSize = 13
+            Btn.TextSize = 12
             Btn.BorderSizePixel = 0
             Btn.Parent = ScrollingFrame
 
@@ -584,43 +588,58 @@ local function buildButtons()
             Btn.MouseButton1Click:Connect(function()
                 targets[pName] = not targets[pName]
             end)
+            playerButtons[pName] = Btn
+        end
+    end
 
-            buttons[pName] = {Button = Btn}
+    -- 2. Thêm 10 con Heo (Peccary) hiện đang có trong workspace vào danh sách
+    local peccaryFolder = workspace:FindFirstChild("NPCs") and workspace.NPCs:FindFirstChild("FlatHeadedPeccary61")
+    if peccaryFolder then
+        for _, pci in pairs(peccaryFolder:GetChildren()) do
+            if pci:IsA("Model") then
+                local npcName = pci.Name
+                local Btn = Instance.new("TextButton")
+                Btn.Size = UDim2.new(1, 0, 0, 28)
+                Btn.Font = Enum.Font.SourceSansBold
+                Btn.TextSize = 12
+                Btn.BorderSizePixel = 0
+                Btn.Parent = ScrollingFrame
+
+                local BtnCorner = Instance.new("UICorner")
+                BtnCorner.CornerRadius = UDim.new(0, 5)
+                BtnCorner.Parent = Btn
+
+                Btn.MouseButton1Click:Connect(function()
+                    peccaryTargets[npcName] = not peccaryTargets[npcName]
+                end)
+                peccaryButtons[npcName] = Btn
+            end
         end
     end
 end
 
-Players.PlayerAdded:Connect(buildButtons)
-Players.PlayerRemoving:Connect(function(player)
-    targets[player.Name] = nil
-    buildButtons()
+-- Lắng nghe sự kiện để cập nhật lại danh sách nút
+Players.PlayerAdded:Connect(updateUIList)
+Players.PlayerRemoving:Connect(function(player) targets[player.Name] = nil updateUIList() end)
+
+task.spawn(function()
+    while true do
+        updateUIList()
+        task.wait(5) -- Tự động làm mới danh sách mỗi 5s để cập nhật heo mới hồi sinh
+    end
 end)
-buildButtons()
 
 --======================================================================
--- 4. VÒNG LẶP CHÍNH: QUẢN LÝ KHOẢNG CÁCH & KHÓA CHỈ SỐ THÔNG MINH
+-- 4. VÒNG LẶP CHÍNH: QUẢN LÝ KHOẢNG CÁCH, CHỈ SỐ & TRỰC QUAN HÓA NÚT BẤM
 --======================================================================
 task.spawn(function()
     while true do
-        local myCharacter = nil
-        if charactersFolder then
-            myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or charactersFolder:FindFirstChild("Lizliz7770")
-        end
-        if not myCharacter then
-            myCharacter = LocalPlayer.Character
-        end
-        
+        local myCharacter = charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")) or LocalPlayer.Character
         local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
         
+        -- Khóa chỉ số
         if isLocking and myCharacter then
-            local realAttributesFolder = nil
-            for _, child in pairs(myCharacter:GetChildren()) do
-                if child:IsA("Folder") and child.Name == "Attributes" then
-                    realAttributesFolder = child
-                    break
-                end
-            end
-            
+            local realAttributesFolder = myCharacter:FindFirstChild("Attributes")
             if realAttributesFolder then
                 pcall(function()
                     realAttributesFolder:SetAttribute("Hunger", targetHunger)
@@ -630,11 +649,11 @@ task.spawn(function()
             end
         end
 
+        -- Tìm kiếm Player gần nhất
         local minDistance = math.huge
         local tempClosest = ""
-
         if myRoot and charactersFolder then
-            for pName, btnData in pairs(buttons) do
+            for pName, Btn in pairs(playerButtons) do
                 local pChar = charactersFolder:FindFirstChild(pName)
                 local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
                 if pRoot then
@@ -643,28 +662,19 @@ task.spawn(function()
                         minDistance = dist
                         tempClosest = pName
                     end
-                    if targets[pName] then
-                        btnData.Button.LayoutOrder = math.floor(dist) - 100000
-                    else
-                        btnData.Button.LayoutOrder = math.floor(dist)
-                    end
+                    Btn.LayoutOrder = targets[pName] and (math.floor(dist) - 100000) or math.floor(dist)
                 else
-                    btnData.Button.LayoutOrder = 999999
+                    Btn.LayoutOrder = 999999
                 end
             end
         end
         closestPlayerName = tempClosest
 
-        for pName, btnData in pairs(buttons) do
-            local Btn = btnData.Button
+        -- Cập nhật màu sắc nút bấm cho PLAYER
+        for pName, Btn in pairs(playerButtons) do
             if targets[pName] then
-                if killAuraActive then
-                    Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-                    Btn.Text = pName .. " [KILLING]"
-                else
-                    Btn.BackgroundColor3 = Color3.fromRGB(160, 120, 30)
-                    Btn.Text = pName .. " [PAUSED]"
-                end
+                Btn.BackgroundColor3 = killAuraActive and Color3.fromRGB(180, 40, 40) or Color3.fromRGB(160, 120, 30)
+                Btn.Text = pName .. (killAuraActive and " [KILLING]" or " [PAUSED]")
                 Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
             elseif pName == closestPlayerName then
                 Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
@@ -677,6 +687,34 @@ task.spawn(function()
             end
         end
 
+        -- CẬP NHẬT: Quản lý màu sắc nút bấm riêng cho mục tiêu HEOCƠ (PECCARY)
+        local peccaryFolder = workspace:FindFirstChild("NPCs") and workspace.NPCs:FindFirstChild("FlatHeadedPeccary61")
+        for npcName, Btn in pairs(peccaryButtons) do
+            local npcModel = peccaryFolder and peccaryFolder:FindFirstChild(npcName)
+            local body = npcModel and (npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChildOfClass("Part"))
+            
+            if body and myRoot then
+                local dist = (myRoot.Position - body.Position).Magnitude
+                Btn.LayoutOrder = peccaryTargets[npcName] and (math.floor(dist) - 50000) or (math.floor(dist) + 50000)
+                
+                if peccaryTargets[npcName] then
+                    Btn.BackgroundColor3 = Color3.fromRGB(230, 50, 120) -- Đỏ hồng nhắm bắn
+                    Btn.Text = "🐷 " .. npcName .. " [KILL TARGET]"
+                    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                else
+                    Btn.BackgroundColor3 = Color3.fromRGB(25, 35, 45) -- Màu tối mặc định cho Heo
+                    Btn.Text = "🐷 " .. npcName .. string.format(" (%dm)", math.floor(dist))
+                    Btn.TextColor3 = Color3.fromRGB(200, 220, 245)
+                end
+            else
+                Btn.LayoutOrder = 999999
+                Btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+                Btn.Text = "❌ " .. npcName .. " (DEAD/FAR)"
+                Btn.TextColor3 = Color3.fromRGB(100, 100, 100)
+            end
+        end
+
+        -- Auto Drink
         if autoDrinkActive and drinkRemote then
             pcall(function()
                 local lake = interactionsFolder and interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
@@ -701,9 +739,7 @@ task.spawn(function()
                     local targetHitbox = targetCharacter and targetCharacter:FindFirstChild("BodyHitbox")
                     
                     if targetHumanoid and targetHitbox then
-                        pcall(function()
-                            attackRemote:FireServer(targetHumanoid, targetHitbox, 1)
-                        end)
+                        pcall(function() attackRemote:FireServer(targetHumanoid, targetHitbox, 1) end)
                     end
                 end
             end
@@ -727,18 +763,10 @@ task.spawn(function()
                     if targetHumanoid and targetHitbox then
                         local rootPart = targetCharacter:FindFirstChild("RootPart")
                         local torso = rootPart and rootPart:FindFirstChild("Torso")
-                        
-                        local latchPoint = nil
-                        if torso then
-                            latchPoint = torso:FindFirstChild("LatchPoint2.R") 
-                                or (torso:FindFirstChild("Waist") and torso.Waist:FindFirstChild("Hips") and torso.Waist.Hips:FindFirstChild("GrapplePoint2"))
-                                or torso:GetChildren()[1]
-                        end
+                        local latchPoint = torso and (torso:FindFirstChild("LatchPoint2.R") or torso:GetChildren()[1])
                         
                         if latchPoint then
-                            pcall(function()
-                                attackRemote:FireServer(targetHumanoid, targetHitbox, 2, latchPoint)
-                            end)
+                            pcall(function() attackRemote:FireServer(targetHumanoid, targetHitbox, 2, latchPoint) end)
                         end
                     end
                 end
@@ -749,47 +777,50 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 7. VÒNG LẶP TẤN CÔNG NPC (HỖ TRỢ PHÂN CẤP FOLDER MỚI)
+-- 7. CẬP NHẬT: VÒNG LẶP TẤN CÔNG NPC (AN TOÀN - CHỈ GIẾT HEO ĐƯỢC CHỌN)
 --======================================================================
 task.spawn(function()
     while true do
         if killAuraActive and attackNPCRemote and npcsFolder then
-            local myCharacter = charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or charactersFolder:FindFirstChild("Lizliz7770")) or LocalPlayer.Character
+            local myCharacter = charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")) or LocalPlayer.Character
             local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
             if myRoot then
                 for _, folder in pairs(npcsFolder:GetChildren()) do
                     if folder:IsA("Folder") or folder:IsA("Model") then
                         
-                        -- Hàm xử lý tấn công đơn mục tiêu khi xác định được bộ phận cơ thể
-                        local function checkAndAttack(targetModel)
-                            local bodyPart = targetModel:FindFirstChild("Body_m") 
-                                or targetModel:FindFirstChildOfClass("MeshPart") 
-                                or targetModel:FindFirstChildOfClass("Part")
-                                
-                            if bodyPart then
-                                local distance = (myRoot.Position - bodyPart.Position).Magnitude
-                                if distance <= maxDetectDistance then
-                                    pcall(function()
-                                        -- Sử dụng chính xác Remote và tham số bạn cung cấp
-                                        attackNPCRemote:FireServer(bodyPart, 1)
-                                    end)
-                                end
-                            end
-                        end
-
-                        -- Hỗ trợ quét cấu trúc thường và cấu trúc lồng sâu 1 cấp như FlatHeadedPeccary61
+                        -- CƠ CHẾ KIỂM TRA LOÀI MỚI: Chỉ đánh khi con Heo cụ thể đó được click chọn
                         if folder.Name == "FlatHeadedPeccary61" then
                             for _, deepNpc in pairs(folder:GetChildren()) do
-                                if deepNpc:IsA("Model") then
-                                    checkAndAttack(deepNpc)
+                                if deepNpc:IsA("Model") and peccaryTargets[deepNpc.Name] then -- ĐÚNG CON ĐƯỢC CHỌN
+                                    local bodyPart = deepNpc:FindFirstChild("Body_m")
+                                    if bodyPart then
+                                        local distance = (myRoot.Position - bodyPart.Position).Magnitude
+                                        if distance <= maxDetectDistance then
+                                            pcall(function()
+                                                attackNPCRemote:FireServer(bodyPart, 1)
+                                            end)
+                                        end
+                                    end
                                 end
                             end
                         else
+                            -- Các loài NPC khác (Bird, Small...) vẫn tự động tấn công hàng loạt như cũ
                             local targetsList = folder:IsA("Model") and {folder} or folder:GetChildren()
                             for _, npcModel in pairs(targetsList) do
                                 if npcModel:IsA("Model") then
-                                    checkAndAttack(npcModel)
+                                    local bodyPart = npcModel:FindFirstChild("Body_m") 
+                                        or npcModel:FindFirstChildOfClass("MeshPart") 
+                                        or npcModel:FindFirstChildOfClass("Part")
+                                        
+                                    if bodyPart then
+                                        local distance = (myRoot.Position - bodyPart.Position).Magnitude
+                                        if distance <= maxDetectDistance then
+                                            pcall(function()
+                                                attackNPCRemote:FireServer(bodyPart, 1)
+                                            end)
+                                        end
+                                    end
                                 end
                             end
                         end
@@ -810,39 +841,19 @@ task.spawn(function()
         local statsGui = PlayerGui:FindFirstChild("Stats")
         if statsGui and statsGui:FindFirstChild("Frame") then
             local minigameFrame = statsGui.Frame:FindFirstChild("Minigame")
-            
             if minigameFrame and minigameFrame.Visible == true then
                 pcall(function()
-                    local movingRing = minigameFrame:FindFirstChild("Ring") 
-                        or minigameFrame:FindFirstChild("Indicator") 
-                        or minigameFrame:FindFirstChildOfClass("ImageLabel")
-                    
-                    local targetRing = minigameFrame:FindFirstChild("Target") 
-                        or minigameFrame:FindFirstChild("Zone") 
-                        or minigameFrame:FindFirstChild("LeafRing")
+                    local movingRing = minigameFrame:FindFirstChild("Ring") or minigameFrame:FindFirstChild("Indicator") or minigameFrame:FindFirstChildOfClass("ImageLabel")
+                    local targetRing = minigameFrame:FindFirstChild("Target") or minigameFrame:FindFirstChild("Zone") or minigameFrame:FindFirstChild("LeafRing")
                     
                     if movingRing and targetRing then
                         local currentScale = movingRing.Size.X.Scale
                         local targetScale = targetRing.Size.X.Scale
-                        
                         if math.abs(currentScale - targetScale) <= 0.05 then
                             VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
                             task.wait(0.01)
                             VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
                             task.wait(0.3)
-                        end
-                    else
-                        for _, obj in pairs(minigameFrame:GetChildren()) do
-                            if obj:IsA("ImageLabel") and obj.Name ~= "Background" then
-                                local sizeX = obj.Size.X.Scale
-                                if sizeX >= 0.35 and sizeX <= 0.48 then
-                                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-                                    task.wait(0.01)
-                                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-                                    task.wait(0.3)
-                                    break
-                                end
-                            end
                         end
                     end
                 end)
@@ -853,4 +864,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("⚡ Đã cập nhật thành công ESP và Kill Aura loài Peccary mới!")
+print("⚡ Tối ưu hóa thành công: Đã thêm danh sách chọn mục tiêu Heo (Peccary) để tránh bị văng game!")
