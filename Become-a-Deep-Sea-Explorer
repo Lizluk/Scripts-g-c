@@ -1,241 +1,130 @@
--- Khởi tạo dịch vụ Roblox
+-- Khởi tạo dịch vụ
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 
--- Biến lưu trạng thái bật/tắt Auto
-local autoAddEnabled = false
-local autoSellEnabled = false
-local autoTreasureEnabled = false
-
--- Đường dẫn đến các Service Knit (sử dụng InvokeServer)
-local KnitServices = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index")["sleitnick_knit@1.7.0"].knit.Services
-local FishService = KnitServices.FishService.RF.AddToInventory
-local MarketService = KnitServices.MarketService.RF.Sell
-local TreasureService = KnitServices.TreasureService.RF.AddToInventory
+print("Script đang bắt đầu tải...")
 
 -- Tạo Giao diện (GUI)
 local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local Title = Instance.new("TextLabel")
-
--- Thành phần Ô nhập 1: Cá
-local FishInputTitle = Instance.new("TextLabel")
-local FishInputBox = Instance.new("TextBox")
-
--- Thành phần Ô nhập 2: Kho báu
-local TreasureInputTitle = Instance.new("TextLabel")
-local TreasureInputBox = Instance.new("TextBox")
-
--- Các dòng hiển thị trạng thái ON/OFF
-local AutoAddStatus = Instance.new("TextLabel")
-local AutoTreasureStatus = Instance.new("TextLabel")
-local AutoSellStatus = Instance.new("TextLabel")
-local FooterInfo = Instance.new("TextLabel")
-
--- Nạp GUI lên màn hình (Hỗ trợ mọi Executor)
 ScreenGui.Name = "KnitUltimateManager"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.DisplayOrder = 999
+ScreenGui.Enabled = true
 
--- Cấu hình Khung chính (Tăng chiều cao lên 310 để đủ chỗ chứa thêm ô và trạng thái)
+-- Phương pháp nạp GUI an toàn nhất
+local function safeParent(gui)
+    local success = false
+    -- Thử dùng syn.protect_gui (nếu dùng Synapse/các executor cao cấp)
+    if syn and syn.protect_gui then syn.protect_gui(gui) end
+    
+    -- Thử các vị trí khác nhau
+    local parents = {
+        (gethui and gethui()),
+        game:GetService("CoreGui"),
+        LocalPlayer:WaitForChild("PlayerGui")
+    }
+    
+    for _, parent in ipairs(parents) do
+        if parent then
+            pcall(function() gui.Parent = parent end)
+            if gui.Parent == parent then 
+                print("GUI đã được nạp thành công vào: " .. parent.Name)
+                success = true
+                break 
+            end
+        end
+    end
+    if not success then warn("Không thể nạp GUI vào bất kỳ vị trí nào!") end
+end
+
+safeParent(ScreenGui)
+
+-- [Logic GUI giống cũ]
+local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.Name = "MainFrame"
-MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 MainFrame.Position = UDim2.new(0.5, -135, 0.35, -155)
 MainFrame.Size = UDim2.new(0, 270, 0, 310)
-MainFrame.BorderSizePixel = 0
+MainFrame.Visible = true -- Đảm bảo nó hiện
 MainFrame.Active = true
 MainFrame.Draggable = true
 
--- Thanh tiêu đề
-Title.Parent = MainFrame
+-- [Thêm tiêu đề để biết là nó đã chạy]
+local Title = Instance.new("TextLabel", MainFrame)
 Title.Size = UDim2.new(1, 0, 0, 35)
-Title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-Title.Text = "VERDANT KNIT MANAGER"
+Title.BackgroundColor3 = Color3.fromRGB(20, 0, 0) -- Màu đỏ nhẹ nếu script chạy
+Title.Text = "VERDANT MANAGER [G: Cá | H: Bán | J: Kho Báu]"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 13
-Title.Font = Enum.Font.SourceSansBold
-Title.BorderSizePixel = 0
+Title.TextSize = 12
 
-----------------------------------------------------------------
--- Ô NHẬP TÊN CÁ
-----------------------------------------------------------------
-FishInputTitle.Parent = MainFrame
-FishInputTitle.Position = UDim2.new(0.05, 0, 0.14, 0)
-FishInputTitle.Size = UDim2.new(0.9, 0, 0, 15)
-FishInputTitle.BackgroundTransparency = 1
-FishInputTitle.Text = "Tên loại cá (Phím G để Auto):"
-FishInputTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
-FishInputTitle.TextXAlignment = Enum.TextXAlignment.Left
-FishInputTitle.TextSize = 12
-
-FishInputBox.Parent = MainFrame
+-- [Ô NHẬP CÁ]
+local FishInputBox = Instance.new("TextBox", MainFrame)
 FishInputBox.Position = UDim2.new(0.05, 0, 0.20, 0)
 FishInputBox.Size = UDim2.new(0.9, 0, 0, 28)
 FishInputBox.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
 FishInputBox.Text = "BlueDottyBlack"
-FishInputBox.PlaceholderText = "Tên cá..."
-FishInputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-FishInputBox.TextSize = 14
-FishInputBox.BorderSizePixel = 0
+FishInputBox.TextColor3 = Color3.new(1,1,1)
 
-----------------------------------------------------------------
--- Ô NHẬP TÊN KHO BÁU
-----------------------------------------------------------------
-TreasureInputTitle.Parent = MainFrame
-TreasureInputTitle.Position = UDim2.new(0.05, 0, 0.32, 0)
-TreasureInputTitle.Size = UDim2.new(0.9, 0, 0, 15)
-TreasureInputTitle.BackgroundTransparency = 1
-TreasureInputTitle.Text = "Tên kho báu (Phím J để Auto):"
-TreasureInputTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
-TreasureInputTitle.TextXAlignment = Enum.TextXAlignment.Left
-TreasureInputTitle.TextSize = 12
-
-TreasureInputBox.Parent = MainFrame
-TreasureInputBox.Position = UDim2.new(0.05, 0, 0.38, 0)
+-- [Ô NHẬP KHO BÁU]
+local TreasureInputBox = Instance.new("TextBox", MainFrame)
+TreasureInputBox.Position = UDim2.new(0.05, 0, 0.40, 0)
 TreasureInputBox.Size = UDim2.new(0.9, 0, 0, 28)
 TreasureInputBox.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
 TreasureInputBox.Text = "Ring"
-TreasureInputBox.PlaceholderText = "Tên vật phẩm..."
-TreasureInputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-TreasureInputBox.TextSize = 14
-TreasureInputBox.BorderSizePixel = 0
+TreasureInputBox.TextColor3 = Color3.new(1,1,1)
 
-----------------------------------------------------------------
--- HIỂN THỊ TRẠNG THÁI HỆ THỐNG
-----------------------------------------------------------------
-AutoAddStatus.Parent = MainFrame
-AutoAddStatus.Position = UDim2.new(0.05, 0, 0.52, 0)
-AutoAddStatus.Size = UDim2.new(0.9, 0, 0, 18)
-AutoAddStatus.BackgroundTransparency = 1
-AutoAddStatus.Text = "[G] Auto Add Cá: OFF"
-AutoAddStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
-AutoAddStatus.TextXAlignment = Enum.TextXAlignment.Left
-AutoAddStatus.TextSize = 13
-AutoAddStatus.Font = Enum.Font.SourceSansBold
+-- [Trạng thái hiển thị]
+local StatusLabel = Instance.new("TextLabel", MainFrame)
+StatusLabel.Position = UDim2.new(0.05, 0, 0.6, 0)
+StatusLabel.Size = UDim2.new(0.9, 0, 0, 50)
+StatusLabel.Text = "G: Add Cá | H: Sell | J: Kho Báu"
+StatusLabel.TextColor3 = Color3.new(1,1,1)
 
-AutoTreasureStatus.Parent = MainFrame
-AutoTreasureStatus.Position = UDim2.new(0.05, 0, 0.61, 0)
-AutoTreasureStatus.Size = UDim2.new(0.9, 0, 0, 18)
-AutoTreasureStatus.BackgroundTransparency = 1
-AutoTreasureStatus.Text = "[J] Auto Tìm Kho Báu: OFF"
-AutoTreasureStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
-AutoTreasureStatus.TextXAlignment = Enum.TextXAlignment.Left
-AutoTreasureStatus.TextSize = 13
-AutoTreasureStatus.Font = Enum.Font.SourceSansBold
-
-AutoSellStatus.Parent = MainFrame
-AutoSellStatus.Position = UDim2.new(0.05, 0, 0.70, 0)
-AutoSellStatus.Size = UDim2.new(0.9, 0, 0, 18)
-AutoSellStatus.BackgroundTransparency = 1
-AutoSellStatus.Text = "[H] Auto Bán Đồ (Market): OFF"
-AutoSellStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
-AutoSellStatus.TextXAlignment = Enum.TextXAlignment.Left
-AutoSellStatus.TextSize = 13
-AutoSellStatus.Font = Enum.Font.SourceSansBold
-
-FooterInfo.Parent = MainFrame
-FooterInfo.Position = UDim2.new(0, 0, 0.85, 0)
-FooterInfo.Size = UDim2.new(1, 0, 0, 30)
-FooterInfo.BackgroundTransparency = 1
-FooterInfo.Text = "Bấm phím [P] để Ẩn / Hiện Menu"
-FooterInfo.TextColor3 = Color3.fromRGB(160, 160, 160)
-FooterInfo.TextSize = 11
-
-----------------------------------------------------------------
--- HỆ THỐNG VÒNG LẶP CHẠY AUTO MƯỢT MÀ
-----------------------------------------------------------------
-
--- Vòng lặp Auto Add Cá (Phím G)
-task.spawn(function()
-    while true do
-        if autoAddEnabled then
-            local fishName = FishInputBox.Text
-            if fishName ~= "" then
-                pcall(function()
-                    FishService:InvokeServer(fishName, "Catch")
-                end)
+-- [TÌM DỊCH VỤ KNIT]
+local function getKnitService(serviceName)
+    local path = ReplicatedStorage:FindFirstChild("Packages")
+    if path then
+        local index = path:FindFirstChild("_Index")
+        if index then
+            local knit = index:FindFirstChild("sleitnick_knit@1.7.0")
+            if knit then
+                return knit.knit.Services[serviceName].RF
             end
-            task.wait(0.05) -- Tốc độ gửi lệnh add cá
-        else
-            task.wait(0.2)
         end
     end
-end)
+    return nil
+end
 
--- Vòng lặp Auto Add Kho Báu (Phím J)
+local autoAdd = false
+local autoSell = false
+local autoTreas = false
+
+-- [VÒNG LẶP]
 task.spawn(function()
     while true do
-        if autoTreasureEnabled then
-            local treasureName = TreasureInputBox.Text
-            if treasureName ~= "" then
-                pcall(function()
-                    TreasureService:InvokeServer(treasureName, "Default")
-                end)
-            end
-            task.wait(0.05) -- Tốc độ gửi lệnh add báu vật
-        else
-            task.wait(0.2)
+        if autoAdd then
+            local s = getKnitService("FishService")
+            if s then s.AddToInventory:InvokeServer(FishInputBox.Text, "Catch") end
         end
+        if autoTreas then
+            local s = getKnitService("TreasureService")
+            if s then s.AddToInventory:InvokeServer(TreasureInputBox.Text, "Default") end
+        end
+        if autoSell then
+            local s = getKnitService("MarketService")
+            if s then s.Sell:InvokeServer() end
+        end
+        task.wait(0.2)
     end
 end)
 
--- Vòng lặp Auto Bán Vật Phẩm (Phím H)
-task.spawn(function()
-    while true do
-        if autoSellEnabled then
-            pcall(function()
-                MarketService:InvokeServer()
-            end)
-            task.wait(0.5) -- Bán đồ mỗi 0.5s để server kịp cập nhật tiền
-        else
-            task.wait(0.2)
-        end
-    end
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.G then autoAdd = not autoAdd end
+    if input.KeyCode == Enum.KeyCode.H then autoSell = not autoSell end
+    if input.KeyCode == Enum.KeyCode.J then autoTreas = not autoTreas end
+    if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
+    StatusLabel.Text = string.format("Cá: %s | Bán: %s | Báu: %s", tostring(autoAdd), tostring(autoSell), tostring(autoTreas))
 end)
-
-----------------------------------------------------------------
--- LẮNG NGHE PHÍM TẮT TỪ BÀN PHÍM (KEYBINDS)
-----------------------------------------------------------------
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end -- Không kích hoạt phím khi đang gõ chat/nhập chữ
-    
-    -- Phím G: Auto Add Cá
-    if input.KeyCode == Enum.KeyCode.G then
-        autoAddEnabled = not autoAddEnabled
-        if autoAddEnabled then
-            AutoAddStatus.Text = "[G] Auto Add Cá: ON (" .. FishInputBox.Text .. ")"
-            AutoAddStatus.TextColor3 = Color3.fromRGB(100, 255, 100)
-        else
-            AutoAddStatus.Text = "[G] Auto Add Cá: OFF"
-            AutoAddStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
-        end
-        
-    -- Phím J: Auto Tìm Kho Báu (MỚI)
-    elseif input.KeyCode == Enum.KeyCode.J then
-        autoTreasureEnabled = not autoTreasureEnabled
-        if autoTreasureEnabled then
-            AutoTreasureStatus.Text = "[J] Auto Tìm Kho Báu: ON (" .. TreasureInputBox.Text .. ")"
-            AutoTreasureStatus.TextColor3 = Color3.fromRGB(100, 255, 100)
-        else
-            AutoTreasureStatus.Text = "[J] Auto Tìm Kho Báu: OFF"
-            AutoTreasureStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
-        end
-
-    -- Phím H: Auto Bán Đồ
-    elseif input.KeyCode == Enum.KeyCode.H then
-        autoSellEnabled = not autoSellEnabled
-        if autoSellEnabled then
-            AutoSellStatus.Text = "[H] Auto Bán Đồ (Market): ON"
-            AutoSellStatus.TextColor3 = Color3.fromRGB(100, 255, 100)
-        else
-            AutoSellStatus.Text = "[H] Auto Bán Đồ (Market): OFF"
-            AutoSellStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
-        end
-        
-    -- Phím P: Ẩn/Hiện Menu
-    elseif input.KeyCode == Enum.KeyCode.P then
-        MainFrame.Visible = not MainFrame.Visible
-    end
