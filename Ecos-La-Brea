@@ -1,4 +1,4 @@
---// LIZLUK ALL-IN-ONE PREMIUM MENU (UPDATED INTEGRATION)
+--// LIZLUK ALL-IN-ONE PREMIUM MENU (UPDATED INTEGRATION WITH DEEP NPC SCAN)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -13,8 +13,8 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 --======================================================================
 -- CẤU HÌNH & TRẠNG THÁI KHỞI TẠO
 --======================================================================
-local targetHunger = 100
-local targetThirst = 100
+local targetHunger = 80
+local targetThirst = 80
 local targetStamina = 100
 local isLocking = false 
 
@@ -22,16 +22,15 @@ local targets = {}
 local killAuraActive = true 
 local autoPounceActive = false 
 local autoDrinkActive = false 
-local npcEspActive = true -- Trạng thái bật/tắt NPC ESP mặc định
+local npcEspActive = true 
 
 local closestPlayerName = "" 
 local maxDetectDistance = 150
 
-local attackCooldown = 1.4
+local attackCooldown = 1.5
 local pounceCooldown = 2.0
-local npcAttackCooldown = 0.5
+local npcAttackCooldown = 1.5
 
--- Danh sách lưu trữ các đối tượng BillboardGui của NPC để dễ quản lý bật/tắt
 local activeNpcEsps = {}
 
 --======================================================================
@@ -114,7 +113,7 @@ end
 
 local PounceBtn, PounceStroke = createUtilityButton(1, "")
 local DrinkBtn, DrinkStroke = createUtilityButton(2, "")
-local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "") -- THAY THẾ AUTO EAT THÀNH NPC ESP BUTTON
+local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "") 
 
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -20, 0, 35)
@@ -298,7 +297,6 @@ local function updateUtilityVisuals()
         NpcEspStroke.Color = Color3.fromRGB(50, 50, 50)
     end
     
-    -- Cập nhật trực quan ẩn/hiện các ESP thực tế trên màn hình
     for _, gui in pairs(activeNpcEsps) do
         if gui and gui:IsA("BillboardGui") then
             gui.Enabled = npcEspActive
@@ -447,16 +445,14 @@ end
 task.spawn(trackCharacters)
 
 ------------------------------------------------------------------------
--- PHẦN CẬP NHẬT CHUẨN: HỆ THỐNG AN TOÀN QUÉT NPC ESP (KHÔNG LO BỊ KẸT LOADING)
+-- CẬP NHẬT: HỆ THỐNG AN TOÀN QUÉT NPC ESP (HỖ TRỢ LOÀI MỚI FLATHEADEDPECCARY)
 ------------------------------------------------------------------------
 local function applyNPCEsp(npcModel, typeName)
     if not npcModel then return end
-    
-    -- Tránh trùng lặp ESP trên cùng 1 đối tượng
     if npcModel:FindFirstChild("NpcESP_Holder") then return end
     
-    local targetPart = npcModel:FindFirstChild("Head") 
-        or npcModel:FindFirstChild("Body_m") 
+    local targetPart = npcModel:FindFirstChild("Body_m")
+        or npcModel:FindFirstChild("Head") 
         or npcModel:FindFirstChildOfClass("MeshPart") 
         or npcModel:FindFirstChildOfClass("Part")
         
@@ -468,10 +464,9 @@ local function applyNPCEsp(npcModel, typeName)
     bb.AlwaysOnTop = true
     bb.ExtentsOffset = Vector3.new(0, 2, 0)
     bb.Adornee = targetPart
-    bb.Enabled = npcEspActive -- Đồng bộ trạng thái UI lúc tạo ra
+    bb.Enabled = npcEspActive 
     bb.Parent = targetPart
     
-    -- Lưu vào danh sách quản lý chung
     table.insert(activeNpcEsps, bb)
 
     local txt = Instance.new("TextLabel")
@@ -480,7 +475,7 @@ local function applyNPCEsp(npcModel, typeName)
     txt.TextStrokeTransparency = 0
     txt.Font = Enum.Font.SourceSansBold
     txt.TextSize = 12
-    txt.TextColor3 = Color3.fromRGB(0, 220, 255) -- Màu xanh Neon
+    txt.TextColor3 = Color3.fromRGB(0, 220, 255) 
     txt.Parent = bb
 
     local connection
@@ -490,7 +485,6 @@ local function applyNPCEsp(npcModel, typeName)
         
         if not npcModel:IsDescendantOf(workspace) or not targetPart:IsDescendantOf(npcModel) or not myRoot then
             connection:Disconnect()
-            -- Dọn dẹp bảng quản lý khi NPC chết/biến mất
             local idx = table.find(activeNpcEsps, bb)
             if idx then table.remove(activeNpcEsps, idx) end
             bb:Destroy()
@@ -502,41 +496,41 @@ local function applyNPCEsp(npcModel, typeName)
     end)
 end
 
--- Cơ chế quét lặp an toàn, không lo thư mục chưa kịp load
 local function scanNpcFolders()
-    -- 1. Kiểm tra mục NPCs con bên trong Workspace
     local mainNpcs = workspace:FindFirstChild("NPCs")
     if mainNpcs then
+        -- 1. Mục Bird
         local birdFolder = mainNpcs:FindFirstChild("Bird")
         if birdFolder then
-            for _, c in pairs(birdFolder:GetChildren()) do
-                applyNPCEsp(c, "Bird")
-            end
+            for _, c in pairs(birdFolder:GetChildren()) do applyNPCEsp(c, "Bird") end
         end
+        -- 2. Mục Small
         local smallFolder = mainNpcs:FindFirstChild("Small")
         if smallFolder then
-            for _, c in pairs(smallFolder:GetChildren()) do
-                applyNPCEsp(c, "Small")
+            for _, c in pairs(smallFolder:GetChildren()) do applyNPCEsp(c, "Small") end
+        end
+        -- 3. Cập nhật: Mục FlatHeadedPeccary61 (Quét sâu các con vật bên trong)
+        local peccaryFolder = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
+        if peccaryFolder then
+            for _, c in pairs(peccaryFolder:GetChildren()) do
+                if c:IsA("Model") or c:IsA("Part") then
+                    applyNPCEsp(c, "Peccary")
+                end
             end
         end
     end
     
-    -- 2. Kiểm tra mục NpcBarriers trực tiếp bên ngoài Workspace
+    -- 4. Mục NpcBarriers
     local barrierFolder = workspace:FindFirstChild("NpcBarriers")
     if barrierFolder then
-        for _, c in pairs(barrierFolder:GetChildren()) do
-            applyNPCEsp(c, "Barrier")
-        end
+        for _, c in pairs(barrierFolder:GetChildren()) do applyNPCEsp(c, "Barrier") end
     end
 end
 
--- Vòng lặp liên tục quét lắng nghe các NPC mới xuất hiện mà không bị block script
 task.spawn(function()
-    -- Quét loạt đầu tiên ngay lập tức
     task.wait(1)
     scanNpcFolders()
     
-    -- Kết nối sự kiện ChildAdded linh hoạt để khi quái hồi sinh là bắt được luôn
     pcall(function()
         local mainNpcs = workspace:WaitForChild("NPCs", 10)
         if mainNpcs then
@@ -545,6 +539,10 @@ task.spawn(function()
             
             local small = mainNpcs:WaitForChild("Small", 5)
             if small then small.ChildAdded:Connect(function(c) task.wait(0.1) applyNPCEsp(c, "Small") end) end
+
+            -- Lắng nghe sinh quái loài mới
+            local peccary = mainNpcs:WaitForChild("FlatHeadedPeccary61", 5)
+            if peccary then peccary.ChildAdded:Connect(function(c) task.wait(0.1) applyNPCEsp(c, "Peccary") end) end
         end
         
         local barriers = workspace:WaitForChild("NpcBarriers", 10)
@@ -553,7 +551,6 @@ task.spawn(function()
         end
     end)
     
-    -- Vòng lặp dự phòng quét định kỳ (mỗi 5 giây kiểm tra lại một lần bảo đảm không sót)
     while true do
         scanNpcFolders()
         task.wait(5)
@@ -692,7 +689,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 5. VÒNG LẶP TẤN CÔNG THƯỜNG (KILL AURA)
+-- 5. VÒNG LẶP TẤN CÔNG THƯỜNG (KILL AURA PLAYER)
 --======================================================================
 task.spawn(function()
     while true do
@@ -752,38 +749,51 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 7. VÒNG LẶP TẤN CÔNG NPC
+-- 7. VÒNG LẶP TẤN CÔNG NPC (HỖ TRỢ PHÂN CẤP FOLDER MỚI)
 --======================================================================
 task.spawn(function()
     while true do
         if killAuraActive and attackNPCRemote and npcsFolder then
-            local myCharacter = nil
-            if charactersFolder then
-                myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or charactersFolder:FindFirstChild("Lizliz7770")
-            end
-            if not myCharacter then myCharacter = LocalPlayer.Character end
-            
+            local myCharacter = charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or charactersFolder:FindFirstChild("Lizliz7770")) or LocalPlayer.Character
             local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
             if myRoot then
                 for _, folder in pairs(npcsFolder:GetChildren()) do
                     if folder:IsA("Folder") or folder:IsA("Model") then
-                        local targetsList = folder:IsA("Model") and {folder} or folder:GetChildren()
                         
-                        for _, npcModel in pairs(targetsList) do
-                            if npcModel:IsA("Model") then
-                                local bodyPart = npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChildOfClass("MeshPart") or npcModel:FindFirstChildOfClass("Part")
+                        -- Hàm xử lý tấn công đơn mục tiêu khi xác định được bộ phận cơ thể
+                        local function checkAndAttack(targetModel)
+                            local bodyPart = targetModel:FindFirstChild("Body_m") 
+                                or targetModel:FindFirstChildOfClass("MeshPart") 
+                                or targetModel:FindFirstChildOfClass("Part")
                                 
-                                if bodyPart then
-                                    local distance = (myRoot.Position - bodyPart.Position).Magnitude
-                                    if distance <= maxDetectDistance then
-                                        pcall(function()
-                                            attackNPCRemote:FireServer(bodyPart, 1)
-                                        end)
-                                    end
+                            if bodyPart then
+                                local distance = (myRoot.Position - bodyPart.Position).Magnitude
+                                if distance <= maxDetectDistance then
+                                    pcall(function()
+                                        -- Sử dụng chính xác Remote và tham số bạn cung cấp
+                                        attackNPCRemote:FireServer(bodyPart, 1)
+                                    end)
                                 end
                             end
                         end
+
+                        -- Hỗ trợ quét cấu trúc thường và cấu trúc lồng sâu 1 cấp như FlatHeadedPeccary61
+                        if folder.Name == "FlatHeadedPeccary61" then
+                            for _, deepNpc in pairs(folder:GetChildren()) do
+                                if deepNpc:IsA("Model") then
+                                    checkAndAttack(deepNpc)
+                                end
+                            end
+                        else
+                            local targetsList = folder:IsA("Model") and {folder} or folder:GetChildren()
+                            for _, npcModel in pairs(targetsList) do
+                                if npcModel:IsA("Model") then
+                                    checkAndAttack(npcModel)
+                                end
+                            end
+                        end
+
                     end
                 end
             end
@@ -842,6 +852,5 @@ task.spawn(function()
     end
 end)
 
--- Khởi tạo trạng thái màu sắc nút bấm lần đầu tiên
 updateUtilityVisuals()
-print("⚡ Đã cập nhật nút bấm: Thêm NPC ESP [K] | Phím [P] ẩn/hiện menu.")
+print("⚡ Đã cập nhật thành công ESP và Kill Aura loài Peccary mới!")
