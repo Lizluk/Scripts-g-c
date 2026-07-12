@@ -1,0 +1,308 @@
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- Xóa GUI và ESP cũ để tránh lỗi trùng lặp
+if CoreGui:FindFirstChild("Multi_Shooter_GUI") then
+    CoreGui.Multi_Shooter_GUI:Destroy()
+end
+
+local function clearOldESP()
+    local npcsFolder = Workspace:FindFirstChild("NPCs")
+    if npcsFolder then
+        for _, npc in ipairs(npcsFolder:GetChildren()) do
+            local oldEsp = npc:FindFirstChild("NPC_ESP_Tag")
+            if oldEsp then oldEsp:Destroy() end
+        end
+    end
+end
+clearOldESP()
+
+-- 1. Khởi Tạo Giao Diện Chính (GUI)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Multi_Shooter_GUI"
+ScreenGui.Parent = CoreGui
+ScreenGui.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 360, 0, 440)
+MainFrame.Position = UDim2.new(0.3, 0, 0.2, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 10)
+FrameCorner.Parent = MainFrame
+
+-- Thanh Tiêu Đề
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 45)
+Title.Text = "🎯 NIGHT SLAYER HUB - MULTI SHOOTER"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.SourceSansBold
+Title.BackgroundColor3 = Color3.fromRGB(34, 34, 38)
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = Title
+
+-- THANH CHUYỂN TAB (NPCs / PLAYERS)
+local TabFrame = Instance.new("Frame")
+TabFrame.Size = UDim2.new(1, -20, 0, 35)
+TabFrame.Position = UDim2.new(0, 10, 0, 55)
+TabFrame.BackgroundTransparency = 1
+TabFrame.Parent = MainFrame
+
+local TabNPCBtn = Instance.new("TextButton")
+TabNPCBtn.Size = UDim2.new(0.5, -5, 1, 0)
+TabNPCBtn.Position = UDim2.new(0, 0, 0, 0)
+TabNPCBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+TabNPCBtn.Text = "🤖 NPCs LIST"
+TabNPCBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+TabNPCBtn.Font = Enum.Font.SourceSansBold
+TabNPCBtn.TextSize = 12
+TabNPCBtn.Parent = TabFrame
+
+local CornerTab1 = Instance.new("UICorner")
+CornerTab1.CornerRadius = UDim.new(0, 6)
+CornerTab1.Parent = TabNPCBtn
+
+local TabPlayerBtn = Instance.new("TextButton")
+TabPlayerBtn.Size = UDim2.new(0.5, -5, 1, 0)
+TabPlayerBtn.Position = UDim2.new(0.5, 5, 0, 0)
+TabPlayerBtn.BackgroundColor3 = Color3.fromRGB(38, 38, 44)
+TabPlayerBtn.Text = "👤 PLAYERS LIST"
+TabPlayerBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+TabPlayerBtn.Font = Enum.Font.SourceSansBold
+TabPlayerBtn.TextSize = 12
+TabPlayerBtn.Parent = TabFrame
+
+local CornerTab2 = Instance.new("UICorner")
+CornerTab2.CornerRadius = UDim.new(0, 6)
+CornerTab2.Parent = TabPlayerBtn
+
+-- KHUNG CUỘN DANH SÁCH (DÙNG CHUNG CHO CẢ 2 TAB)
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(1, -20, 1, -155)
+ScrollFrame.Position = UDim2.new(0, 10, 0, 100)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = 4
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(0, 255, 150)
+ScrollFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 6)
+UIListLayout.Parent = ScrollFrame
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- NÚT REFRESH CHUNG PHÍA DƯỚI
+local RefreshBtn = Instance.new("TextButton")
+RefreshBtn.Size = UDim2.new(1, -20, 0, 35)
+RefreshBtn.Position = UDim2.new(0, 10, 1, -45)
+RefreshBtn.BackgroundColor3 = Color3.fromRGB(34, 34, 38)
+RefreshBtn.Text = "🔄 LÀM MỚI DANH SÁCH"
+RefreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+RefreshBtn.TextSize = 12
+RefreshBtn.Font = Enum.Font.SourceSansBold
+RefreshBtn.Parent = MainFrame
+
+local RefreshCorner = Instance.new("UICorner")
+RefreshCorner.CornerRadius = UDim.new(0, 6)
+RefreshCorner.Parent = RefreshBtn
+
+local currentTab = "NPC" -- Mặc định ở tab NPC
+
+-- 2. HÀM KÍCH HOẠT REMOTE SUNG CHO NPC
+local function shootNPC(npcModel)
+    if not npcModel then return end
+    local ohVector31 = Vector3.new(-104.44049835205078, 4.774374008178711, -6.360236644744873)
+    local ohInstance2 = npcModel:FindFirstChild("Head.002") or npcModel:FindFirstChild("Head") or npcModel:FindFirstChild("HumanoidRootPart")
+    
+    if ohInstance2 then
+        local remote = ReplicatedStorage:FindFirstChild("Util") and ReplicatedStorage.Util:FindFirstChild("Net") and ReplicatedStorage.Util.Net:FindFirstChild("RE/PlayShootEffect")
+        if remote then
+            remote:FireServer(ohVector31, ohInstance2)
+            print("🤖 Đã bắn NPC: " .. npcModel.Name)
+        end
+    end
+end
+
+-- HÀM KÍCH HOẠT REMOTE SUNG CHO NGƯỜI CHƠI THẬT (VÀO FACE)
+local function shootPlayer(targetPlr)
+    if not targetPlr or not targetPlr.Character then return end
+    local char = targetPlr.Character
+    
+    -- Tọa độ chuẩn xác từ log mới của bạn
+    local ohVector31 = Vector3.new(-105.00645446777344, 4.289616584777832, 0.588221549987793)
+    
+    -- Ưu tiên tìm mục tiêu trong CharacterModel hoặc trực tiếp trong Character
+    local ohInstance2 = char:FindFirstChild("Face", true) 
+        or char:FindFirstChild("CharacterModel") and char.CharacterModel:FindFirstChild("Face")
+        or char:FindFirstChild("Head") 
+        or char:FindFirstChild("HumanoidRootPart")
+        
+    if ohInstance2 then
+        local remote = ReplicatedStorage:FindFirstChild("Util") and ReplicatedStorage.Util:FindFirstChild("Net") and ReplicatedStorage.Util.Net:FindFirstChild("RE/PlayShootEffect")
+        if remote then
+            remote:FireServer(ohVector31, ohInstance2)
+            print("👤 Đã bắn Player: " .. targetPlr.Name .. " vào mục tiêu: " .. ohInstance2.Name)
+        end
+    end
+end
+
+-- 3. HÀM TẠO ESP CHỮ CHO NPC
+local function createESPTag(npcModel)
+    if not npcModel or npcModel:FindFirstChild("NPC_ESP_Tag") then return end
+    local head = npcModel:FindFirstChild("Head") or npcModel:FindFirstChild("Head.002") or npcModel:FindFirstChildOfClass("BasePart")
+    if not head then return end
+    
+    local BillboardGui = Instance.new("BillboardGui")
+    BillboardGui.Name = "NPC_ESP_Tag"
+    BillboardGui.Size = UDim2.new(0, 150, 0, 30)
+    BillboardGui.AlwaysOnTop = true
+    BillboardGui.ExtentsOffset = Vector3.new(0, 2.5, 0)
+    BillboardGui.Adornee = head
+    BillboardGui.Parent = npcModel
+
+    local TextLabel = Instance.new("TextLabel")
+    TextLabel.Size = UDim2.new(1, 0, 1, 0)
+    TextLabel.BackgroundTransparency = 1
+    TextLabel.Text = "[NPC] " .. npcModel.Name
+    TextLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+    TextLabel.TextSize = 12
+    TextLabel.Font = Enum.Font.SourceSansBold
+    TextLabel.TextStrokeTransparency = 0
+    TextLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    TextLabel.Parent = BillboardGui
+end
+
+-- 4. HÀM TẠO CARD HIỂN THỊ DÒNG TÊN TRÊN MENU
+local function createListRow(nameText, onClickCallback, isPlayerRow)
+    local RowFrame = Instance.new("Frame")
+    RowFrame.Size = UDim2.new(1, -5, 0, 38)
+    RowFrame.BackgroundColor3 = Color3.fromRGB(38, 38, 44)
+    RowFrame.BorderSizePixel = 0
+    RowFrame.Parent = ScrollFrame
+    
+    local RowCorner = Instance.new("UICorner")
+    RowCorner.CornerRadius = UDim.new(0, 6)
+    RowCorner.Parent = RowFrame
+    
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Size = UDim2.new(1, -15, 1, 0)
+    NameLabel.Position = UDim2.new(0, 15, 0, 0)
+    NameLabel.Text = (isPlayerRow and "👤 " or "🤖 ") .. nameText
+    NameLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
+    NameLabel.TextSize = 12
+    NameLabel.Font = Enum.Font.SourceSansBold
+    NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.Parent = RowFrame
+    
+    local ClickBtn = Instance.new("TextButton")
+    ClickBtn.Size = UDim2.new(1, 0, 1, 0)
+    ClickBtn.BackgroundTransparency = 1
+    ClickBtn.Text = ""
+    ClickBtn.Parent = RowFrame
+    
+    ClickBtn.MouseEnter:Connect(function()
+        RowFrame.BackgroundColor3 = Color3.fromRGB(48, 55, 65)
+        NameLabel.TextColor3 = isPlayerRow and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(0, 255, 150)
+    end)
+    
+    ClickBtn.MouseLeave:Connect(function()
+        RowFrame.BackgroundColor3 = Color3.fromRGB(38, 38, 44)
+        NameLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
+    end)
+    
+    ClickBtn.MouseButton1Click:Connect(function()
+        RowFrame.BackgroundColor3 = isPlayerRow and Color3.fromRGB(150, 100, 0) or Color3.fromRGB(0, 100, 50)
+        task.wait(0.1)
+        RowFrame.BackgroundColor3 = Color3.fromRGB(48, 55, 65)
+        onClickCallback()
+    end)
+end
+
+-- 5. HÀM UPDATE CHÍNH XÁC DANH SÁCH THEO TAB THỰC TẾ
+local function updateMainList()
+    -- Xóa sạch các card cũ trên giao diện
+    for _, child in ipairs(ScrollFrame:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    
+    if currentTab == "NPC" then
+        -- XỬ LÝ QUÉT TAB NPC
+        local npcsFolder = Workspace:FindFirstChild("NPCs")
+        if npcsFolder then
+            for _, npc in ipairs(npcsFolder:GetChildren()) do
+                if npc:IsA("Model") or npc:IsA("Folder") or npc:IsA("BasePart") then
+                    createESPTag(npc) -- Tạo ESP trên đầu
+                    createListRow(npc.Name, function()
+                        shootNPC(npc)
+                    end, false)
+                end
+            end
+        end
+    elseif currentTab == "PLAYER" then
+        -- XỬ LÝ QUÉT TAB PLAYERS THỰC
+        clearOldESP() -- Tắt bớt ESP NPC khi sang tab người chơi cho đỡ rối mắt
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then -- Không hiện tên bản thân lên danh sách bắn
+                createListRow(player.Name, function()
+                    shootPlayer(player)
+                end, true)
+            end
+        end
+    end
+end
+
+-- 6. ĐIỀU HƯỚNG SỰ KIỆN CHUYỂN TAB TRÊN GUI
+TabNPCBtn.MouseButton1Click:Connect(function()
+    currentTab = "NPC"
+    TabNPCBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+    TabNPCBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    
+    TabPlayerBtn.BackgroundColor3 = Color3.fromRGB(38, 38, 44)
+    TabPlayerBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    updateMainList()
+end)
+
+TabPlayerBtn.MouseButton1Click:Connect(function()
+    currentTab = "PLAYER"
+    TabPlayerBtn.BackgroundColor3 = Color3.fromRGB(255, 165, 0) -- Đổi sang màu cam cho phân biệt Player
+    TabPlayerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    
+    TabNPCBtn.BackgroundColor3 = Color3.fromRGB(38, 38, 44)
+    TabNPCBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    updateMainList()
+end)
+
+-- Khởi động quét dữ liệu ban đầu
+updateMainList()
+
+RefreshBtn.MouseButton1Click:Connect(function()
+    updateMainList()
+end)
+
+-- 7. Hệ Thống Phím Tắt Nhấn C Để Ẩn/Hiện GUI nhanh
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.C then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
+
+print("🔥 Script Multi-Tab (NPC & Players) đã nạp thành công! Nhấn 'C' để ẩn/hiện GUI.")
