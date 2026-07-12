@@ -1,4 +1,4 @@
---// LIZLUK ALL-IN-ONE PREMIUM MENU (STRICT SAFETY FIX)
+--// LIZLUK ALL-IN-ONE PREMIUM MENU (STANDARDIZED COMPILER FIX)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -18,8 +18,8 @@ local targetThirst = 100
 local targetStamina = 100
 local isLocking = false 
 
-local targets = {}         -- Chỉ kích hoạt khi được chọn trên UI
-local peccaryTargets = {}  -- Chỉ kích hoạt khi heo được chọn trên UI
+local targets = {}         
+local peccaryTargets = {}  
 
 local killAuraActive = true 
 local autoPounceActive = false 
@@ -27,9 +27,9 @@ local autoDrinkActive = false
 local npcEspActive = true 
 
 local closestPlayerName = "" 
-local maxDetectDistance = 150 -- Khoảng cách an toàn để kích hoạt cho NPC/Player
+local maxDetectDistance = 150 
 
-local attackCooldown = 1
+local attackCooldown = 1.4
 local pounceCooldown = 2.0
 local npcAttackCooldown = 0.5
 
@@ -306,16 +306,29 @@ local function updateUtilityVisuals()
     end
 end
 
-PounceBtn.MouseButton1Click:Connect(function() autoPounceActive = not autoPounceActive updateUtilityVisuals() end)
-DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
-NpcEspBtn.MouseButton1Click:Connect(function() npcEspActive = not npcEspActive updateUtilityVisuals() end)
+PounceBtn.MouseButton1Click:Connect(function() 
+    autoPounceActive = not autoPounceActive 
+    updateUtilityVisuals() 
+end)
+DrinkBtn.MouseButton1Click:Connect(function() 
+    autoDrinkActive = not autoDrinkActive 
+    updateUtilityVisuals() 
+end)
+NpcEspBtn.MouseButton1Click:Connect(function() 
+    npcEspActive = not npcEspActive 
+    updateUtilityVisuals() 
+end)
 
 ToggleLockBtn.MouseButton1Click:Connect(function()
     isLocking = not isLocking
     if isLocking then
-        targetHunger  = tonumber(InputHunger.Text) or 100
-        targetThirst  = tonumber(InputThirst.Text) or 100
-        targetStamina = tonumber(InputStamina.Text) or 100
+        local hVal = tonumber(InputHunger.Text)
+        local tVal = tonumber(InputThirst.Text)
+        local sVal = tonumber(InputStamina.Text)
+        
+        targetHunger = hVal or 100
+        targetThirst = tVal or 100
+        targetStamina = sVal or 100
         
         ToggleLockBtn.Text = "ĐANG KHÓA CHỈ SỐ (ON) 🔒"
         TweenService:Create(ToggleLockBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
@@ -329,15 +342,32 @@ end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if UserInputService:GetFocusedTextBox() or gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
-    if input.KeyCode == Enum.KeyCode.F then autoPounceActive = not autoPounceActive updateUtilityVisuals() end
-    if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
-    if input.KeyCode == Enum.KeyCode.K then npcEspActive = not npcEspActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.P then 
+        MainFrame.Visible = not MainFrame.Visible 
+    end
+    if input.KeyCode == Enum.KeyCode.F then 
+        autoPounceActive = not autoPounceActive 
+        updateUtilityVisuals() 
+end
+    if input.KeyCode == Enum.KeyCode.L then 
+        autoDrinkActive = not autoDrinkActive 
+        updateUtilityVisuals() 
+end
+    if input.KeyCode == Enum.KeyCode.K then 
+        npcEspActive = not npcEspActive 
+        updateUtilityVisuals() 
+end
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
-        StatusLabel.Text = killAuraActive and "KILL AURA: RUNNING [Q]" or "KILL AURA: PAUSED [Q]"
-        StatusLabel.TextColor3 = killAuraActive and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 200, 50)
-        StatusStroke.Color = killAuraActive and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 130, 0)
+        if killAuraActive then
+            StatusLabel.Text = "KILL AURA: RUNNING [Q]"
+            StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+            StatusStroke.Color = Color3.fromRGB(0, 180, 0)
+        else
+            StatusLabel.Text = "KILL AURA: PAUSED [Q]"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+            StatusStroke.Color = Color3.fromRGB(180, 130, 0)
+        end
     end
 end)
 
@@ -390,14 +420,21 @@ local function applyESP(character, playerName)
         local distance = math.floor((myRoot.Position - head.Position).Magnitude)
         
         if targets[playerName] then
-            txt.Text = killAuraActive and string.format("[🎯] %s\n[%d m]", playerName, distance) or string.format("[⏸️] %s\n[%d m]", playerName, distance)
-            txt.TextColor3 = killAuraActive and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(255, 200, 50)
-        elseif playerName == closestPlayerName then
-            txt.Text = string.format("[⭐ CẬN] %s\n[%d m]", playerName, distance)
-            txt.TextColor3 = Color3.fromRGB(0, 255, 150)
+            if killAuraActive then
+                txt.Text = string.format("[🎯] %s\n[%d m]", playerName, distance)
+                txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+            else
+                txt.Text = string.format("[⏸️] %s\n[%d m]", playerName, distance)
+                txt.TextColor3 = Color3.fromRGB(255, 200, 50)
+            end
         else
-            txt.Text = string.format("%s\n[%d m]", playerName, distance)
-            txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+            if playerName == closestPlayerName then
+                txt.Text = string.format("[⭐ CẬN] %s\n[%d m]", playerName, distance)
+                txt.TextColor3 = Color3.fromRGB(0, 255, 150)
+            else
+                txt.Text = string.format("%s\n[%d m]", playerName, distance)
+                txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
         end
     end)
 end
@@ -457,7 +494,11 @@ local function applyNPCEsp(npcModel, typeName)
             txt.TextColor3 = Color3.fromRGB(255, 50, 50)
         else
             txt.Text = string.format("👾 [%s]\n%s (%dm)", typeName, npcModel.Name, distance)
-            txt.TextColor3 = (typeName == "Peccary") and Color3.fromRGB(255, 180, 220) or Color3.fromRGB(0, 220, 255)
+            if typeName == "Peccary" then
+                txt.TextColor3 = Color3.fromRGB(255, 180, 220)
+            else
+                txt.TextColor3 = Color3.fromRGB(0, 220, 255)
+            end
         end
     end)
 end
@@ -580,7 +621,11 @@ task.spawn(function()
                         minDistance = dist
                         tempClosest = pName
                     end
-                    Btn.LayoutOrder = targets[pName] and (math.floor(dist) - 100000) or math.floor(dist)
+                    if targets[pName] then
+                        Btn.LayoutOrder = math.floor(dist) - 100000
+                    else
+                        Btn.LayoutOrder = math.floor(dist)
+                    end
                 else
                     Btn.LayoutOrder = 999999
                 end
@@ -590,17 +635,24 @@ task.spawn(function()
 
         for pName, Btn in pairs(playerButtons) do
             if targets[pName] then
-                Btn.BackgroundColor3 = killAuraActive and Color3.fromRGB(180, 40, 40) or Color3.fromRGB(160, 120, 30)
-                Btn.Text = pName .. (killAuraActive and " [KILLING]" or " [PAUSED]")
+                if killAuraActive then
+                    Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                    Btn.Text = pName .. " [KILLING]"
+                else
+                    Btn.BackgroundColor3 = Color3.fromRGB(160, 120, 30)
+                    Btn.Text = pName .. " [PAUSED]"
+                end
                 Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            elseif pName == closestPlayerName then
-                Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
-                Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
-                Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
             else
-                Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-                Btn.Text = pName
-                Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                if pName == closestPlayerName then
+                    Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
+                    Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
+                    Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
+                else
+                    Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                    Btn.Text = pName
+                    Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                end
             end
         end
 
@@ -610,12 +662,13 @@ task.spawn(function()
             local body = npcModel and (npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChildOfClass("Part"))
             if body and myRoot then
                 local dist = (myRoot.Position - body.Position).Magnitude
-                Btn.LayoutOrder = peccaryTargets[npcName] and (math.floor(dist) - 50000) or (math.floor(dist) + 50000)
                 if peccaryTargets[npcName] then
+                    Btn.LayoutOrder = math.floor(dist) - 50000
                     Btn.BackgroundColor3 = Color3.fromRGB(230, 50, 120)
                     Btn.Text = "🐷 " .. npcName .. " [KILL TARGET]"
                     Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
                 else
+                    Btn.LayoutOrder = math.floor(dist) + 50000
                     Btn.BackgroundColor3 = Color3.fromRGB(25, 35, 45)
                     Btn.Text = "🐷 " .. npcName .. string.format(" (%dm)", math.floor(dist))
                     Btn.TextColor3 = Color3.fromRGB(200, 220, 245)
@@ -639,7 +692,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 4. FIX: VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER (CHỈ CHẠY KHI ĐƯỢC CHỌN VÀ LẠI GẦN)
+-- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER
 --======================================================================
 task.spawn(function()
     while true do
@@ -649,7 +702,6 @@ task.spawn(function()
 
             if myRoot then
                 for pName, isTargeted in pairs(targets) do
-                    -- SỬA LỖI: Chỉ bắn Remote khi người chơi đó thực sự được click chọn trên UI
                     if isTargeted then 
                         local targetCharacter = charactersFolder:FindFirstChild(pName)
                         local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
@@ -658,7 +710,6 @@ task.spawn(function()
                         
                         if targetRoot and targetHumanoid and targetHitbox then
                             local distance = (myRoot.Position - targetRoot.Position).Magnitude
-                            -- KIỂM TRA KHOẢNG CÁCH: Phải lại gần phạm vi cài đặt mới bắt đầu thả Remote
                             if distance <= maxDetectDistance then
                                 pcall(function() attackRemote:FireServer(targetHumanoid, targetHitbox, 1) end)
                             end
@@ -672,7 +723,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 5. FIX: VÒNG LẶP SKILL VỒ PLAYER (CHỈ CHẠY KHI ĐƯỢC CHỌN VÀ LẠI GẦN)
+-- 5. VÒNG LẶP SKILL VỒ PLAYER
 --======================================================================
 task.spawn(function()
     while true do
@@ -682,7 +733,6 @@ task.spawn(function()
 
             if myRoot then
                 for pName, isTargeted in pairs(targets) do
-                    -- SỬA LỖI: Chỉ thả skill vồ khi người đó được chọn trên UI
                     if isTargeted then
                         local targetCharacter = charactersFolder:FindFirstChild(pName)
                         local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
@@ -691,13 +741,15 @@ task.spawn(function()
                         
                         if targetRoot and targetHumanoid and targetHitbox then
                             local distance = (myRoot.Position - targetRoot.Position).Magnitude
-                            -- KIỂM TRA KHOẢNG CÁCH: Phải lại gần phạm vi cài đặt mới bắt đầu thả Remote
                             if distance <= maxDetectDistance then
-                                local torso = targetCharacter:FindFirstChild("RootPart") and targetCharacter.RootPart:FindFirstChild("Torso")
-                                local latchPoint = torso and (torso:FindFirstChild("LatchPoint2.R") or torso:GetChildren()[1])
-                                
-                                if latchPoint then
-                                    pcall(function() attackRemote:FireServer(targetHumanoid, targetHitbox, 2, latchPoint) end)
+                                local rootPart = targetCharacter:FindFirstChild("RootPart")
+                                local torso = rootPart and rootPart:FindFirstChild("Torso")
+                                if torso then
+                                    local children = torso:GetChildren()
+                                    local latchPoint = torso:FindFirstChild("LatchPoint2.R") or children[1]
+                                    if latchPoint then
+                                        pcall(function() attackRemote:FireServer(targetHumanoid, targetHitbox, 2, latchPoint) end)
+                                    end
                                 end
                             end
                         end
@@ -710,7 +762,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 6. FIX: VÒNG LẶP TẤN CÔNG NPC (BẮT BUỘC KIỂM TRA KHOẢNG CÁCH AN TOÀN)
+-- 6. VÒNG LẶP TẤN CÔNG NPC
 --======================================================================
 task.spawn(function()
     while true do
@@ -723,7 +775,6 @@ task.spawn(function()
                     if folder:IsA("Folder") or folder:IsA("Model") then
                         
                         if folder.Name == "FlatHeadedPeccary61" then
-                            -- LOÀI HEO: Phải thỏa mãn 2 điều kiện (Được chọn trên UI + Lại gần quái)
                             for _, deepNpc in pairs(folder:GetChildren()) do
                                 if deepNpc:IsA("Model") and peccaryTargets[deepNpc.Name] then 
                                     local bodyPart = deepNpc:FindFirstChild("Body_m")
@@ -736,14 +787,15 @@ task.spawn(function()
                                 end
                             end
                         else
-                            -- LOÀI NPC THƯỜNG (BIRD, SMALL, BARRIER): Tự động đánh nhưng BẮT BUỘC phải lại gần
-                            local targetsList = folder:IsA("Model") and {folder} or folder:GetChildren()
+                            local targetsList = folder:GetChildren()
+                            if folder:IsA("Model") then
+                                targetsList = {folder}
+                            end
                             for _, npcModel in pairs(targetsList) do
                                 if npcModel:IsA("Model") then
                                     local bodyPart = npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChildOfClass("MeshPart") or npcModel:FindFirstChildOfClass("Part")
                                     if bodyPart then
                                         local distance = (myRoot.Position - bodyPart.Position).Magnitude
-                                        -- SỬA LỖI: Chỉ gửi Remote khi bạn ĐÃ LẠI GẦN con quái đó! Không bao giờ spam từ xa toàn map nữa.
                                         if distance <= maxDetectDistance then
                                             pcall(function() attackNPCRemote:FireServer(bodyPart, 1) end)
                                         end
@@ -790,4 +842,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🛡️ Đã cập nhật lớp bảo mật: Chỉ kích hoạt Remote khi Player được chọn + Lại gần NPC!")
+print("🦋 LIZLUK PREMIUM CORE LOADED SUCCESSFUL 🦋")
