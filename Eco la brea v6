@@ -31,7 +31,7 @@ local npcEspActive = true
 local closestPlayerName = "" 
 local maxDetectDistance = 150 
 
-local attackCooldown = 0.5
+local attackCooldown = 0.1
 local pounceCooldown = 2.0
 local npcAttackCooldown = 0.5
 
