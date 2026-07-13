@@ -1,4 +1,4 @@
---// LIZLUK ASSASSIN CORE (VÁ LỖI HIỂN THỊ LAYOUT GUI)
+--// LIZLUK ASSASSIN CORE (BYPASS ARCHIVABLE FALSE - FORCE SCAN REGION)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -35,22 +35,13 @@ local pounceCooldown = 2.0
 local npcAttackCooldown = 0.5
 
 local activeNpcEsps = {}
-local dynamicPeccaryFolderName = "" 
 
 --======================================================================
--- HÀM TỰ ĐỘNG TÌM THƯ MỤC HEO THEO TỪ KHÓA
+-- HÀM ĐỊNH VỊ NPC KHÔNG PHỤ THUỘC VÀO TÊN HOẶC TRẠNG THÁI KHÓA ARCHIVABLE
 --======================================================================
-local function findPeccaryFolder()
-    local npcsFolder = workspace:FindFirstChild("NPCs")
-    if npcsFolder then
-        for _, child in pairs(npcsFolder:GetChildren()) do
-            if child:IsA("Folder") and string.match(child.Name, "^FlatHeadedPeccary") then
-                dynamicPeccaryFolderName = child.Name
-                return child
-            end
-        end
-    end
-    return nil
+local function getNPCTargetPart(npcModel)
+    if not npcModel then return nil end
+    return npcModel.PrimaryPart or npcModel:FindFirstChild("HRP") or npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChild("Head") or npcModel:FindFirstChildOfClass("Part") or npcModel:FindFirstChildOfClass("MeshPart")
 end
 
 --======================================================================
@@ -111,7 +102,6 @@ StatusStroke.Color = Color3.fromRGB(40, 40, 40)
 StatusStroke.Thickness = 1
 StatusStroke.Parent = StatusLabel
 
--- HÀM TẠO NÚT UTILITY CHUẨN TEXT KHÔNG BỊ TRỐNG
 local function createUtilityButton(posIndex, defaultText)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -20, 0, 30)
@@ -139,7 +129,6 @@ local PounceBtn, PounceStroke = createUtilityButton(1, "AUTO POUNCE: OFF [F]")
 local DrinkBtn, DrinkStroke = createUtilityButton(2, "AUTO DRINK: OFF [L]")
 local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "NPC ESP: DISABLED [K]") 
 
--- SỬA LẠI LAYOUT Ô NHẬP KHOẢNG CÁCH (FIX BỊ ĐÈ CHỮ)
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -20, 0, 35)
 DistanceInputFrame.Position = UDim2.new(0, 10, 0, 185)
@@ -172,7 +161,7 @@ DistanceBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 DistanceBox.Font = Enum.Font.GothamBold
 DistanceBox.TextSize = 12
 DistanceBox.ClearTextOnFocus = false
-DistanceBox.Parent = DistanceInputFrame -- Sửa lỗi gán nhầm Parent vào chính nó
+DistanceBox.Parent = DistanceInputFrame 
 
 local DistanceBoxCorner = Instance.new("UICorner")
 DistanceBoxCorner.CornerRadius = UDim.new(0, 4)
@@ -435,7 +424,8 @@ end
 local function applyNPCEsp(npcModel, typeName)
     if not npcModel then return end
     if npcModel:FindFirstChild("NpcESP_Holder") then return end
-    local targetPart = npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChild("Head") or npcModel:FindFirstChildOfClass("MeshPart") or npcModel:FindFirstChildOfClass("Part")
+    
+    local targetPart = getNPCTargetPart(npcModel)
     if not targetPart then return end
 
     local bb = Instance.new("BillboardGui")
@@ -482,36 +472,21 @@ local function applyNPCEsp(npcModel, typeName)
 end
 
 --======================================================================
--- 2. CƠ CHẾ QUÉT KHÔNG CẦN TÊN CHÍNH XÁC (SMART AUTO SEARCH)
+-- 2. CƠ CHẾ QUÉT PHÁ BĂNG (BYPASS ARCHIVABLE FALSE BẰNG GETDESCENTDANTS)
 --======================================================================
 local playerButtons = {}
 local peccaryButtons = {}
+local scannedNPCModels = {} -- Lưu trữ danh sách model thực tế quét được
 
 local function scanNpcAndPlayers()
-    local pf = findPeccaryFolder()
-
-    if npcsFolder then
-        if pf then
-            for _, v in pairs(pf:GetChildren()) do
-                if v:IsA("Model") then applyNPCEsp(v, "Peccary") end
-            end
-        end
-        local bf = npcsFolder:FindFirstChild("Bird")
-        if bf then
-            for _, v in pairs(bf:GetChildren()) do if v:IsA("Model") then applyNPCEsp(v, "Bird") end end
-        end
-        local sf = npcsFolder:FindFirstChild("Small")
-        if sf then
-            for _, v in pairs(sf:GetChildren()) do if v:IsA("Model") then applyNPCEsp(v, "Small") end end
-        end
-    end
-
     for _, btn in pairs(ScrollingFrame:GetChildren()) do
         if btn:IsA("TextButton") then btn:Destroy() end
     end
     playerButtons = {}
     peccaryButtons = {}
+    scannedNPCModels = {}
 
+    -- 1. Quét Player
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Name ~= "Lubakixa" then
             local pName = player.Name
@@ -528,36 +503,49 @@ local function scanNpcAndPlayers()
         end
     end
 
-    if pf then
-        for _, pig in pairs(pf:GetChildren()) do
-            if pig:IsA("Model") then
-                local pigName = pig.Name
-                local Btn = Instance.new("TextButton")
-                Btn.Size = UDim2.new(1, 0, 0, 28)
-                Btn.Font = Enum.Font.SourceSansBold
-                Btn.TextSize = 12
-                Btn.BorderSizePixel = 0
-                Btn.Parent = ScrollingFrame
-                Instance.new("UICorner").Parent = Btn
+    -- 2. Bẻ khóa Archivable bằng cách dùng GetDescendants quét sâu toàn bộ nhánh bộ nhớ của NPCs
+    if npcsFolder then
+        local allObjects = npcsFolder:GetDescendants()
+        for _, obj in pairs(allObjects) do
+            if obj:IsA("Model") and obj.Parent and obj.Parent ~= npcsFolder then
+                -- Kiểm tra xem tên của Model hoặc thư mục cha của nó có chữ Peccary không
+                local isPeccary = string.match(obj.Name, "Peccary") or string.match(obj.Parent.Name, "Peccary") or string.match(obj.Parent.Name, "Flat")
+                
+                if isPeccary then
+                    table.insert(scannedNPCModels, obj)
+                    applyNPCEsp(obj, "Peccary")
+                    
+                    local pigName = obj.Name
+                    -- Tránh tạo trùng nút bấm cho cùng 1 con heo
+                    if not peccaryButtons[pigName] then
+                        local Btn = Instance.new("TextButton")
+                        Btn.Size = UDim2.new(1, 0, 0, 28)
+                        Btn.Font = Enum.Font.SourceSansBold
+                        Btn.TextSize = 12
+                        Btn.BorderSizePixel = 0
+                        Btn.Parent = ScrollingFrame
+                        Instance.new("UICorner").Parent = Btn
 
-                Btn.MouseButton1Click:Connect(function() peccaryTargets[pigName] = not peccaryTargets[pigName] end)
-                peccaryButtons[pigName] = Btn
+                        Btn.MouseButton1Click:Connect(function() peccaryTargets[pigName] = not peccaryTargets[pigName] end)
+                        peccaryButtons[pigName] = Btn
+                    end
+                end
             end
         end
     end
 end
 
 task.spawn(function()
-    task.wait(1)
+    task.wait(0.5)
     scanNpcAndPlayers()
     while true do
         scanNpcAndPlayers()
-        task.wait(3)
+        task.wait(3.5) -- Quét liên tục ép Roblox cập nhật
     end
 end)
 
 --======================================================================
--- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT & KHOẢNG CÁCH THỰC TẾ
+-- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT GUI & KHÓA CHỈ SỐ PLAYER
 --======================================================================
 task.spawn(function()
     while true do
@@ -565,7 +553,7 @@ task.spawn(function()
         local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
         if isLocking and myCharacter then
-            local attr = myCharacter:FindFirstChild("Attributes")
+            local attr = myCharacter:FindFirstChild("Attributes") or LocalPlayer
             if attr then
                 pcall(function()
                     attr:SetAttribute("Hunger", targetHunger)
@@ -615,11 +603,18 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
-        local pf = findPeccaryFolder()
+        -- Cập nhật trạng thái nút Heo từ danh sách bẻ khóa bộ nhớ nâng cao
         for npcName, Btn in pairs(peccaryButtons) do
             if Btn and Btn.Parent then
-                local pigModel = pf and pf:FindFirstChild(npcName)
-                local body = pigModel and (pigModel:FindFirstChild("Body_m") or pigModel:FindFirstChildOfClass("Part"))
+                local pigModel = nil
+                for _, model in pairs(scannedNPCModels) do
+                    if model.Name == npcName then
+                        pigModel = model
+                        break
+                    end
+                end
+
+                local body = getNPCTargetPart(pigModel)
                 if body and myRoot then
                     local dist = (myRoot.Position - body.Position).Magnitude
                     Btn.LayoutOrder = peccaryTargets[npcName] and (math.floor(dist) - 50000) or (math.floor(dist) + 50000)
@@ -709,35 +704,20 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 6. VÒNG LẶP TẤN CÔNG NPC TỰ ĐỘNG
+-- 6. VÒNG LẶP TẤN CÔNG NPC TỰ ĐỘNG (XỬ LÝ DANH SÁCH BẺ KHÓA BỘ NHỚ)
 --======================================================================
 task.spawn(function()
     while true do
-        if killAuraActive and attackNPCRemote and npcsFolder then
+        if killAuraActive and attackNPCRemote then
             local myChar = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             if myRoot then
-                local pf = findPeccaryFolder()
-                if pf then
-                    for _, pig in pairs(pf:GetChildren()) do
-                        if pig:IsA("Model") and peccaryTargets[pig.Name] then
-                            local body = pig:FindFirstChild("Body_m")
-                            if body and (myRoot.Position - body.Position).Magnitude <= maxDetectDistance then
-                                pcall(function() attackNPCRemote:FireServer(body, 1) end)
-                            end
-                        end
-                    end
-                end
-                
-                for _, folder in pairs(npcsFolder:GetChildren()) do
-                    if folder:IsA("Folder") and folder.Name ~= dynamicPeccaryFolderName then
-                        for _, npc in pairs(folder:GetChildren()) do
-                            if npc:IsA("Model") then
-                                local body = npc:FindFirstChild("Body_m") or npc:FindFirstChildOfClass("MeshPart") or npc:FindFirstChildOfClass("Part")
-                                if body and (myRoot.Position - body.Position).Magnitude <= maxDetectDistance then
-                                    pcall(function() attackNPCRemote:FireServer(body, 1) end)
-                                end
-                            end
+                -- Tấn công thẳng các Model heo thu thập được từ hàm GetDescendants nâng cao
+                for _, npcModel in pairs(scannedNPCModels) do
+                    if npcModel and npcModel:IsDescendantOf(workspace) then
+                        local body = getNPCTargetPart(npcModel)
+                        if body and (myRoot.Position - body.Position).Magnitude <= maxDetectDistance then
+                            pcall(function() attackNPCRemote:FireServer(body, 1) end)
                         end
                     end
                 end
@@ -775,4 +755,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK GUI LAYOUT FIXED & LOADED 🦋")
+print("🦋 LIZLUK ASSASSIN: ARCHIVABLE FALSE BYPASS COMPLETE! 🦋")
