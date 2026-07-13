@@ -1,4 +1,4 @@
---// LIZLUK PREMIUM CORE (STRICT SYNTAX & CORE_GUI RENDER FIX)
+--// LIZLUK ASSASSIN CORE (SMART AUTO-DETECT PRESET)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -36,6 +36,25 @@ local npcAttackCooldown = 0.5
 
 local activeNpcEsps = {}
 
+-- Biến lưu tên thư mục Heo tìm được tự động
+local dynamicPeccaryFolderName = "" 
+
+--======================================================================
+-- HÀM TỰ ĐỘNG TÌM THƯ MỤC HEO THEO TỪ KHÓA (BẤT CHẤP ĐỔI SỐ)
+--======================================================================
+local function findPeccaryFolder()
+    local npcsFolder = workspace:FindFirstChild("NPCs")
+    if npcsFolder then
+        for _, child in pairs(npcsFolder:GetChildren()) do
+            if child:IsA("Folder") and string.match(child.Name, "^FlatHeadedPeccary") then
+                dynamicPeccaryFolderName = child.Name
+                return child
+            end
+        end
+    end
+    return nil
+end
+
 --======================================================================
 -- 1. ÉP BUỘC GIAO DIỆN VÀO CORE_GUI TRÁNH BỊ CHẶN (LIZLUK STYLE)
 --======================================================================
@@ -69,7 +88,7 @@ UIStroke.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundTransparency = 1
-Title.Text = "🦋 LIZLUK ASSASSIN MENU [P] 🦋"
+Title.Text = "🦋 LIZLUK AUTOMATION [P] 🦋"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
@@ -151,11 +170,12 @@ DistanceBox.Font = Enum.Font.GothamBold
 DistanceBox.TextSize = 12
 DistanceBox.ClearTextOnFocus = false
 DistanceBox.PlaceholderText = "Meters"
-DistanceBox.Parent = DistanceInputFrame
+DistanceBox.Parent = DistanceBox
 
 local DistanceBoxCorner = Instance.new("UICorner")
 DistanceBoxCorner.CornerRadius = UDim.new(0, 4)
 DistanceBoxCorner.Parent = DistanceBox
+DistanceBox.Parent = DistanceInputFrame
 
 DistanceBox.FocusLost:Connect(function()
     local number = tonumber(DistanceBox.Text)
@@ -210,12 +230,8 @@ local function createLockerInput(name, placeholder, posY)
     boxStroke.Thickness = 1
     boxStroke.Parent = box
     
-    box.Focused:Connect(function() 
-        boxStroke.Color = Color3.fromRGB(255, 255, 255) 
-    end)
-    box.FocusLost:Connect(function() 
-        boxStroke.Color = Color3.fromRGB(45, 45, 45) 
-    end)
+    box.Focused:Connect(function() boxStroke.Color = Color3.fromRGB(255, 255, 255) end)
+    box.FocusLost:Connect(function() boxStroke.Color = Color3.fromRGB(45, 45, 45) end)
     
     return box
 end
@@ -315,30 +331,16 @@ local function updateUtilityVisuals()
     end
 end
 
-PounceBtn.MouseButton1Click:Connect(function() 
-    autoPounceActive = not autoPounceActive 
-    updateUtilityVisuals() 
-end)
-DrinkBtn.MouseButton1Click:Connect(function() 
-    autoDrinkActive = not autoDrinkActive 
-    updateUtilityVisuals() 
-end)
-NpcEspBtn.MouseButton1Click:Connect(function() 
-    npcEspActive = not npcEspActive 
-    updateUtilityVisuals() 
-end)
+PounceBtn.MouseButton1Click:Connect(function() autoPounceActive = not autoPounceActive updateUtilityVisuals() end)
+DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
+NpcEspBtn.MouseButton1Click:Connect(function() npcEspActive = not npcEspActive updateUtilityVisuals() end)
 
 ToggleLockBtn.MouseButton1Click:Connect(function()
     isLocking = not isLocking
     if isLocking then
-        local hVal = tonumber(InputHunger.Text)
-        local tVal = tonumber(InputThirst.Text)
-        local sVal = tonumber(InputStamina.Text)
-        
-        targetHunger = hVal or 100
-        targetThirst = tVal or 100
-        targetStamina = sVal or 100
-        
+        targetHunger = tonumber(InputHunger.Text) or 100
+        targetThirst = tonumber(InputThirst.Text) or 100
+        targetStamina = tonumber(InputStamina.Text) or 100
         ToggleLockBtn.Text = "ĐANG KHÓA CHỈ SỐ (ON) 🔒"
         TweenService:Create(ToggleLockBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
         LockStroke.Color = Color3.fromRGB(255, 255, 255)
@@ -350,24 +352,11 @@ ToggleLockBtn.MouseButton1Click:Connect(function()
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if UserInputService:GetFocusedTextBox() or gameProcessed then 
-        return 
-    end
-    if input.KeyCode == Enum.KeyCode.P then 
-        MainFrame.Visible = not MainFrame.Visible 
-    end
-    if input.KeyCode == Enum.KeyCode.F then 
-        autoPounceActive = not autoPounceActive 
-        updateUtilityVisuals() 
-    end
-    if input.KeyCode == Enum.KeyCode.L then 
-        autoDrinkActive = not autoDrinkActive 
-        updateUtilityVisuals() 
-    end
-    if input.KeyCode == Enum.KeyCode.K then 
-        npcEspActive = not npcEspActive 
-        updateUtilityVisuals() 
-    end
+    if UserInputService:GetFocusedTextBox() or gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
+    if input.KeyCode == Enum.KeyCode.F then autoPounceActive = not autoPounceActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.K then npcEspActive = not npcEspActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
         if killAuraActive then
@@ -383,21 +372,12 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 --======================================================================
--- KẾT NỐI REMOTES VÀ FOLDERS AN TOÀN
+-- KẾT NỐI REMOTES AN TOÀN
 --======================================================================
 local eventsFolder = ReplicatedStorage:FindFirstChild("Events")
-local attackRemote = nil
-local attackNPCRemote = nil
-if eventsFolder then
-    attackRemote = eventsFolder:FindFirstChild("Attack")
-    attackNPCRemote = eventsFolder:FindFirstChild("AttackNPC")
-end
-
-local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
-local drinkRemote = nil
-if remotesFolder then
-    drinkRemote = remotesFolder:FindFirstChild("DrinkRemote")
-end
+local attackRemote = eventsFolder and eventsFolder:FindFirstChild("Attack")
+local attackNPCRemote = eventsFolder and eventsFolder:FindFirstChild("AttackNPC")
+local drinkRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("DrinkRemote")
 
 local interactionsFolder = workspace:FindFirstChild("Interactions")
 local charactersFolder = workspace:FindFirstChild("Characters")
@@ -489,7 +469,7 @@ local function applyNPCEsp(npcModel, typeName)
             bb:Destroy()
             return
         end
-        local myCharacter = LocalPlayer.Character or (charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")))
+        local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
         local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
         if not myRoot then return end
         
@@ -499,43 +479,45 @@ local function applyNPCEsp(npcModel, typeName)
             txt.TextColor3 = Color3.fromRGB(255, 50, 50)
         else
             txt.Text = string.format("👾 [%s]\n%s (%dm)", typeName, npcModel.Name, distance)
-            txt.TextColor3 = (typeName == "Peccary") and Color3.fromRGB(255, 150, 200) or Color3.fromRGB(0, 220, 255)
+            txt.TextColor3 = (typeName == "Peccary") and Color3.fromRGB(255, 150, 200) or Color3.fromRGB(0, 220, 245)
         end
     end)
 end
 
 --======================================================================
--- 2. CƠ CHẾ QUÉT DANH SÁCH ÉP HIỆN THỊ HEO LÊN UI (FIXED SYNTAX)
+-- 2. CƠ CHẾ QUÉT KHÔNG CẦN TÊN CHÍNH XÁC (SMART AUTO SEARCH)
 --======================================================================
 local playerButtons = {}
 local peccaryButtons = {}
 
 local function scanNpcAndPlayers()
-    local mainNpcs = workspace:FindFirstChild("NPCs")
-    if mainNpcs then
-        local pf = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
+    -- Tự động tìm lại thư mục Heo nếu nó đổi tên
+    local pf = findPeccaryFolder()
+
+    if npcsFolder then
         if pf then
             for _, v in pairs(pf:GetChildren()) do
                 if v:IsA("Model") then applyNPCEsp(v, "Peccary") end
             end
         end
-        local bf = mainNpcs:FindFirstChild("Bird")
+        local bf = npcsFolder:FindFirstChild("Bird")
         if bf then
             for _, v in pairs(bf:GetChildren()) do if v:IsA("Model") then applyNPCEsp(v, "Bird") end end
         end
-        local sf = mainNpcs:FindFirstChild("Small")
+        local sf = npcsFolder:FindFirstChild("Small")
         if sf then
             for _, v in pairs(sf:GetChildren()) do if v:IsA("Model") then applyNPCEsp(v, "Small") end end
         end
     end
 
+    -- Xóa UI cũ làm mới danh sách
     for _, btn in pairs(ScrollingFrame:GetChildren()) do
         if btn:IsA("TextButton") then btn:Destroy() end
     end
     playerButtons = {}
     peccaryButtons = {}
 
-    -- Thêm người chơi
+    -- Đưa người chơi lên bảng UI
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Name ~= "Lubakixa" then
             local pName = player.Name
@@ -547,40 +529,33 @@ local function scanNpcAndPlayers()
             Btn.Parent = ScrollingFrame
             Instance.new("UICorner").Parent = Btn
 
-            Btn.MouseButton1Click:Connect(function()
-                targets[pName] = not targets[pName]
-            end)
+            Btn.MouseButton1Click:Connect(function() targets[pName] = not targets[pName] end)
             playerButtons[pName] = Btn
         end
     end
 
-    -- Thêm danh sách heo lên UI trực tiếp
-    if mainNpcs then
-        local pf = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
-        if pf then
-            for _, pig in pairs(pf:GetChildren()) do
-                if pig:IsA("Model") then
-                    local pigName = pig.Name
-                    local Btn = Instance.new("TextButton")
-                    Btn.Size = UDim2.new(1, 0, 0, 28)
-                    Btn.Font = Enum.Font.SourceSansBold
-                    Btn.TextSize = 12
-                    Btn.BorderSizePixel = 0
-                    Btn.Parent = ScrollingFrame
-                    Instance.new("UICorner").Parent = Btn
+    -- Đưa Heo quét được tự động lên bảng UI
+    if pf then
+        for _, pig in pairs(pf:GetChildren()) do
+            if pig:IsA("Model") then
+                local pigName = pig.Name
+                local Btn = Instance.new("TextButton")
+                Btn.Size = UDim2.new(1, 0, 0, 28)
+                Btn.Font = Enum.Font.SourceSansBold
+                Btn.TextSize = 12
+                Btn.BorderSizePixel = 0
+                Btn.Parent = ScrollingFrame
+                Instance.new("UICorner").Parent = Btn
 
-                    Btn.MouseButton1Click:Connect(function()
-                        peccaryTargets[pigName] = not peccaryTargets[pigName]
-                    end)
-                    peccaryButtons[pigName] = Btn
-                end
+                Btn.MouseButton1Click:Connect(function() peccaryTargets[pigName] = not peccaryTargets[pigName] end)
+                peccaryButtons[pigName] = Btn
             end
         end
     end
 end
 
 task.spawn(function()
-    task.wait(0.5)
+    task.wait(1)
     scanNpcAndPlayers()
     while true do
         scanNpcAndPlayers()
@@ -589,11 +564,11 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT & KHOẢNG CÁCH THỰC TẾ (FIXED SYNTAX 'IN PAIRS')
+-- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT & KHOẢNG CÁCH THỰC TẾ
 --======================================================================
 task.spawn(function()
     while true do
-        local myCharacter = LocalPlayer.Character or (charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")))
+        local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
         local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
         if isLocking and myCharacter then
@@ -610,8 +585,8 @@ task.spawn(function()
         local minDistance = math.huge
         local tempClosest = ""
 
-        -- SỬA LỖI ĐỎ: Thêm 'in pairs' đầy đủ cú pháp
-        for pName, Btn in pairs(playerButtons) do
+        -- Đồng bộ nút Player
+        for pName, Btn do
             if Btn and Btn.Parent then
                 local pChar = charactersFolder and charactersFolder:FindFirstChild(pName)
                 local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
@@ -648,11 +623,9 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
-        -- SỬA LỖI ĐỎ: Thêm 'in pairs' đầy đủ cú pháp cho Heo
-        local mainNpcs = workspace:FindFirstChild("NPCs")
-        local pf = mainNpcs and mainNpcs:FindFirstChild("FlatHeadedPeccary61")
-
-        for npcName, Btn in pairs(peccaryButtons) do
+        -- Đồng bộ nút Heo bằng Tên Thư Mục Quét Tự Động
+        local pf = findPeccaryFolder()
+        for npcName, Btn do
             if Btn and Btn.Parent then
                 local pigModel = pf and pf:FindFirstChild(npcName)
                 local body = pigModel and (pigModel:FindFirstChild("Body_m") or pigModel:FindFirstChildOfClass("Part"))
@@ -693,7 +666,7 @@ end)
 task.spawn(function()
     while true do
         if killAuraActive and attackRemote and charactersFolder then
-            local myChar = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or LocalPlayer.Character
+            local myChar = charactersFolder:FindFirstChild(LocalPlayer.Name) or LocalPlayer.Character
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             if myRoot then
                 for pName, isTargeted in pairs(targets) do
@@ -702,10 +675,8 @@ task.spawn(function()
                         local tr = tc and tc:FindFirstChild("HumanoidRootPart")
                         local th = tc and tc:FindFirstChildOfClass("Humanoid")
                         local tb = tc and tc:FindFirstChild("BodyHitbox")
-                        if tr and th and tb then
-                            if (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
-                                pcall(function() attackRemote:FireServer(th, tb, 1) end)
-                            end
+                        if tr and th and tb and (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
+                            pcall(function() attackRemote:FireServer(th, tb, 1) end)
                         end
                     end
                 end
@@ -721,7 +692,7 @@ end)
 task.spawn(function()
     while true do
         if autoPounceActive and attackRemote and charactersFolder then
-            local myChar = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or LocalPlayer.Character
+            local myChar = charactersFolder:FindFirstChild(LocalPlayer.Name) or LocalPlayer.Character
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             if myRoot then
                 for pName, isTargeted in pairs(targets) do
@@ -730,11 +701,12 @@ task.spawn(function()
                         local tr = tc and tc:FindFirstChild("HumanoidRootPart")
                         local th = tc and tc:FindFirstChildOfClass("Humanoid")
                         local tb = tc and tc:FindFirstChild("BodyHitbox")
-                        if tr and th and tb then
-                            if (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
-                                local torso = tc:FindFirstChild("RootPart") and tc.RootPart:FindFirstChild("Torso")
-                                local latch = torso and (torso:FindFirstChild("LatchPoint2.R") or torso:GetChildren()[1])
-                                if latch then pcall(function() attackRemote:FireServer(th, tb, 2, latch) end) end
+                        if tr and th and tb and (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
+                            local rootPart = tc:FindFirstChild("RootPart")
+                            local torso = rootPart and rootPart:FindFirstChild("Torso")
+                            local latchPoint = torso and (torso:FindFirstChild("LatchPoint2.R") or torso:GetChildren()[1])
+                            if latchPoint then
+                                pcall(function() attackRemote:FireServer(th, tb, 2, latchPoint) end)
                             end
                         end
                     end
@@ -746,15 +718,16 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 6. VÒNG LẶP TẤN CÔNG NPC
+-- 6. VÒNG LẶP TẤN CÔNG NPC TỰ ĐỘNG
 --======================================================================
 task.spawn(function()
     while true do
         if killAuraActive and attackNPCRemote and npcsFolder then
-            local myChar = LocalPlayer.Character or (charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")))
+            local myChar = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             if myRoot then
-                local pf = npcsFolder:FindFirstChild("FlatHeadedPeccary61")
+                -- Tấn công Heo dựa trên thư mục quét được tự động
+                local pf = findPeccaryFolder()
                 if pf then
                     for _, pig in pairs(pf:GetChildren()) do
                         if pig:IsA("Model") and peccaryTargets[pig.Name] then
@@ -766,8 +739,9 @@ task.spawn(function()
                     end
                 end
                 
+                -- Tấn công các NPC thuộc thư mục khác
                 for _, folder in pairs(npcsFolder:GetChildren()) do
-                    if folder:IsA("Folder") and folder.Name ~= "FlatHeadedPeccary61" then
+                    if folder:IsA("Folder") and folder.Name ~= dynamicPeccaryFolderName then
                         for _, npc in pairs(folder:GetChildren()) do
                             if npc:IsA("Model") then
                                 local body = npc:FindFirstChild("Body_m") or npc:FindFirstChildOfClass("MeshPart") or npc:FindFirstChildOfClass("Part")
@@ -812,4 +786,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK ULTRA BYPASS CORE FIXED SYNTAX LOADED 🦋")
+print("🦋 LIZLUK SMART AUTO-DETECT LOADED 🦋")
