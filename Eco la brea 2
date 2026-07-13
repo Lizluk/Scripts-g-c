@@ -1,4 +1,4 @@
---// LIZLUK ASSASSIN CORE (BYPASS ARCHIVABLE FALSE - FORCE SCAN REGION)
+--// LIZLUK ASSASSIN CORE (FIX ALL NPCs: PIGS, BIRDS & SMALL ANIMALS)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -370,7 +370,7 @@ local charactersFolder = workspace:FindFirstChild("Characters")
 local npcsFolder = workspace:FindFirstChild("NPCs")
 
 --======================================================================
--- HỆ THỐNG ESP (PLAYER & NPC CHUẨN)
+-- HỆ THỐNG ESP (PLAYER & NPC TOÀN DIỆN)
 --======================================================================
 local function applyESP(character, playerName)
     if not character then return end
@@ -444,7 +444,15 @@ local function applyNPCEsp(npcModel, typeName)
     txt.TextStrokeTransparency = 0
     txt.Font = Enum.Font.SourceSansBold
     txt.TextSize = 12
-    txt.TextColor3 = (typeName == "Peccary") and Color3.fromRGB(255, 150, 200) or Color3.fromRGB(0, 220, 255)
+    
+    -- Màu sắc riêng cho từng loại động vật
+    if typeName == "Peccary" then
+        txt.TextColor3 = Color3.fromRGB(255, 150, 200) -- Heo hồng
+    elseif typeName == "Bird" then
+        txt.TextColor3 = Color3.fromRGB(255, 255, 100) -- Chim vàng
+    else
+        txt.TextColor3 = Color3.fromRGB(100, 230, 255) -- Thú nhỏ khác xanh dương
+    end
     txt.Parent = bb
 
     local connection
@@ -465,18 +473,18 @@ local function applyNPCEsp(npcModel, typeName)
             txt.Text = string.format("🐷 [MỤC TIÊU KHÓA]\n%s (%dm)", npcModel.Name, distance)
             txt.TextColor3 = Color3.fromRGB(255, 50, 50)
         else
-            txt.Text = string.format("👾 [%s]\n%s (%dm)", typeName, npcModel.Name, distance)
-            txt.TextColor3 = (typeName == "Peccary") and Color3.fromRGB(255, 150, 200) or Color3.fromRGB(0, 220, 245)
+            local icon = (typeName == "Peccary") and "🐷" or (typeName == "Bird" and "🦅" or "🐹")
+            txt.Text = string.format("%s [%s]\n%s (%dm)", icon, typeName, npcModel.Name, distance)
         end
     end)
 end
 
 --======================================================================
--- 2. CƠ CHẾ QUÉT PHÁ BĂNG (BYPASS ARCHIVABLE FALSE BẰNG GETDESCENTDANTS)
+-- 2. CƠ CHẾ QUÉT MỞ RỘNG (GOM TOÀN BỘ CHIM, THÚ NHỎ VÀ HEO)
 --======================================================================
 local playerButtons = {}
 local peccaryButtons = {}
-local scannedNPCModels = {} -- Lưu trữ danh sách model thực tế quét được
+local scannedNPCModels = {} -- Chứa TẤT CẢ mọi Model động vật để tự động KillAura
 
 local function scanNpcAndPlayers()
     for _, btn in pairs(ScrollingFrame:GetChildren()) do
@@ -503,20 +511,23 @@ local function scanNpcAndPlayers()
         end
     end
 
-    -- 2. Bẻ khóa Archivable bằng cách dùng GetDescendants quét sâu toàn bộ nhánh bộ nhớ của NPCs
+    -- 2. Quét sâu bằng GetDescendants để bẻ khóa Archivable và lấy toàn bộ mục Bird, Small, Heo
     if npcsFolder then
         local allObjects = npcsFolder:GetDescendants()
         for _, obj in pairs(allObjects) do
             if obj:IsA("Model") and obj.Parent and obj.Parent ~= npcsFolder then
-                -- Kiểm tra xem tên của Model hoặc thư mục cha của nó có chữ Peccary không
-                local isPeccary = string.match(obj.Name, "Peccary") or string.match(obj.Parent.Name, "Peccary") or string.match(obj.Parent.Name, "Flat")
+                -- Đưa toàn bộ Model tìm được vào danh sách để KillAura tự động xơi tái
+                table.insert(scannedNPCModels, obj)
                 
+                -- Phân loại dựa trên tên thư mục cha hoặc tên Model
+                local parentName = obj.Parent.Name
+                local isPeccary = string.match(obj.Name, "Peccary") or string.match(parentName, "Peccary") or string.match(parentName, "Flat")
+                local isBird = string.match(parentName, "Bird") or string.match(obj.Name, "Bird")
+                local isSmall = string.match(parentName, "Small") or string.match(obj.Name, "Small")
+
                 if isPeccary then
-                    table.insert(scannedNPCModels, obj)
                     applyNPCEsp(obj, "Peccary")
-                    
                     local pigName = obj.Name
-                    -- Tránh tạo trùng nút bấm cho cùng 1 con heo
                     if not peccaryButtons[pigName] then
                         local Btn = Instance.new("TextButton")
                         Btn.Size = UDim2.new(1, 0, 0, 28)
@@ -529,6 +540,12 @@ local function scanNpcAndPlayers()
                         Btn.MouseButton1Click:Connect(function() peccaryTargets[pigName] = not peccaryTargets[pigName] end)
                         peccaryButtons[pigName] = Btn
                     end
+                elseif isBird then
+                    applyNPCEsp(obj, "Bird") -- Kích hoạt ESP cho Chim
+                elseif isSmall then
+                    applyNPCEsp(obj, "Small") -- Kích hoạt ESP cho Thú Nhỏ
+                else
+                    applyNPCEsp(obj, parentName) -- Dự phòng loại khác
                 end
             end
         end
@@ -540,7 +557,7 @@ task.spawn(function()
     scanNpcAndPlayers()
     while true do
         scanNpcAndPlayers()
-        task.wait(3.5) -- Quét liên tục ép Roblox cập nhật
+        task.wait(3.5)
     end
 end)
 
@@ -603,7 +620,6 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
-        -- Cập nhật trạng thái nút Heo từ danh sách bẻ khóa bộ nhớ nâng cao
         for npcName, Btn in pairs(peccaryButtons) do
             if Btn and Btn.Parent then
                 local pigModel = nil
@@ -704,7 +720,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 6. VÒNG LẶP TẤN CÔNG NPC TỰ ĐỘNG (XỬ LÝ DANH SÁCH BẺ KHÓA BỘ NHỚ)
+-- 6. VÒNG LẶP TẤN CÔNG NPC TỰ ĐỘNG (DIỆT SẠCH HEO, CHIM, THÚ NHỎ)
 --======================================================================
 task.spawn(function()
     while true do
@@ -712,7 +728,7 @@ task.spawn(function()
             local myChar = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             if myRoot then
-                -- Tấn công thẳng các Model heo thu thập được từ hàm GetDescendants nâng cao
+                -- Vòng lặp quét thẳng vào mảng scannedNPCModels chứa đầy đủ mọi loại thú
                 for _, npcModel in pairs(scannedNPCModels) do
                     if npcModel and npcModel:IsDescendantOf(workspace) then
                         local body = getNPCTargetPart(npcModel)
@@ -755,4 +771,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK ASSASSIN: ARCHIVABLE FALSE BYPASS COMPLETE! 🦋")
+print("🦋 LIZLUK ASSASSIN: ALL ANIMALS (PIG, BIRD, SMALL) FIXED & OK! 🦋")
