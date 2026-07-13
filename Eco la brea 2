@@ -1,4 +1,4 @@
---// LIZLUK ASSASSIN CORE (VÁ LỖI CÚ PHÁP FOR-LOOP)
+--// LIZLUK ASSASSIN CORE (VÁ LỖI HIỂN THỊ LAYOUT GUI)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -35,12 +35,10 @@ local pounceCooldown = 2.0
 local npcAttackCooldown = 0.5
 
 local activeNpcEsps = {}
-
--- Biến lưu tên thư mục Heo tìm được tự động
 local dynamicPeccaryFolderName = "" 
 
 --======================================================================
--- HÀM TỰ ĐỘNG TÌM THƯ MỤC HEO THEO TỪ KHÓA (BẤT CHẤP ĐỔI SỐ)
+-- HÀM TỰ ĐỘNG TÌM THƯ MỤC HEO THEO TỪ KHÓA
 --======================================================================
 local function findPeccaryFolder()
     local npcsFolder = workspace:FindFirstChild("NPCs")
@@ -113,12 +111,16 @@ StatusStroke.Color = Color3.fromRGB(40, 40, 40)
 StatusStroke.Thickness = 1
 StatusStroke.Parent = StatusLabel
 
-local function createUtilityButton(posIndex, text)
+-- HÀM TẠO NÚT UTILITY CHUẨN TEXT KHÔNG BỊ TRỐNG
+local function createUtilityButton(posIndex, defaultText)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -20, 0, 30)
     btn.Position = UDim2.new(0, 10, 0, 45 + (posIndex * 35))
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 11
+    btn.Text = defaultText
+    btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     btn.Parent = MainFrame
 
     local corner = Instance.new("UICorner")
@@ -133,10 +135,11 @@ local function createUtilityButton(posIndex, text)
     return btn, stroke
 end
 
-local PounceBtn, PounceStroke = createUtilityButton(1, "")
-local DrinkBtn, DrinkStroke = createUtilityButton(2, "")
-local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "") 
+local PounceBtn, PounceStroke = createUtilityButton(1, "AUTO POUNCE: OFF [F]")
+local DrinkBtn, DrinkStroke = createUtilityButton(2, "AUTO DRINK: OFF [L]")
+local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "NPC ESP: DISABLED [K]") 
 
+-- SỬA LẠI LAYOUT Ô NHẬP KHOẢNG CÁCH (FIX BỊ ĐÈ CHỮ)
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -20, 0, 35)
 DistanceInputFrame.Position = UDim2.new(0, 10, 0, 185)
@@ -149,10 +152,10 @@ InputFrameCorner.CornerRadius = UDim.new(0, 6)
 InputFrameCorner.Parent = DistanceInputFrame
 
 local DistanceLabel = Instance.new("TextLabel")
-DistanceLabel.Size = UDim2.new(0, 140, 1, 0)
+DistanceLabel.Size = UDim2.new(0, 150, 1, 0)
 DistanceLabel.Position = UDim2.new(0, 10, 0, 0)
 DistanceLabel.BackgroundTransparency = 1
-DistanceLabel.Text = "📍 Khoảng cách kích hoạt (m):"
+DistanceLabel.Text = "📍 Khoảng cách (m):"
 DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 DistanceLabel.Font = Enum.Font.GothamMedium
 DistanceLabel.TextSize = 11
@@ -160,8 +163,8 @@ DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
 DistanceLabel.Parent = DistanceInputFrame
 
 local DistanceBox = Instance.new("TextBox")
-DistanceBox.Size = UDim2.new(0, 60, 0, 23)
-DistanceBox.Position = UDim2.new(1, -70, 0.5, -11)
+DistanceBox.Size = UDim2.new(0, 55, 0, 23)
+DistanceBox.Position = UDim2.new(1, -65, 0.5, -11)
 DistanceBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 DistanceBox.BorderSizePixel = 0
 DistanceBox.Text = tostring(maxDetectDistance)
@@ -169,23 +172,17 @@ DistanceBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 DistanceBox.Font = Enum.Font.GothamBold
 DistanceBox.TextSize = 12
 DistanceBox.ClearTextOnFocus = false
-DistanceBox.PlaceholderText = "Meters"
-DistanceBox.Parent = DistanceBox
+DistanceBox.Parent = DistanceInputFrame -- Sửa lỗi gán nhầm Parent vào chính nó
 
 local DistanceBoxCorner = Instance.new("UICorner")
 DistanceBoxCorner.CornerRadius = UDim.new(0, 4)
 DistanceBoxCorner.Parent = DistanceBox
-DistanceBox.Parent = DistanceInputFrame
 
 DistanceBox.FocusLost:Connect(function()
     local number = tonumber(DistanceBox.Text)
-    if number then
-        if number >= 0 then
-            maxDetectDistance = number
-            DistanceBox.Text = tostring(number)
-        else
-            DistanceBox.Text = tostring(maxDetectDistance)
-        end
+    if number and number >= 0 then
+        maxDetectDistance = number
+        DistanceBox.Text = tostring(number)
     else
         DistanceBox.Text = tostring(maxDetectDistance)
     end
@@ -491,7 +488,6 @@ local playerButtons = {}
 local peccaryButtons = {}
 
 local function scanNpcAndPlayers()
-    -- Tự động tìm lại thư mục Heo nếu nó đổi tên
     local pf = findPeccaryFolder()
 
     if npcsFolder then
@@ -510,14 +506,12 @@ local function scanNpcAndPlayers()
         end
     end
 
-    -- Xóa UI cũ làm mới danh sách
     for _, btn in pairs(ScrollingFrame:GetChildren()) do
         if btn:IsA("TextButton") then btn:Destroy() end
     end
     playerButtons = {}
     peccaryButtons = {}
 
-    -- Đưa người chơi lên bảng UI
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Name ~= "Lubakixa" then
             local pName = player.Name
@@ -534,7 +528,6 @@ local function scanNpcAndPlayers()
         end
     end
 
-    -- Đưa Heo quét được tự động lên bảng UI
     if pf then
         for _, pig in pairs(pf:GetChildren()) do
             if pig:IsA("Model") then
@@ -564,7 +557,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT & KHOẢNG CÁCH THỰC TẾ (ĐÃ VÁ LỖI)
+-- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT & KHOẢNG CÁCH THỰC TẾ
 --======================================================================
 task.spawn(function()
     while true do
@@ -585,7 +578,6 @@ task.spawn(function()
         local minDistance = math.huge
         local tempClosest = ""
 
-        -- Đồng bộ nút Player (ĐÃ SỬA CÚ PHÁP)
         for pName, Btn in pairs(playerButtons) do
             if Btn and Btn.Parent then
                 local pChar = charactersFolder and charactersFolder:FindFirstChild(pName)
@@ -623,7 +615,6 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
-        -- Đồng bộ nút Heo bằng Tên Thư Mục Quét Tự Động (ĐÃ SỬA CÚ PHÁP)
         local pf = findPeccaryFolder()
         for npcName, Btn in pairs(peccaryButtons) do
             if Btn and Btn.Parent then
@@ -726,7 +717,6 @@ task.spawn(function()
             local myChar = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             if myRoot then
-                -- Tấn công Heo dựa trên thư mục quét được tự động
                 local pf = findPeccaryFolder()
                 if pf then
                     for _, pig in pairs(pf:GetChildren()) do
@@ -739,7 +729,6 @@ task.spawn(function()
                     end
                 end
                 
-                -- Tấn công các NPC thuộc thư mục khác
                 for _, folder in pairs(npcsFolder:GetChildren()) do
                     if folder:IsA("Folder") and folder.Name ~= dynamicPeccaryFolderName then
                         for _, npc in pairs(folder:GetChildren()) do
@@ -786,4 +775,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK SMART AUTO-DETECT FIXED & LOADED 🦋")
+print("🦋 LIZLUK GUI LAYOUT FIXED & LOADED 🦋")
