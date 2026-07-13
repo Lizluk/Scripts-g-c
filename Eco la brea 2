@@ -1,4 +1,4 @@
---// LIZLUK PREMIUM CORE (STRICT COMPILER COMPATIBILITY FIX)
+--// LIZLUK PREMIUM CORE (STRICT SYNTAX & CORE_GUI RENDER FIX)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 10)
@@ -36,35 +37,20 @@ local npcAttackCooldown = 0.5
 local activeNpcEsps = {}
 
 --======================================================================
--- 1. GIAO DIỆN HỢP NHẤT (LIZLUK STYLE)
+-- 1. ÉP BUỘC GIAO DIỆN VÀO CORE_GUI TRÁNH BỊ CHẶN (LIZLUK STYLE)
 --======================================================================
-if not PlayerGui then
-    local startTime = os.time()
-    while not PlayerGui do
-        if (os.time() - startTime) > 5 then
-            break
-        end
-        PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-        task.wait(0.2)
-    end
-end
-
-if not PlayerGui then 
-    PlayerGui = game:GetService("CoreGui") 
-end
-
-if PlayerGui:FindFirstChild("LizlukKillGUI") then
-    PlayerGui.LizlukKillGUI:Destroy()
+if CoreGui:FindFirstChild("LizlukKillGUI") then
+    CoreGui.LizlukKillGUI:Destroy()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "LizlukKillGUI"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = PlayerGui
+ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 240, 0, 620)
-MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
+MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -418,7 +404,7 @@ local charactersFolder = workspace:FindFirstChild("Characters")
 local npcsFolder = workspace:FindFirstChild("NPCs")
 
 --======================================================================
--- HỆ THỐNG ESP (PLAYER & NPC ĐÃ CHUẨN HÓA KHÔNG LỒNG LỆNH)
+-- HỆ THỐNG ESP (PLAYER & NPC CHUẨN)
 --======================================================================
 local function applyESP(character, playerName)
     if not character then return end
@@ -519,13 +505,12 @@ local function applyNPCEsp(npcModel, typeName)
 end
 
 --======================================================================
--- 2. CƠ CHẾ QUÉT MỚI HOÀN TOÀN - ÉP HIỆN THỊ HEO LÊN UI CHẮC CHẮN 100%
+-- 2. CƠ CHẾ QUÉT DANH SÁCH ÉP HIỆN THỊ HEO LÊN UI (FIXED SYNTAX)
 --======================================================================
 local playerButtons = {}
 local peccaryButtons = {}
 
 local function scanNpcAndPlayers()
-    -- Quét ESP cho heo và các sinh vật khác
     local mainNpcs = workspace:FindFirstChild("NPCs")
     if mainNpcs then
         local pf = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
@@ -544,7 +529,6 @@ local function scanNpcAndPlayers()
         end
     end
 
-    -- Xây dựng lại danh sách nút bấm trên UI cho sạch sẽ
     for _, btn in pairs(ScrollingFrame:GetChildren()) do
         if btn:IsA("TextButton") then btn:Destroy() end
     end
@@ -570,7 +554,7 @@ local function scanNpcAndPlayers()
         end
     end
 
-    -- Ép render heo lên UI bằng phương thức trực diện
+    -- Thêm danh sách heo lên UI trực tiếp
     if mainNpcs then
         local pf = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
         if pf then
@@ -595,9 +579,8 @@ local function scanNpcAndPlayers()
     end
 end
 
--- Chạy vòng lặp quét danh sách độc lập 3 giây một lần để giao diện luôn mượt
 task.spawn(function()
-    task.wait(1)
+    task.wait(0.5)
     scanNpcAndPlayers()
     while true do
         scanNpcAndPlayers()
@@ -606,7 +589,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT & KHOẢNG CÁCH THỰC TẾ
+-- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT & KHOẢNG CÁCH THỰC TẾ (FIXED SYNTAX 'IN PAIRS')
 --======================================================================
 task.spawn(function()
     while true do
@@ -627,8 +610,8 @@ task.spawn(function()
         local minDistance = math.huge
         local tempClosest = ""
 
-        -- Đồng bộ nút Player
-        for pName, Btn do
+        -- SỬA LỖI ĐỎ: Thêm 'in pairs' đầy đủ cú pháp
+        for pName, Btn in pairs(playerButtons) do
             if Btn and Btn.Parent then
                 local pChar = charactersFolder and charactersFolder:FindFirstChild(pName)
                 local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
@@ -665,11 +648,11 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
-        -- Đồng bộ nút Heo (Peccary)
+        -- SỬA LỖI ĐỎ: Thêm 'in pairs' đầy đủ cú pháp cho Heo
         local mainNpcs = workspace:FindFirstChild("NPCs")
         local pf = mainNpcs and mainNpcs:FindFirstChild("FlatHeadedPeccary61")
 
-        for npcName, Btn do
+        for npcName, Btn in pairs(peccaryButtons) do
             if Btn and Btn.Parent then
                 local pigModel = pf and pf:FindFirstChild(npcName)
                 local body = pigModel and (pigModel:FindFirstChild("Body_m") or pigModel:FindFirstChildOfClass("Part"))
@@ -695,7 +678,6 @@ task.spawn(function()
             end
         end
 
-        -- Auto Drink Lake
         if autoDrinkActive and drinkRemote and interactionsFolder then
             local lake = interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
             if lake then pcall(function() drinkRemote:FireServer(lake) end) end
@@ -764,7 +746,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 6. VÒNG LẶP TẤN CÔNG NPC (HEO & CÁC CON KHÁC)
+-- 6. VÒNG LẶP TẤN CÔNG NPC
 --======================================================================
 task.spawn(function()
     while true do
@@ -830,4 +812,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK ASSASSIN CORE COMPILER-SAFE LOADED 🦋")
+print("🦋 LIZLUK ULTRA BYPASS CORE FIXED SYNTAX LOADED 🦋")
