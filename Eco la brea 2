@@ -1,4 +1,4 @@
---// LIZLUK PREMIUM CORE (BLACKLIST & AUTO-CLEANUP UPDATE)
+--// LIZLUK PREMIUM CORE (STRICT COMPILER COMPATIBILITY FIX)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -20,7 +20,6 @@ local isLocking = false
 
 local targets = {}         
 local peccaryTargets = {}  
-local blacklist = {} -- Lưu trữ danh sách đồng đội (Blacklist khỏi Aura)
 
 local killAuraActive = true 
 local autoPounceActive = false 
@@ -37,7 +36,7 @@ local npcAttackCooldown = 0.5
 local activeNpcEsps = {}
 
 --======================================================================
--- 1. GIAO DIỆN HỢP NHẤT (LIZLUK STYLE WITH BLACKLIST TAB)
+-- 1. GIAO DIỆN HỢP NHẤT (LIZLUK STYLE)
 --======================================================================
 if not PlayerGui then
     local startTime = os.time()
@@ -64,7 +63,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 650)
+MainFrame.Size = UDim2.new(0, 240, 0, 620)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BorderSizePixel = 0
@@ -265,63 +264,22 @@ Divider2.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 Divider2.BorderSizePixel = 0
 Divider2.Parent = MainFrame
 
--- TĂNG DIỆN TÍCH BẢNG CUỘN VÀ CHIA KHÔNG GIAN CHO BLACKLIST
-local KillListTitle = Instance.new("TextLabel")
-KillListTitle.Size = UDim2.new(0.5, -10, 0, 20)
-KillListTitle.Position = UDim2.new(0, 10, 0, 408)
-KillListTitle.BackgroundTransparency = 1
-KillListTitle.Text = "⚔️ DANH SÁCH DIỆT"
-KillListTitle.TextColor3 = Color3.fromRGB(255, 100, 100)
-KillListTitle.Font = Enum.Font.GothamBold
-KillListTitle.TextSize = 10
-KillListTitle.TextXAlignment = Enum.TextXAlignment.Left
-KillListTitle.Parent = MainFrame
-
-local BlacklistTitle = Instance.new("TextLabel")
-BlacklistTitle.Size = UDim2.new(0.5, -10, 0, 20)
-BlacklistTitle.Position = UDim2.new(0.5, 5, 0, 408)
-BlacklistTitle.BackgroundTransparency = 1
-BlacklistTitle.Text = "🛡️ ĐỒNG ĐỘI (BLACKLIST)"
-BlacklistTitle.TextColor3 = Color3.fromRGB(100, 200, 255)
-BlacklistTitle.Font = Enum.Font.GothamBold
-BlacklistTitle.TextSize = 10
-BlacklistTitle.TextXAlignment = Enum.TextXAlignment.Left
-BlacklistTitle.Parent = MainFrame
-
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(0.5, -12, 1, -440)
-ScrollingFrame.Position = UDim2.new(0, 10, 0, 430)
+ScrollingFrame.Size = UDim2.new(1, -20, 1, -420)
+ScrollingFrame.Position = UDim2.new(0, 10, 0, 410)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-ScrollingFrame.ScrollBarThickness = 2
+ScrollingFrame.ScrollBarThickness = 3
 ScrollingFrame.Parent = MainFrame
 
 local UIListLayout = Instance.new("UIListLayout")
 UIListLayout.Parent = ScrollingFrame
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Padding = UDim.new(0, 4)
-
-local BlacklistFrame = Instance.new("ScrollingFrame")
-BlacklistFrame.Size = UDim2.new(0.5, -12, 1, -440)
-BlacklistFrame.Position = UDim2.new(0.5, 5, 0, 430)
-BlacklistFrame.BackgroundTransparency = 1
-BlacklistFrame.BorderSizePixel = 0
-BlacklistFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-BlacklistFrame.ScrollBarThickness = 2
-BlacklistFrame.Parent = MainFrame
-
-local UIListLayoutBL = Instance.new("UIListLayout")
-UIListLayoutBL.Parent = BlacklistFrame
-UIListLayoutBL.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayoutBL.Padding = UDim.new(0, 4)
+UIListLayout.Padding = UDim.new(0, 5)
 
 UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
-end)
-
-UIListLayoutBL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    BlacklistFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayoutBL.AbsoluteContentSize.Y)
 end)
 
 --======================================================================
@@ -415,7 +373,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.F then 
         autoPounceActive = not autoPounceActive 
         updateUtilityVisuals() 
-end
+    end
     if input.KeyCode == Enum.KeyCode.L then 
         autoDrinkActive = not autoDrinkActive 
         updateUtilityVisuals() 
@@ -459,29 +417,8 @@ local interactionsFolder = workspace:FindFirstChild("Interactions")
 local charactersFolder = workspace:FindFirstChild("Characters")
 local npcsFolder = workspace:FindFirstChild("NPCs")
 
-task.spawn(function()
-    while true do
-        if eventsFolder and remotesFolder and charactersFolder then
-            break
-        end
-        eventsFolder = ReplicatedStorage:FindFirstChild("Events")
-        if eventsFolder then
-            attackRemote = eventsFolder:FindFirstChild("Attack")
-            attackNPCRemote = eventsFolder:FindFirstChild("AttackNPC")
-        end
-        remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
-        if remotesFolder then 
-            drinkRemote = remotesFolder:FindFirstChild("DrinkRemote") 
-        end
-        interactionsFolder = workspace:FindFirstChild("Interactions")
-        charactersFolder = workspace:FindFirstChild("Characters")
-        npcsFolder = workspace:FindFirstChild("NPCs")
-        task.wait(1)
-    end
-end)
-
 --======================================================================
--- HỆ THỐNG ESP (PLAYER & NPC)
+-- HỆ THỐNG ESP (PLAYER & NPC ĐÃ CHUẨN HÓA KHÔNG LỒNG LỆNH)
 --======================================================================
 local function applyESP(character, playerName)
     if not character then return end
@@ -507,29 +444,19 @@ local function applyESP(character, playerName)
 
     local connection
     connection = RunService.RenderStepped:Connect(function()
-        if blacklist[playerName] then
-            txt.Text = string.format("[🛡️ ĐỒNG ĐỘI] %s", playerName)
-            txt.TextColor3 = Color3.fromRGB(0, 180, 255)
-            return
-        end
         if not charactersFolder or not character:IsDescendantOf(charactersFolder) or not head:IsDescendantOf(character) then
             connection:Disconnect()
             bb:Destroy()
             return
         end
-        if not LocalPlayer.Character then return end
-        local myRoot = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
         if not myRoot then return end
         
         local distance = math.floor((myRoot.Position - head.Position).Magnitude)
         if targets[playerName] then
-            if killAuraActive then
-                txt.Text = string.format("[🎯] %s\n[%d m]", playerName, distance)
-                txt.TextColor3 = Color3.fromRGB(255, 50, 50)
-            else
-                txt.Text = string.format("[⏸️] %s\n[%d m]", playerName, distance)
-                txt.TextColor3 = Color3.fromRGB(255, 200, 50)
-            end
+            txt.Text = killAuraActive and string.format("[🎯] %s\n[%d m]", playerName, distance) or string.format("[⏸️] %s\n[%d m]", playerName, distance)
+            txt.TextColor3 = killAuraActive and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(255, 200, 50)
         else
             if playerName == closestPlayerName then
                 txt.Text = string.format("[⭐ CẬN] %s\n[%d m]", playerName, distance)
@@ -542,23 +469,9 @@ local function applyESP(character, playerName)
     end)
 end
 
-task.spawn(function()
-    while not charactersFolder do task.wait(0.5) end
-    for _, child in pairs(charactersFolder:GetChildren()) do
-        if child:IsA("Model") and child.Name ~= LocalPlayer.Name and child.Name ~= "Lubakixa" then
-            if Players:GetPlayerFromCharacter(child) then applyESP(child, child.Name) end
-        end
-    end
-    charactersFolder.ChildAdded:Connect(function(child)
-        if child:IsA("Model") and child.Name ~= LocalPlayer.Name and child.Name ~= "Lubakixa" then
-            task.wait(0.5)
-            if Players:GetPlayerFromCharacter(child) then applyESP(child, child.Name) end
-        end
-    end)
-end)
-
 local function applyNPCEsp(npcModel, typeName)
-    if not npcModel or npcModel:FindFirstChild("NpcESP_Holder") then return end
+    if not npcModel then return end
+    if npcModel:FindFirstChild("NpcESP_Holder") then return end
     local targetPart = npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChild("Head") or npcModel:FindFirstChildOfClass("MeshPart") or npcModel:FindFirstChildOfClass("Part")
     if not targetPart then return end
 
@@ -578,304 +491,238 @@ local function applyNPCEsp(npcModel, typeName)
     txt.TextStrokeTransparency = 0
     txt.Font = Enum.Font.SourceSansBold
     txt.TextSize = 12
-    txt.TextColor3 = Color3.fromRGB(0, 220, 255) 
+    txt.TextColor3 = (typeName == "Peccary") and Color3.fromRGB(255, 150, 200) or Color3.fromRGB(0, 220, 255)
     txt.Parent = bb
 
     local connection
     connection = RunService.RenderStepped:Connect(function()
-        local myCharacter = LocalPlayer.Character
-        if charactersFolder then
-            myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")
-        end
-        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-        
-        if not npcModel:IsDescendantOf(workspace) or not targetPart:IsDescendantOf(npcModel) or not myRoot then
+        if not npcModel:IsDescendantOf(workspace) or not targetPart:IsDescendantOf(npcModel) then
             connection:Disconnect()
             local idx = table.find(activeNpcEsps, bb)
             if idx then table.remove(activeNpcEsps, idx) end
             bb:Destroy()
             return
         end
+        local myCharacter = LocalPlayer.Character or (charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")))
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
         
         local distance = math.floor((myRoot.Position - targetPart.Position).Magnitude)
-        if typeName == "Peccary" and peccaryTargets[npcModel.Name] then
-            txt.Text = string.format("🐷 [🎯 MỤC TIÊU]\n%s (%dm)", npcModel.Name, distance)
+        if peccaryTargets[npcModel.Name] then
+            txt.Text = string.format("🐷 [MỤC TIÊU KHÓA]\n%s (%dm)", npcModel.Name, distance)
             txt.TextColor3 = Color3.fromRGB(255, 50, 50)
         else
             txt.Text = string.format("👾 [%s]\n%s (%dm)", typeName, npcModel.Name, distance)
-            txt.TextColor3 = (typeName == "Peccary") and Color3.fromRGB(255, 180, 220) or Color3.fromRGB(0, 220, 255)
+            txt.TextColor3 = (typeName == "Peccary") and Color3.fromRGB(255, 150, 200) or Color3.fromRGB(0, 220, 255)
         end
     end)
 end
 
-local function scanNpcFolders()
-    local mainNpcs = workspace:FindFirstChild("NPCs")
-    if mainNpcs then
-        local birdFolder = mainNpcs:FindFirstChild("Bird")
-        if birdFolder then for _, c in pairs(birdFolder:GetChildren()) do applyNPCEsp(c, "Bird") end end
-        local smallFolder = mainNpcs:FindFirstChild("Small")
-        if smallFolder then for _, c in pairs(smallFolder:GetChildren()) do applyNPCEsp(c, "Small") end end
-        local peccaryFolder = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
-        if peccaryFolder then 
-            for _, c in pairs(peccaryFolder:GetChildren()) do 
-                if c:IsA("Model") then applyNPCEsp(c, "Peccary") end 
-            end 
-        end
-    end
-end
-
-task.spawn(function()
-    while true do scanNpcFolders() task.wait(3) end
-end)
-
 --======================================================================
--- 2. ĐỒNG BỘ DANH SÁCH CUỘN TRÊN UI (HỖ TRỢ BLACKLIST)
+-- 2. CƠ CHẾ QUÉT MỚI HOÀN TOÀN - ÉP HIỆN THỊ HEO LÊN UI CHẮC CHẮN 100%
 --======================================================================
 local playerButtons = {}
 local peccaryButtons = {}
-local blacklistButtons = {}
 
-local function updateUIList()
-    -- Clear cũ
-    for _, child in pairs(ScrollingFrame:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-    for _, child in pairs(BlacklistFrame:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-    playerButtons = {}
-    peccaryButtons = {}
-    blacklistButtons = {}
-
-    -- Render bảng Kill và bảng Blacklist
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Name ~= "Lubakixa" then
-            local pName = player.Name
-            
-            if blacklist[pName] then
-                -- Nếu bị cho vào Blacklist thì hiện bên bảng Blacklist làm đồng đội
-                local BtnBL = Instance.new("TextButton")
-                BtnBL.Size = UDim2.new(1, 0, 0, 24)
-                BtnBL.Font = Enum.Font.SourceSansBold
-                BtnBL.TextSize = 11
-                BtnBL.BackgroundColor3 = Color3.fromRGB(20, 45, 65)
-                BtnBL.Text = "🛡️ " .. pName
-                BtnBL.TextColor3 = Color3.fromRGB(100, 200, 255)
-                BtnBL.Parent = BlacklistFrame
-                Instance.new("UICorner", BtnBL).CornerRadius = UDim.new(0, 4)
-                
-                BtnBL.MouseButton1Click:Connect(function()
-                    blacklist[pName] = nil -- Gỡ khỏi Blacklist
-                    targets[pName] = nil
-                    updateUIList()
-                end)
-                blacklistButtons[pName] = BtnBL
-            else
-                -- Nếu không bị Blacklist thì hiện bên bảng Kill
-                local Btn = Instance.new("TextButton")
-                Btn.Size = UDim2.new(1, 0, 0, 24)
-                Btn.Font = Enum.Font.SourceSansBold
-                Btn.TextSize = 11
-                Btn.BorderSizePixel = 0
-                Btn.Parent = ScrollingFrame
-                Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
-
-                Btn.MouseButton1Click:Connect(function() 
-                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
-                        -- Giữ Ctrl + Click để ném thẳng vào Blacklist
-                        blacklist[pName] = true
-                        targets[pName] = nil
-                    else
-                        -- Click bình thường để Lock Target diệt
-                        targets[pName] = not targets[pName] 
-                    end
-                    updateUIList()
-                end)
-                playerButtons[pName] = Btn
+local function scanNpcAndPlayers()
+    -- Quét ESP cho heo và các sinh vật khác
+    local mainNpcs = workspace:FindFirstChild("NPCs")
+    if mainNpcs then
+        local pf = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
+        if pf then
+            for _, v in pairs(pf:GetChildren()) do
+                if v:IsA("Model") then applyNPCEsp(v, "Peccary") end
             end
+        end
+        local bf = mainNpcs:FindFirstChild("Bird")
+        if bf then
+            for _, v in pairs(bf:GetChildren()) do if v:IsA("Model") then applyNPCEsp(v, "Bird") end end
+        end
+        local sf = mainNpcs:FindFirstChild("Small")
+        if sf then
+            for _, v in pairs(sf:GetChildren()) do if v:IsA("Model") then applyNPCEsp(v, "Small") end end
         end
     end
 
-    -- Render Heo Peccary (Không thể bị cho vào blacklist)
-    local mainNpcs = workspace:FindFirstChild("NPCs")
-    local peccaryFolder = mainNpcs and mainNpcs:FindFirstChild("FlatHeadedPeccary61")
-    if peccaryFolder then
-        for _, pci in pairs(peccaryFolder:GetChildren()) do
-            if pci:IsA("Model") then
-                local npcName = pci.Name
-                local Btn = Instance.new("TextButton")
-                Btn.Size = UDim2.new(1, 0, 0, 24)
-                Btn.Font = Enum.Font.SourceSansBold
-                Btn.TextSize = 11
-                Btn.BorderSizePixel = 0
-                Btn.Parent = ScrollingFrame
-                Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
+    -- Xây dựng lại danh sách nút bấm trên UI cho sạch sẽ
+    for _, btn in pairs(ScrollingFrame:GetChildren()) do
+        if btn:IsA("TextButton") then btn:Destroy() end
+    end
+    playerButtons = {}
+    peccaryButtons = {}
 
-                Btn.MouseButton1Click:Connect(function() 
-                    peccaryTargets[npcName] = not peccaryTargets[npcName] 
-                end)
-                peccaryButtons[npcName] = Btn
+    -- Thêm người chơi
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Name ~= "Lubakixa" then
+            local pName = player.Name
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, 0, 0, 28)
+            Btn.Font = Enum.Font.SourceSansBold
+            Btn.TextSize = 12
+            Btn.BorderSizePixel = 0
+            Btn.Parent = ScrollingFrame
+            Instance.new("UICorner").Parent = Btn
+
+            Btn.MouseButton1Click:Connect(function()
+                targets[pName] = not targets[pName]
+            end)
+            playerButtons[pName] = Btn
+        end
+    end
+
+    -- Ép render heo lên UI bằng phương thức trực diện
+    if mainNpcs then
+        local pf = mainNpcs:FindFirstChild("FlatHeadedPeccary61")
+        if pf then
+            for _, pig in pairs(pf:GetChildren()) do
+                if pig:IsA("Model") then
+                    local pigName = pig.Name
+                    local Btn = Instance.new("TextButton")
+                    Btn.Size = UDim2.new(1, 0, 0, 28)
+                    Btn.Font = Enum.Font.SourceSansBold
+                    Btn.TextSize = 12
+                    Btn.BorderSizePixel = 0
+                    Btn.Parent = ScrollingFrame
+                    Instance.new("UICorner").Parent = Btn
+
+                    Btn.MouseButton1Click:Connect(function()
+                        peccaryTargets[pigName] = not peccaryTargets[pigName]
+                    end)
+                    peccaryButtons[pigName] = Btn
+                end
             end
         end
     end
 end
 
-Players.PlayerAdded:Connect(updateUIList)
-Players.PlayerRemoving:Connect(function(player) 
-    targets[player.Name] = nil 
-    blacklist[player.Name] = nil
-    updateUIList() 
-end)
-
-task.spawn(function() 
-    while true do updateUIList() task.wait(6) end 
+-- Chạy vòng lặp quét danh sách độc lập 3 giây một lần để giao diện luôn mượt
+task.spawn(function()
+    task.wait(1)
+    scanNpcAndPlayers()
+    while true do
+        scanNpcAndPlayers()
+        task.wait(3)
+    end
 end)
 
 --======================================================================
--- 3. VÒNG LẶP HỆ THỐNG GIAO DIỆN & TỰ ĐỘNG XOÁ TÊN KHI MỤC TIÊU CHẾT
+-- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT & KHOẢNG CÁCH THỰC TẾ
 --======================================================================
 task.spawn(function()
     while true do
-        local myCharacter = LocalPlayer.Character
-        if charactersFolder then
-            myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")
-        end
+        local myCharacter = LocalPlayer.Character or (charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")))
         local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-        
-        -- Khóa chỉ số
+
         if isLocking and myCharacter then
-            local realAttributesFolder = myCharacter:FindFirstChild("Attributes")
-            if realAttributesFolder then
+            local attr = myCharacter:FindFirstChild("Attributes")
+            if attr then
                 pcall(function()
-                    realAttributesFolder:SetAttribute("Hunger", targetHunger)
-                    realAttributesFolder:SetAttribute("Thirst", targetThirst)
-                    realAttributesFolder:SetAttribute("Stamina", targetStamina)
+                    attr:SetAttribute("Hunger", targetHunger)
+                    attr:SetAttribute("Thirst", targetThirst)
+                    attr:SetAttribute("Stamina", targetStamina)
                 end)
             end
         end
 
-        -- [FIX CHẾT]: Quét dọn các mục tiêu đã chết
-        if charactersFolder then
-            for pName, isTargeted in pairs(targets) do
-                if isTargeted then
-                    local pChar = charactersFolder:FindFirstChild(pName)
-                    local pHum = pChar and pChar:FindFirstChildOfClass("Humanoid")
-                    -- Nếu không tìm thấy character, không có humanoid, hoặc máu <= 0 -> XÓA KHỎI LOCK TARGET
-                    if not pChar or not pHum or pHum.Health <= 0 then
-                        targets[pName] = nil
-                    end
-                end
-            end
-        end
-
-        local mainNpcs = workspace:FindFirstChild("NPCs")
-        local peccaryFolder = mainNpcs and mainNpcs:FindFirstChild("FlatHeadedPeccary61")
-        for npcName, isTargeted in pairs(peccaryTargets) do
-            if isTargeted then
-                local npcModel = peccaryFolder and peccaryFolder:FindFirstChild(npcName)
-                local npcHum = npcModel and npcModel:FindFirstChildOfClass("Humanoid")
-                -- Nếu heo chết hoặc biến mất -> XÓA KHỎI LOCK TARGET
-                if not npcModel or (npcHum and npcHum.Health <= 0) or not npcModel:FindFirstChild("Body_m") then
-                    peccaryTargets[npcName] = nil
-                end
-            end
-        end
-
-        -- Tính toán khoảng cách và cập nhật giao diện nút bấm
         local minDistance = math.huge
         local tempClosest = ""
-        
-        if myRoot and charactersFolder then
-            for pName, Btn in pairs(playerButtons) do
-                local pChar = charactersFolder:FindFirstChild(pName)
+
+        -- Đồng bộ nút Player
+        for pName, Btn do
+            if Btn and Btn.Parent then
+                local pChar = charactersFolder and charactersFolder:FindFirstChild(pName)
                 local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
-                if pRoot then
+                if pRoot and myRoot then
                     local dist = (myRoot.Position - pRoot.Position).Magnitude
                     if dist <= maxDetectDistance and dist < minDistance then
                         minDistance = dist
                         tempClosest = pName
                     end
                     Btn.LayoutOrder = targets[pName] and (math.floor(dist) - 100000) or math.floor(dist)
+                    
+                    if targets[pName] then
+                        Btn.BackgroundColor3 = killAuraActive and Color3.fromRGB(180, 40, 40) or Color3.fromRGB(160, 120, 30)
+                        Btn.Text = killAuraActive and pName .. " [KILLING]" or pName .. " [PAUSED]"
+                        Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    else
+                        if pName == closestPlayerName then
+                            Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30)
+                            Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
+                            Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
+                        else
+                            Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                            Btn.Text = pName .. string.format(" (%dm)", math.floor(dist))
+                            Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                        end
+                    end
                 else
                     Btn.LayoutOrder = 999999
+                    Btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+                    Btn.Text = pName .. " (FAR/OFF)"
+                    Btn.TextColor3 = Color3.fromRGB(100, 100, 100)
                 end
             end
         end
         closestPlayerName = tempClosest
 
-        -- Cập nhật màu sắc nút Player
-        for pName, Btn in pairs(playerButtons) do
-            if targets[pName] then
-                Btn.BackgroundColor3 = killAuraActive and Color3.fromRGB(180, 40, 40) or Color3.fromRGB(160, 120, 30)
-                Btn.Text = pName .. (killAuraActive and " [KILL]" or " [PAUSE]")
-                Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            else
-                if pName == closestPlayerName then
-                    Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
-                    Btn.Text = "⭐ " .. pName
-                    Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
+        -- Đồng bộ nút Heo (Peccary)
+        local mainNpcs = workspace:FindFirstChild("NPCs")
+        local pf = mainNpcs and mainNpcs:FindFirstChild("FlatHeadedPeccary61")
+
+        for npcName, Btn do
+            if Btn and Btn.Parent then
+                local pigModel = pf and pf:FindFirstChild(npcName)
+                local body = pigModel and (pigModel:FindFirstChild("Body_m") or pigModel:FindFirstChildOfClass("Part"))
+                if body and myRoot then
+                    local dist = (myRoot.Position - body.Position).Magnitude
+                    Btn.LayoutOrder = peccaryTargets[npcName] and (math.floor(dist) - 50000) or (math.floor(dist) + 50000)
+                    
+                    if peccaryTargets[npcName] then
+                        Btn.BackgroundColor3 = Color3.fromRGB(230, 50, 120)
+                        Btn.Text = "🐷 " .. npcName .. " [TARGET LOCK]"
+                        Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    else
+                        Btn.BackgroundColor3 = Color3.fromRGB(25, 35, 45)
+                        Btn.Text = "🐷 " .. npcName .. string.format(" (%dm)", math.floor(dist))
+                        Btn.TextColor3 = Color3.fromRGB(200, 220, 245)
+                    end
                 else
-                    Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-                    Btn.Text = pName
-                    Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                    Btn.LayoutOrder = 999999
+                    Btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+                    Btn.Text = "❌ " .. npcName .. " (OUT RANGE)"
+                    Btn.TextColor3 = Color3.fromRGB(100, 100, 100)
                 end
             end
         end
 
-        -- Cập nhật màu sắc nút Heo Peccary
-        for npcName, Btn in pairs(peccaryButtons) do
-            local npcModel = peccaryFolder and peccaryFolder:FindFirstChild(npcName)
-            local body = npcModel and (npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChildOfClass("Part"))
-            if body and myRoot then
-                local dist = (myRoot.Position - body.Position).Magnitude
-                if peccaryTargets[npcName] then
-                    Btn.LayoutOrder = math.floor(dist) - 50000
-                    Btn.BackgroundColor3 = Color3.fromRGB(230, 50, 120)
-                    Btn.Text = "🐷 " .. npcName .. " [TARGET]"
-                    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-                else
-                    Btn.LayoutOrder = math.floor(dist) + 50000
-                    Btn.BackgroundColor3 = Color3.fromRGB(25, 35, 45)
-                    Btn.Text = "🐷 " .. npcName .. string.format(" (%dm)", math.floor(dist))
-                    Btn.TextColor3 = Color3.fromRGB(200, 220, 245)
-                end
-            else
-                Btn.LayoutOrder = 999999
-                Btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-                Btn.Text = "❌ " .. npcName
-                Btn.TextColor3 = Color3.fromRGB(100, 100, 100)
-            end
+        -- Auto Drink Lake
+        if autoDrinkActive and drinkRemote and interactionsFolder then
+            local lake = interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
+            if lake then pcall(function() drinkRemote:FireServer(lake) end) end
         end
 
-        -- Tự động uống nước
-        if autoDrinkActive and drinkRemote then
-            pcall(function()
-                local lake = interactionsFolder and interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
-                if lake then drinkRemote:FireServer(lake) end
-            end)
-        end
-        task.wait(0.1)
+        task.wait(0.2)
     end
 end)
 
 --======================================================================
--- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER (LOẠI BỎ BLACKLIST)
+-- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER
 --======================================================================
 task.spawn(function()
     while true do
         if killAuraActive and attackRemote and charactersFolder then
-            local myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")
-            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-
+            local myChar = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or LocalPlayer.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             if myRoot then
                 for pName, isTargeted in pairs(targets) do
-                    -- Kiểm tra bảo vệ: Nếu nằm trong BLACKLIST thì TUYỆT ĐỐI không đánh!
-                    if isTargeted and not blacklist[pName] then 
-                        local targetCharacter = charactersFolder:FindFirstChild(pName)
-                        local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-                        local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
-                        local targetHitbox = targetCharacter and targetCharacter:FindFirstChild("BodyHitbox")
-                        
-                        if targetRoot and targetHumanoid and targetHitbox and targetHumanoid.Health > 0 then
-                            local distance = (myRoot.Position - targetRoot.Position).Magnitude
-                            if distance <= maxDetectDistance then
-                                pcall(function() attackRemote:FireServer(targetHumanoid, targetHitbox, 1) end)
+                    if isTargeted then
+                        local tc = charactersFolder:FindFirstChild(pName)
+                        local tr = tc and tc:FindFirstChild("HumanoidRootPart")
+                        local th = tc and tc:FindFirstChildOfClass("Humanoid")
+                        local tb = tc and tc:FindFirstChild("BodyHitbox")
+                        if tr and th and tb then
+                            if (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
+                                pcall(function() attackRemote:FireServer(th, tb, 1) end)
                             end
                         end
                     end
@@ -887,34 +734,25 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 5. VÒNG LẶP SKILL VỒ PLAYER (LOẠI BỎ BLACKLIST)
+-- 5. VÒNG LẶP SKILL VỒ PLAYER
 --======================================================================
 task.spawn(function()
     while true do
         if autoPounceActive and attackRemote and charactersFolder then
-            local myCharacter = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")
-            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-
+            local myChar = charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa") or LocalPlayer.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             if myRoot then
                 for pName, isTargeted in pairs(targets) do
-                    -- Kiểm tra bảo vệ: Nếu nằm trong BLACKLIST thì TUYỆT ĐỐI không vồ!
-                    if isTargeted and not blacklist[pName] then
-                        local targetCharacter = charactersFolder:FindFirstChild(pName)
-                        local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-                        local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
-                        local targetHitbox = targetCharacter and targetCharacter:FindFirstChild("BodyHitbox")
-                        
-                        if targetRoot and targetHumanoid and targetHitbox and targetHumanoid.Health > 0 then
-                            local distance = (myRoot.Position - targetRoot.Position).Magnitude
-                            if distance <= maxDetectDistance then
-                                local torso = targetCharacter:FindFirstChild("RootPart") and targetCharacter.RootPart:FindFirstChild("Torso")
-                                if torso then
-                                    local children = torso:GetChildren()
-                                    local latchPoint = torso:FindFirstChild("LatchPoint2.R") or children[1]
-                                    if latchPoint then
-                                        pcall(function() attackRemote:FireServer(targetHumanoid, targetHitbox, 2, latchPoint) end)
-                                    end
-                                end
+                    if isTargeted then
+                        local tc = charactersFolder:FindFirstChild(pName)
+                        local tr = tc and tc:FindFirstChild("HumanoidRootPart")
+                        local th = tc and tc:FindFirstChildOfClass("Humanoid")
+                        local tb = tc and tc:FindFirstChild("BodyHitbox")
+                        if tr and th and tb then
+                            if (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
+                                local torso = tc:FindFirstChild("RootPart") and tc.RootPart:FindFirstChild("Torso")
+                                local latch = torso and (torso:FindFirstChild("LatchPoint2.R") or torso:GetChildren()[1])
+                                if latch then pcall(function() attackRemote:FireServer(th, tb, 2, latch) end) end
                             end
                         end
                     end
@@ -926,42 +764,33 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 6. VÒNG LẶP TẤN CÔNG NPC
+-- 6. VÒNG LẶP TẤN CÔNG NPC (HEO & CÁC CON KHÁC)
 --======================================================================
 task.spawn(function()
     while true do
         if killAuraActive and attackNPCRemote and npcsFolder then
-            local myCharacter = charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")) or LocalPlayer.Character
-            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-
+            local myChar = LocalPlayer.Character or (charactersFolder and (charactersFolder:FindFirstChild(LocalPlayer.Name) or charactersFolder:FindFirstChild("Lubakixa")))
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             if myRoot then
-                for _, folder in pairs(npcsFolder:GetChildren()) do
-                    if folder:IsA("Folder") or folder:IsA("Model") then
-                        if folder.Name == "FlatHeadedPeccary61" then
-                            for _, deepNpc in pairs(folder:GetChildren()) do
-                                if deepNpc:IsA("Model") and peccaryTargets[deepNpc.Name] then 
-                                    local bodyPart = deepNpc:FindFirstChild("Body_m")
-                                    local npcHum = deepNpc:FindFirstChildOfClass("Humanoid")
-                                    if bodyPart and (not npcHum or npcHum.Health > 0) then
-                                        local distance = (myRoot.Position - bodyPart.Position).Magnitude
-                                        if distance <= maxDetectDistance then
-                                            pcall(function() attackNPCRemote:FireServer(bodyPart, 1) end)
-                                        end
-                                    end
-                                end
+                local pf = npcsFolder:FindFirstChild("FlatHeadedPeccary61")
+                if pf then
+                    for _, pig in pairs(pf:GetChildren()) do
+                        if pig:IsA("Model") and peccaryTargets[pig.Name] then
+                            local body = pig:FindFirstChild("Body_m")
+                            if body and (myRoot.Position - body.Position).Magnitude <= maxDetectDistance then
+                                pcall(function() attackNPCRemote:FireServer(body, 1) end)
                             end
-                        else
-                            local targetsList = folder:IsA("Model") and {folder} or folder:GetChildren()
-                            for _, npcModel in pairs(targetsList) do
-                                if npcModel:IsA("Model") then
-                                    local bodyPart = npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChildOfClass("MeshPart") or npcModel:FindFirstChildOfClass("Part")
-                                    local npcHum = npcModel:FindFirstChildOfClass("Humanoid")
-                                    if bodyPart and (not npcHum or npcHum.Health > 0) then
-                                        local distance = (myRoot.Position - bodyPart.Position).Magnitude
-                                        if distance <= maxDetectDistance then
-                                            pcall(function() attackNPCRemote:FireServer(bodyPart, 1) end)
-                                        end
-                                    end
+                        end
+                    end
+                end
+                
+                for _, folder in pairs(npcsFolder:GetChildren()) do
+                    if folder:IsA("Folder") and folder.Name ~= "FlatHeadedPeccary61" then
+                        for _, npc in pairs(folder:GetChildren()) do
+                            if npc:IsA("Model") then
+                                local body = npc:FindFirstChild("Body_m") or npc:FindFirstChildOfClass("MeshPart") or npc:FindFirstChildOfClass("Part")
+                                if body and (myRoot.Position - body.Position).Magnitude <= maxDetectDistance then
+                                    pcall(function() attackNPCRemote:FireServer(body, 1) end)
                                 end
                             end
                         end
@@ -985,9 +814,8 @@ task.spawn(function()
                     local movingRing = minigameFrame:FindFirstChild("Ring") or minigameFrame:FindFirstChild("Indicator") or minigameFrame:FindFirstChildOfClass("ImageLabel")
                     local targetRing = minigameFrame:FindFirstChild("Target") or minigameFrame:FindFirstChild("Zone") or minigameFrame:FindFirstChild("LeafRing")
                     if movingRing and targetRing then
-                        local currentScale = movingRing.Size.X.Scale
-                        local targetScale = targetRing.Size.X.Scale
-                        if math.abs(currentScale - targetScale) <= 0.05 then
+                        local diff = math.abs(movingRing.Size.X.Scale - targetRing.Size.X.Scale)
+                        if diff <= 0.05 then
                             VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
                             task.wait(0.01)
                             VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
@@ -1002,4 +830,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK ASSASSIN UPDATE: BLACKLIST & REAPER CLEANUP LOADED 🦋")
+print("🦋 LIZLUK ASSASSIN CORE COMPILER-SAFE LOADED 🦋")
