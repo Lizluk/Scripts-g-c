@@ -1,4 +1,4 @@
---// LIZLUK ASSASSIN CORE (SMART AUTO-DETECT PRESET)
+--// LIZLUK ASSASSIN CORE (VÁ LỖI CÚ PHÁP FOR-LOOP)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -564,7 +564,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT & KHOẢNG CÁCH THỰC TẾ
+-- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT & KHOẢNG CÁCH THỰC TẾ (ĐÃ VÁ LỖI)
 --======================================================================
 task.spawn(function()
     while true do
@@ -585,8 +585,8 @@ task.spawn(function()
         local minDistance = math.huge
         local tempClosest = ""
 
-        -- Đồng bộ nút Player
-        for pName, Btn do
+        -- Đồng bộ nút Player (ĐÃ SỬA CÚ PHÁP)
+        for pName, Btn in pairs(playerButtons) do
             if Btn and Btn.Parent then
                 local pChar = charactersFolder and charactersFolder:FindFirstChild(pName)
                 local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
@@ -623,9 +623,9 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
-        -- Đồng bộ nút Heo bằng Tên Thư Mục Quét Tự Động
+        -- Đồng bộ nút Heo bằng Tên Thư Mục Quét Tự Động (ĐÃ SỬA CÚ PHÁP)
         local pf = findPeccaryFolder()
-        for npcName, Btn do
+        for npcName, Btn in pairs(peccaryButtons) do
             if Btn and Btn.Parent then
                 local pigModel = pf and pf:FindFirstChild(npcName)
                 local body = pigModel and (pigModel:FindFirstChild("Body_m") or pigModel:FindFirstChildOfClass("Part"))
@@ -786,4 +786,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK SMART AUTO-DETECT LOADED 🦋")
+print("🦋 LIZLUK SMART AUTO-DETECT FIXED & LOADED 🦋")
