@@ -1,100 +1,191 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- Cấu hình mục tiêu duy nhất cần chặn
-local TARGET_EVENT_NAME = "TakeDamage"
+-- Danh sách quản lý trạng thái chặn của từng Remote
+local BlockedRemotes = {
+    ["TakeDamage"] = false
+}
 
--- Trạng thái chặn mặc định (Bật/Tắt qua GUI)
-local IsBlockActive = false
-
--- Dọn dẹp GUI cũ nếu trùng lặp
-local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("TakeDamageBlockerGUI")
+-- Dọn dẹp giao diện cũ nếu có
+local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("AdvancedRemoteBlocker")
 if oldGui then oldGui:Destroy() end
 
 -- =========================================================================
--- KIẾN TRÚC CAN THIỆP CHỈ ĐỊNH: CHỈ CHẶN ĐÚNG TAKEDAMAGE
+-- KIẾN TRÚC CAN THIỆP PHÂN TÍCH THAM SỐ (ARGUMENT FILTER HOOK)
 -- =========================================================================
 local success, err = pcall(function()
     local rawMetatable = getrawmetatable(game)
     local setReadOnly = setreadonly or make_writeable
     
     setReadOnly(rawMetatable, false)
-    
     local oldNamecall = rawMetatable.__namecall
 
     rawMetatable.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
         
-        -- Kiểm tra nếu game thực hiện gọi FireServer
         if not checkcaller() and method == "FireServer" and self:IsA("RemoteEvent") then
-            -- KIỂM TRA CHẶT CHẼ: 
-            -- 1. Tên của Event phải chính xác là "TakeDamage"
-            -- 2. Hoặc nó phải nằm trong thư mục mang tên "Events" để tránh chặn nhầm các Remote trùng tên ở nơi khác
-            if IsBlockActive and (self.Name == TARGET_EVENT_NAME or (self.Parent and self.Parent.Name == "Events" and self.Name == TARGET_EVENT_NAME)) then
-                -- Chỉ huỷ bỏ duy nhất gói tin sát thương này
-                return nil 
+            local name = self.Name
+            
+            -- Nếu Remote này nằm trong danh sách đang bị bật chế độ "Chặn"
+            if BlockedRemotes[name] == true then
+                -- Bẻ gãy đường truyền ngay lập tức, chặn đứng toàn bộ tham số (0.1, "fall"...)
+                return nil
             end
         end
         
-        -- Tất cả các gói tin khác (Di chuyển, dùng chiêu, mua đồ, chat...) đi qua bình thường
         return oldNamecall(self, ...)
     end)
 
     setReadOnly(rawMetatable, true)
 end)
 
-if not success then 
-    warn("⚠️ Thiết bị/Executor không hỗ trợ can thiệp Metatable: ", err) 
-end
+if not success then warn("⚠️ Executor không hỗ trợ can thiệp sâu Metatable:", err) end
 
 -- =========================================================================
--- KHỞI TẠO GIAO DIỆN PHẲNG ĐIỀU KHIỂN (GUI)
+-- KHỞI TẠO GIAO DIỆN MÔ PHỎNG REMOTE SPY (UI DESIGN)
 -- =========================================================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "TakeDamageBlockerGUI"
+ScreenGui.Name = "AdvancedRemoteBlocker"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
+-- Khung nền chính (Giống giao diện tối của Remote Spy)
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 260, 0, 130)
-MainFrame.Position = UDim2.new(0.5, -130, 0.4, -65)
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.Size = UDim2.new(0, 500, 0, 300)
+MainFrame.Position = UDim2.new(0.5, -250, 0.4, -150)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 1
+MainFrame.BorderColor3 = Color3.fromRGB(50, 50, 50)
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+-- Thanh Tiêu Đề bên trên
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 30)
+TopBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainFrame
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Size = UDim2.new(1, -10, 1, 0)
+Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🛑 TakeDamage Blocker (Safe Mode)"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Text = "• Status: Remote Blocker (Custom Spy Mode)"
+Title.TextColor3 = Color3.fromRGB(180, 180, 180)
 Title.TextSize = 13
-Title.Font = Enum.Font.SourceSansBold
-Title.Parent = MainFrame
+Title.Font = Enum.Font.SourceSans
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TopBar
 
-local StatusButton = Instance.new("TextButton")
-StatusButton.Size = UDim2.new(0, 220, 0, 45)
-StatusButton.Position = UDim2.new(0, 20, 0, 55)
-StatusButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-StatusButton.Text = "Trạng Thái: ĐANG TẮT (OFF)"
-StatusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-StatusButton.TextSize = 13
-StatusButton.Font = Enum.Font.SourceSansBold
-StatusButton.Parent = MainFrame
-Instance.new("UICorner", StatusButton).CornerRadius = UDim.new(0, 6)
+-- Phân vùng TRÁI: Danh sách Remotes (Ảnh 1)
+local LeftPanel = Instance.new("Frame")
+LeftPanel.Size = UDim2.new(0.5, 0, 1, -30)
+LeftPanel.Position = UDim2.new(0, 0, 0, 30)
+LeftPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+LeftPanel.BorderSizePixel = 0
+LeftPanel.Parent = MainFrame
 
--- Xử lý tương tác nút bấm Bật / Tắt
-StatusButton.MouseButton1Click:Connect(function()
-    IsBlockActive = not IsBlockActive
+-- Nút bấm mô phỏng mục "TakeDamage"
+local RemoteItem = Instance.new("TextButton")
+RemoteItem.Size = UDim2.new(1, -10, 0, 32)
+RemoteItem.Position = UDim2.new(0, 5, 0, 10)
+RemoteItem.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+RemoteItem.BorderColor3 = Color3.fromRGB(50, 50, 50)
+RemoteItem.Text = "  ⚡  TakeDamage"
+RemoteItem.TextColor3 = Color3.fromRGB(220, 220, 220)
+RemoteItem.TextSize = 14
+RemoteItem.Font = Enum.Font.SourceSans
+RemoteItem.TextXAlignment = Enum.TextXAlignment.Left
+RemoteItem.Parent = LeftPanel
+
+-- Phân vùng PHẢI: Bảng chi tiết cấu hình chặn (Ảnh 2)
+local RightPanel = Instance.new("Frame")
+RightPanel.Size = UDim2.new(0.5, 0, 1, -30)
+RightPanel.Position = UDim2.new(0.5, 0, 0, 30)
+RightPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+RightPanel.BorderSizePixel = 0
+RightPanel.Visible = false -- Ẩn đi, bấm vào TakeDamage mới hiện giống Spy
+RightPanel.Parent = MainFrame
+
+-- Tiêu đề của phân vùng chi tiết
+local DetailTitle = Instance.new("TextLabel")
+DetailTitle.Size = UDim2.new(1, 0, 0, 25)
+DetailTitle.Position = UDim2.new(0, 0, 0, 5)
+DetailTitle.BackgroundTransparency = 1
+DetailTitle.Text = "⚡ TakeDamage"
+DetailTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+DetailTitle.TextSize = 14
+DetailTitle.Font = Enum.Font.SourceSansBold
+DetailTitle.Parent = RightPanel
+
+-- Nút CHẶN (Giống hệt chức năng ô vuông Chặn trong ảnh 2)
+local BlockButton = Instance.new("TextButton")
+BlockButton.Size = UDim2.new(0, 80, 0, 25)
+BlockButton.Position = UDim2.new(0.5, -40, 0, 35)
+BlockButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+BlockButton.BorderColor3 = Color3.fromRGB(70, 70, 70)
+BlockButton.Text = "⬜ Chặn"
+BlockButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+BlockButton.TextSize = 13
+BlockButton.Font = Enum.Font.SourceSans
+BlockButton.Parent = RightPanel
+
+-- Khung hiển thị giả lập Tham số (Arguments hiển thị trong ảnh 2)
+local ArgsFrame = Instance.new("Frame")
+ArgsFrame.Size = UDim2.new(1, -20, 0, 180)
+ArgsFrame.Position = UDim2.new(0, 10, 0, 75)
+ArgsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+ArgsFrame.BorderColor3 = Color3.fromRGB(45, 45, 45)
+ArgsFrame.Parent = RightPanel
+
+local UIList = Instance.new("UIListLayout")
+UIList.Padding = UDim.new(0, 4)
+UIList.Parent = ArgsFrame
+
+local function createArgLabel(text)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 25)
+    label.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    label.BorderSizePixel = 0
+    label.Text = "   " .. text
+    label.TextColor3 = Color3.fromRGB(200, 150, 100)
+    label.TextSize = 13
+    label.Font = Enum.Font.SourceSans
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = ArgsFrame
+end
+
+-- Tạo sẵn các dòng hiển thị thông số để giống hệt ảnh của bạn
+createArgLabel("1 📦 0.1")
+createArgLabel("2 📦 \"fall\"")
+createArgLabel("3 📦 \"latchknock2\"")
+
+-- =========================================================================
+-- XỬ LÝ SỰ KIỆN TƯƠNG TÁC (CONTROLLER LOGIC)
+-- =========================================================================
+
+-- Bấm vào tên Remote ở bên trái sẽ hiển thị bảng cấu hình bên phải
+RemoteItem.MouseButton1Click:Connect(function()
+    RightPanel.Visible = true
+    RemoteItem.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+end)
+
+-- Bấm vào nút "Chặn" để kích hoạt đánh chặn gói tin
+BlockButton.MouseButton1Click:Connect(function()
+    BlockedRemotes["TakeDamage"] = not BlockedRemotes["TakeDamage"]
     
-    if IsBlockActive then
-        StatusButton.BackgroundColor3 = Color3.fromRGB(46, 139, 87)
-        StatusButton.Text = "Trạng Thái: ĐANG CHẶN (ON)"
-        print("🔓 [Bypass Active] Chỉ chặn duy nhất gói tin TakeDamage!")
+    if BlockedRemotes["TakeDamage"] then
+        BlockButton.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+        BlockButton.Text = "🟥 Đang Chặn"
+        BlockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        RemoteItem.TextColor3 = Color3.fromRGB(255, 100, 100)
+        print("🛑 [BLOCK ACTIVATED] Đã chặn đứng hoàn toàn gói tin TakeDamage!")
     else
-        StatusButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-        StatusButton.Text = "Trạng Thái: ĐANG TẮT (OFF)"
-        print("🔒 [Bypass Disabled] Đã mở lại nhận sát thương.")
+        BlockButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        BlockButton.Text = "⬜ Chặn"
+        BlockButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+        RemoteItem.TextColor3 = Color3.fromRGB(220, 220, 220)
+        print("🔓 [BLOCK DEACTIVATED] Đã bỏ chặn Remote.")
     end
 end)
