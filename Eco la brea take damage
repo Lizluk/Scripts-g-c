@@ -1,17 +1,309 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
+local LogService = game:GetService("LogService")
 
--- Danh sách quản lý trạng thái chặn của từng Remote
-local BlockedRemotes = {
-    ["TakeDamage"] = false
-}
+-- Bộ lưu trữ dữ liệu nâng cao
+local RemoteLogs = {}      -- Lưu trữ chi tiết từng lượt gọi của từng Remote
+local BlockedRemotes = {}   -- Trạng thái chặn
+local SelectedRemoteName = nil
 
--- Dọn dẹp giao diện cũ nếu có
-local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("AdvancedRemoteBlocker")
+-- Dọn dẹp GUI cũ
+local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("HydroSpyV3Pro")
 if oldGui then oldGui:Destroy() end
 
 -- =========================================================================
--- KIẾN TRÚC CAN THIỆP PHÂN TÍCH THAM SỐ (ARGUMENT FILTER HOOK)
+-- HÀM BỔ TRỢ: ĐỊNH DẠNG THAM SỐ THÀNH DẠNG CHUỖI VÀ DẠNG CODE LUA
+-- =========================================================================
+local function getArgDetails(v)
+    local t = typeof(v)
+    if t == "string" then return "String", string.format('"%s"', v), string.format('"%s"', v)
+    elseif t == "number" then return "Number", tostring(v), tostring(v)
+    elseif t == "boolean" then return "Boolean", tostring(v):upper(), tostring(v)
+    elseif t == "Instance" then return "Instance", v:GetFullName(), string.format('game.%s', v:GetFullName())
+    elseif t == "Vector3" then 
+        local str = string.format("(%.2f, %.2f, %.2f)", v.X, v.Y, v.Z)
+        local code = string.format("Vector3.new(%.2f, %.2f, %.2f)", v.X, v.Y, v.Z)
+        return "Vector3", str, code
+    elseif t == "table" then
+        local success, json = pcall(function() return HttpService:JSONEncode(v) end)
+        local display = success and json or "{...}"
+        return "Table", display, display
+    else
+        return t, tostring(v), tostring(v)
+    end
+end
+
+-- =========================================================================
+-- KHỞI TẠO GIAO DIỆN CHUẨN HYDROSPY V3 (UI DESIGN)
+-- =========================================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "HydroSpyV3Pro"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 680, 0, 380)
+MainFrame.Position = UDim2.new(0.5, -340, 0.4, -190)
+MainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+MainFrame.BorderSizePixel = 1
+MainFrame.BorderColor3 = Color3.fromRGB(40, 40, 45)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+-- Top Bar
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 32)
+TopBar.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -20, 1, 0)
+Title.Position = UDim2.new(0, 12, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "⚡ HydroSpy v3.0 Pro - Context Menu & Script Generator"
+Title.TextColor3 = Color3.fromRGB(170, 180, 200)
+Title.TextSize = 13
+Title.Font = Enum.Font.Code
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TopBar
+
+-- PANEL TRÁI: Danh sách các tên Remote
+local LeftPanel = Instance.new("ScrollingFrame")
+LeftPanel.Size = UDim2.new(0.4, -8, 1, -40)
+LeftPanel.Position = UDim2.new(0, 6, 0, 36)
+LeftPanel.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
+LeftPanel.BorderColor3 = Color3.fromRGB(30, 30, 35)
+LeftPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
+LeftPanel.ScrollBarThickness = 4
+LeftPanel.Parent = MainFrame
+
+local LeftLayout = Instance.new("UIListLayout")
+LeftLayout.Padding = UDim.new(0, 2)
+LeftLayout.Parent = LeftPanel
+LeftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    LeftPanel.CanvasSize = UDim2.new(0, 0, 0, LeftLayout.AbsoluteContentSize.Y)
+end)
+
+-- PANEL PHẢI: Danh sách chi tiết từng Lượt Gọi (Logs) giống hệt HydroSpy gốc
+local RightPanel = Instance.new("Frame")
+RightPanel.Size = UDim2.new(0.6, -4, 1, -40)
+RightPanel.Position = UDim2.new(0.4, 2, 0, 36)
+RightPanel.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+RightPanel.BorderSizePixel = 0
+RightPanel.Visible = false
+RightPanel.Parent = MainFrame
+
+local DetailTitle = Instance.new("TextLabel")
+DetailTitle.Size = UDim2.new(1, -100, 0, 30)
+DetailTitle.Position = UDim2.new(0, 8, 0, 0)
+DetailTitle.BackgroundTransparency = 1
+DetailTitle.Text = "Remote"
+DetailTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+DetailTitle.TextSize = 13
+DetailTitle.Font = Enum.Font.SourceSansBold
+DetailTitle.TextXAlignment = Enum.TextXAlignment.Left
+DetailTitle.Parent = RightPanel
+
+local BlockButton = Instance.new("TextButton")
+BlockButton.Size = UDim2.new(0, 80, 0, 24)
+BlockButton.Position = UDim2.new(1, -86, 0, 3)
+BlockButton.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+BlockButton.BorderColor3 = Color3.fromRGB(55, 55, 60)
+BlockButton.Text = "⬜ Chặn"
+BlockButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+BlockButton.TextSize = 12
+BlockButton.Font = Enum.Font.SourceSans
+BlockButton.Parent = RightPanel
+
+local LogsFrame = Instance.new("ScrollingFrame")
+LogsFrame.Size = UDim2.new(1, -12, 1, -36)
+LogsFrame.Position = UDim2.new(0, 6, 0, 32)
+LogsFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
+LogsFrame.BorderColor3 = Color3.fromRGB(28, 28, 32)
+LogsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+LogsFrame.ScrollBarThickness = 4
+LogsFrame.Parent = RightPanel
+
+local RightLayout = Instance.new("UIListLayout")
+RightLayout.Padding = UDim.new(0, 6)
+RightLayout.Parent = LogsFrame
+RightLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    LogsFrame.CanvasSize = UDim2.new(0, 0, 0, RightLayout.AbsoluteContentSize.Y)
+end)
+
+-- =========================================================================
+-- KHỞI TẠO MENU CHUỘT PHẢI (CONTEXT MENU ĐỂ GENERATE SCRIPT)
+-- =========================================================================
+local ContextMenu = Instance.new("Frame")
+ContextMenu.Size = UDim2.new(0, 150, 0, 32)
+ContextMenu.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+ContextMenu.BorderColor3 = Color3.fromRGB(60, 60, 65)
+ContextMenu.ZIndex = 10
+ContextMenu.Visible = false
+ContextMenu.Parent = ScreenGui
+
+local GenScriptBtn = Instance.new("TextButton")
+GenScriptBtn.Size = UDim2.new(1, 0, 1, 0)
+GenScriptBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+GenScriptBtn.BorderSizePixel = 0
+GenScriptBtn.Text = "📄 Generate Script (Copy)"
+GenScriptBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
+GenScriptBtn.TextSize = 12
+GenScriptBtn.Font = Enum.Font.SourceSans
+GenScriptBtn.ZIndex = 11
+GenScriptBtn.Parent = ContextMenu
+
+-- Tự động ẩn menu chuột phải nếu click ra ngoài
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
+        task.wait(0.1)
+        ContextMenu.Visible = false
+    end
+end)
+
+-- =========================================================================
+-- LOGIC RENDER VÀ TƯƠNG TÁC
+-- =========================================================================
+local function viewRemoteLogs(remoteName)
+    SelectedRemoteName = remoteName
+    DetailTitle.Text = "🔥 " .. remoteName
+    
+    -- Xóa các danh sách hiển thị cũ
+    for _, child in pairs(LogsFrame:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    
+    -- Cập nhật trạng thái nút chặn
+    if BlockedRemotes[remoteName] then
+        BlockButton.BackgroundColor3 = Color3.fromRGB(150, 45, 45)
+        BlockButton.Text = "🟥 Đang Chặn"
+    else
+        BlockButton.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+        BlockButton.Text = "⬜ Chặn"
+    end
+    
+    -- Lấy danh sách toàn bộ các lượt gọi (Log) của Remote này
+    local logs = RemoteLogs[remoteName] or {}
+    for logIndex, logData in ipairs(logs) do
+        -- Tạo một khung bao bọc riêng cho mỗi Lượt Gọi giống ô vuông HydroSpy
+        local LogBox = Instance.new("Frame")
+        LogBox.Size = UDim2.new(1, -6, 0, #logData.DisplayArgs * 20 + 10)
+        LogBox.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
+        LogBox.BorderColor3 = Color3.fromRGB(40, 40, 45)
+        LogBox.Parent = LogsFrame
+        
+        local BoxLayout = Instance.new("UIListLayout")
+        BoxLayout.Padding = UDim.new(0, 2)
+        BoxLayout.Position = UDim2.new(0, 6, 0, 5)
+        BoxLayout.Parent = LogBox
+        
+        -- Thêm các tham số vào bên trong ô vuông đó
+        for _, argText in ipairs(logData.DisplayArgs) do
+            local argLabel = Instance.new("TextLabel")
+            argLabel.Size = UDim2.new(1, -12, 0, 18)
+            argLabel.BackgroundTransparency = 1
+            argLabel.Text = "    " .. argText
+            argLabel.TextColor3 = Color3.fromRGB(210, 150, 90)
+            argLabel.TextSize = 12
+            argLabel.Font = Enum.Font.Code
+            argLabel.TextXAlignment = Enum.TextXAlignment.Left
+            argLabel.Parent = LogBox
+        end
+        
+        -- SỰ KIỆN CLICK CHUỘT PHẢI VÀO Ô VUÔNG ĐỂ MỞ MENU COPY CODE
+        LogBox.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton2 then -- Click chuột phải
+                ContextMenu.Position = UDim2.new(0, input.Position.X, 0, input.Position.Y)
+                ContextMenu.Visible = true
+                
+                -- Kết nối chức năng Generate Script riêng cho lượt gọi này
+                GenScriptBtn.MouseButton1Click:Connect(function()
+                    ContextMenu.Visible = false
+                    
+                    -- Xây dựng chuỗi Code Lua hoàn chỉnh
+                    local codeString = string.format("-- Generated by HydroSpy V3 Pro\nlocal Remote = %s\nRemote:FireServer(%s)", logData.Path, table.concat(logData.CodeArgs, ", "))
+                    
+                    -- Sao chép trực tiếp vào bộ nhớ đệm hệ thống (Clipboard) của Executor của bạn
+                    if setclipboard then
+                        setclipboard(codeString)
+                        print("📋 Đã copy code thực thi vào Clipboard!")
+                    else
+                        print("Mã của bạn:\n" .. codeString)
+                    end
+                end)
+            end
+        end)
+    end
+    RightPanel.Visible = true
+end
+
+BlockButton.MouseButton1Click:Connect(function()
+    if not SelectedRemoteName then return end
+    BlockedRemotes[SelectedRemoteName] = not BlockedRemotes[SelectedRemoteName]
+    viewRemoteLogs(SelectedRemoteName)
+    
+    local itemBtn = LeftPanel:FindFirstChild("Btn_" .. SelectedRemoteName)
+    if itemBtn then
+        itemBtn.TextColor3 = BlockedRemotes[SelectedRemoteName] and Color3.fromRGB(255, 90, 90) or Color3.fromRGB(220, 220, 230)
+    end
+end)
+
+-- Ghi nhận dữ liệu Log mới
+local function addNewLog(remoteInstance, rawArgs)
+    local name = remoteInstance.Name
+    if not RemoteLogs[name] then RemoteLogs[name] = {} end
+    
+    local displayList = {}
+    local codeList = {}
+    
+    for i, v in ipairs(rawArgs) do
+        local argType, displayVal, codeVal = getArgDetails(v)
+        table.insert(displayList, string.format("[%d] 📦 Type: %s | Value: %s", i, argType, displayVal))
+        table.insert(codeList, codeVal)
+    end
+    if #rawArgs == 0 then table.insert(displayList, "   (No Arguments)") end
+    
+    -- Lưu trữ thông tin
+    table.insert(RemoteLogs[name], {
+        DisplayArgs = displayList,
+        CodeArgs = codeList,
+        Path = remoteInstance:GetFullName()
+    })
+    
+    -- Cập nhật số lượng hiển thị ở cột trái
+    local existingBtn = LeftPanel:FindFirstChild("Btn_" .. name)
+    local count = #RemoteLogs[name]
+    if existingBtn then
+        existingBtn.Text = string.format("  ⚡ (%d) %s", count, name)
+        if SelectedRemoteName == name then viewRemoteLogs(name) end
+    else
+        local RemoteItem = Instance.new("TextButton")
+        RemoteItem.Name = "Btn_" .. name
+        RemoteItem.Size = UDim2.new(1, -6, 0, 30)
+        RemoteItem.BackgroundColor3 = Color3.fromRGB(26, 26, 30)
+        RemoteItem.BorderSizePixel = 0
+        RemoteItem.Text = string.format("  ⚡ (1) %s", name)
+        RemoteItem.TextColor3 = Color3.fromRGB(220, 220, 230)
+        RemoteItem.TextSize = 13
+        RemoteItem.Font = Enum.Font.SourceSans
+        RemoteItem.TextXAlignment = Enum.TextXAlignment.Left
+        RemoteItem.Parent = LeftPanel
+        
+        RemoteItem.MouseButton1Click:Connect(function()
+            for _, child in pairs(LeftPanel:GetChildren()) do
+                if child:IsA("TextButton") then child.BackgroundColor3 = Color3.fromRGB(26, 26, 30) end
+            end
+            RemoteItem.BackgroundColor3 = Color3.fromRGB(40, 40, 46)
+            viewRemoteLogs(name)
+        end)
+    end
+end
+
+-- =========================================================================
+-- HỆ THỐNG MÓC NỐI METATABLE HOOKING
 -- =========================================================================
 local success, err = pcall(function()
     local rawMetatable = getrawmetatable(game)
@@ -24,11 +316,14 @@ local success, err = pcall(function()
         local method = getnamecallmethod()
         
         if not checkcaller() and method == "FireServer" and self:IsA("RemoteEvent") then
-            local name = self.Name
+            local remoteName = self.Name
+            local args = {...}
             
-            -- Nếu Remote này nằm trong danh sách đang bị bật chế độ "Chặn"
-            if BlockedRemotes[name] == true then
-                -- Bẻ gãy đường truyền ngay lập tức, chặn đứng toàn bộ tham số (0.1, "fall"...)
+            task.spawn(function()
+                addNewLog(self, args)
+            end)
+            
+            if BlockedRemotes[remoteName] == true then
                 return nil
             end
         end
@@ -39,153 +334,4 @@ local success, err = pcall(function()
     setReadOnly(rawMetatable, true)
 end)
 
-if not success then warn("⚠️ Executor không hỗ trợ can thiệp sâu Metatable:", err) end
-
--- =========================================================================
--- KHỞI TẠO GIAO DIỆN MÔ PHỎNG REMOTE SPY (UI DESIGN)
--- =========================================================================
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AdvancedRemoteBlocker"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-
--- Khung nền chính (Giống giao diện tối của Remote Spy)
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 500, 0, 300)
-MainFrame.Position = UDim2.new(0.5, -250, 0.4, -150)
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MainFrame.BorderSizePixel = 1
-MainFrame.BorderColor3 = Color3.fromRGB(50, 50, 50)
-MainFrame.Active = true
-MainFrame.Draggable = true
-MainFrame.Parent = ScreenGui
-
--- Thanh Tiêu Đề bên trên
-local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 30)
-TopBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-TopBar.BorderSizePixel = 0
-TopBar.Parent = MainFrame
-
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -10, 1, 0)
-Title.Position = UDim2.new(0, 10, 0, 0)
-Title.BackgroundTransparency = 1
-Title.Text = "• Status: Remote Blocker (Custom Spy Mode)"
-Title.TextColor3 = Color3.fromRGB(180, 180, 180)
-Title.TextSize = 13
-Title.Font = Enum.Font.SourceSans
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TopBar
-
--- Phân vùng TRÁI: Danh sách Remotes (Ảnh 1)
-local LeftPanel = Instance.new("Frame")
-LeftPanel.Size = UDim2.new(0.5, 0, 1, -30)
-LeftPanel.Position = UDim2.new(0, 0, 0, 30)
-LeftPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-LeftPanel.BorderSizePixel = 0
-LeftPanel.Parent = MainFrame
-
--- Nút bấm mô phỏng mục "TakeDamage"
-local RemoteItem = Instance.new("TextButton")
-RemoteItem.Size = UDim2.new(1, -10, 0, 32)
-RemoteItem.Position = UDim2.new(0, 5, 0, 10)
-RemoteItem.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-RemoteItem.BorderColor3 = Color3.fromRGB(50, 50, 50)
-RemoteItem.Text = "  ⚡  TakeDamage"
-RemoteItem.TextColor3 = Color3.fromRGB(220, 220, 220)
-RemoteItem.TextSize = 14
-RemoteItem.Font = Enum.Font.SourceSans
-RemoteItem.TextXAlignment = Enum.TextXAlignment.Left
-RemoteItem.Parent = LeftPanel
-
--- Phân vùng PHẢI: Bảng chi tiết cấu hình chặn (Ảnh 2)
-local RightPanel = Instance.new("Frame")
-RightPanel.Size = UDim2.new(0.5, 0, 1, -30)
-RightPanel.Position = UDim2.new(0.5, 0, 0, 30)
-RightPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-RightPanel.BorderSizePixel = 0
-RightPanel.Visible = false -- Ẩn đi, bấm vào TakeDamage mới hiện giống Spy
-RightPanel.Parent = MainFrame
-
--- Tiêu đề của phân vùng chi tiết
-local DetailTitle = Instance.new("TextLabel")
-DetailTitle.Size = UDim2.new(1, 0, 0, 25)
-DetailTitle.Position = UDim2.new(0, 0, 0, 5)
-DetailTitle.BackgroundTransparency = 1
-DetailTitle.Text = "⚡ TakeDamage"
-DetailTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-DetailTitle.TextSize = 14
-DetailTitle.Font = Enum.Font.SourceSansBold
-DetailTitle.Parent = RightPanel
-
--- Nút CHẶN (Giống hệt chức năng ô vuông Chặn trong ảnh 2)
-local BlockButton = Instance.new("TextButton")
-BlockButton.Size = UDim2.new(0, 80, 0, 25)
-BlockButton.Position = UDim2.new(0.5, -40, 0, 35)
-BlockButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-BlockButton.BorderColor3 = Color3.fromRGB(70, 70, 70)
-BlockButton.Text = "⬜ Chặn"
-BlockButton.TextColor3 = Color3.fromRGB(200, 200, 200)
-BlockButton.TextSize = 13
-BlockButton.Font = Enum.Font.SourceSans
-BlockButton.Parent = RightPanel
-
--- Khung hiển thị giả lập Tham số (Arguments hiển thị trong ảnh 2)
-local ArgsFrame = Instance.new("Frame")
-ArgsFrame.Size = UDim2.new(1, -20, 0, 180)
-ArgsFrame.Position = UDim2.new(0, 10, 0, 75)
-ArgsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-ArgsFrame.BorderColor3 = Color3.fromRGB(45, 45, 45)
-ArgsFrame.Parent = RightPanel
-
-local UIList = Instance.new("UIListLayout")
-UIList.Padding = UDim.new(0, 4)
-UIList.Parent = ArgsFrame
-
-local function createArgLabel(text)
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0, 25)
-    label.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    label.BorderSizePixel = 0
-    label.Text = "   " .. text
-    label.TextColor3 = Color3.fromRGB(200, 150, 100)
-    label.TextSize = 13
-    label.Font = Enum.Font.SourceSans
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = ArgsFrame
-end
-
--- Tạo sẵn các dòng hiển thị thông số để giống hệt ảnh của bạn
-createArgLabel("1 📦 0.1")
-createArgLabel("2 📦 \"fall\"")
-createArgLabel("3 📦 \"latchknock2\"")
-
--- =========================================================================
--- XỬ LÝ SỰ KIỆN TƯƠNG TÁC (CONTROLLER LOGIC)
--- =========================================================================
-
--- Bấm vào tên Remote ở bên trái sẽ hiển thị bảng cấu hình bên phải
-RemoteItem.MouseButton1Click:Connect(function()
-    RightPanel.Visible = true
-    RemoteItem.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-end)
-
--- Bấm vào nút "Chặn" để kích hoạt đánh chặn gói tin
-BlockButton.MouseButton1Click:Connect(function()
-    BlockedRemotes["TakeDamage"] = not BlockedRemotes["TakeDamage"]
-    
-    if BlockedRemotes["TakeDamage"] then
-        BlockButton.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-        BlockButton.Text = "🟥 Đang Chặn"
-        BlockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        RemoteItem.TextColor3 = Color3.fromRGB(255, 100, 100)
-        print("🛑 [BLOCK ACTIVATED] Đã chặn đứng hoàn toàn gói tin TakeDamage!")
-    else
-        BlockButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-        BlockButton.Text = "⬜ Chặn"
-        BlockButton.TextColor3 = Color3.fromRGB(200, 200, 200)
-        RemoteItem.TextColor3 = Color3.fromRGB(220, 220, 220)
-        print("🔓 [BLOCK DEACTIVATED] Đã bỏ chặn Remote.")
-    end
-end)
+if not success then warn("Executor không hỗ trợ can thiệp sâu Metatable:", err) end
