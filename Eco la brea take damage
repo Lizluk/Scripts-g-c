@@ -1,70 +1,101 @@
--- Tạo GUI cơ bản
-local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local ToggleButton = Instance.new("TextButton")
-local UIButtonCorner = Instance.new("UICorner")
-local UIFramCorner = Instance.new("UICorner")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
--- Cấu hình Giao diện
-ScreenGui.Name = "AntiDamageGUI"
-ScreenGui.Parent = game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-ScreenGui.ResetOnSpawn = false
+-- Cấu hình mục tiêu chặn gói tin
+local TARGET_EVENT_NAME = "TakeDamage"
 
-MainFrame.Name = "MainFrame"
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
-MainFrame.Size = UDim2.new(0, 180, 0, 60)
-MainFrame.Active = true
-MainFrame.Draggable = true -- Giữ chuột để di chuyển GUI
-UIFramCorner.Parent = MainFrame
+-- Trạng thái kích hoạt chặn (Mặc định là tắt, bật/tắt qua GUI)
+local IsBlockActive = false
 
-ToggleButton.Name = "ToggleButton"
-ToggleButton.Parent = MainFrame
-ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Đỏ: Đang tắt (Không chặn)
-ToggleButton.Position = UDim2.new(0.05, 0, 0.15, 0)
-ToggleButton.Size = UDim2.new(0, 164, 0, 42)
-ToggleButton.Font = Enum.Font.SourceSansBold
-ToggleButton.Text = "Block Damage: OFF"
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.TextSize = 16
-UIButtonCorner.Parent = ToggleButton
+-- Dọn dẹp GUI cũ nếu chạy lại script nhiều lần
+local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("TakeDamageBlockerGUI")
+if oldGui then oldGui:Destroy() end
 
--- LOGIC CHẶN SỰ KIỆN TAKE DAMAGE (HOOKING)
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
--- Thay đổi đường dẫn mục tiêu sang Events.TakeDamage
-local TargetEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("TakeDamage")
-
-local isBlocking = false
-local rawMeta = getrawmetatable(game)
-local oldInstanceMethod = rawMeta.__index.namecall -- Lưu phương thức gốc
-
--- Mở khóa metatable để can thiệp mạng
-setreadonly(rawMeta, false)
-
-rawMeta.__index.namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
+-- =========================================================================
+-- KIẾN TRÚC CAN THIỆP: METATABLE HOOKING (CHẶN GÓI TIN FIRESERVER)
+-- =========================================================================
+local success, err = pcall(function()
+    local rawMetatable = getrawmetatable(game)
+    local setReadOnly = setreadonly or make_writeable
     
-    -- Nếu đang BẬT chặn và đối tượng gọi là TakeDamage thông qua FireServer/InvokeServer
-    if isBlocking and self == TargetEvent and (method == "FireServer" or method == "InvokeServer") then
-        warn("[Anti-Damage] Đã chặn gói tin gửi sát thương về server thành công!")
-        return nil -- Ngắt kết nối gói tin tại đây, không cho truyền về server
-    end
+    -- Mở khóa Metatable để can thiệp
+    setReadOnly(rawMetatable, false)
     
-    return oldInstanceMethod(self, unpack(args))
+    local oldNamecall = rawMetatable.__namecall
+
+    rawMetatable.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        
+        -- Kiểm tra nếu script của game gọi hàm FireServer
+        if not checkcaller() and method == "FireServer" and self:IsA("RemoteEvent") then
+            local eventName = self.Name
+            
+            -- Thực hiện logic chặn gói tin dựa theo từ khóa giống cấu trúc bạn yêu cầu
+            if IsBlockActive and string.find(eventName, TARGET_EVENT_NAME) then
+                -- Trả về nil để hủy bỏ hoàn toàn gói tin, ngăn không cho gửi dữ liệu sát thương về Server
+                return nil
+            end
+        end
+        
+        return oldNamecall(self, ...)
+    end)
+
+    -- Khóa lại Metatable sau khi cấu hình xong
+    setReadOnly(rawMetatable, true)
 end)
 
-setreadonly(rawMeta, true)
+if not success then 
+    warn("⚠️ Thiết bị/Executor của bạn không hỗ trợ can thiệp Metatable sâu: ", err) 
+end
 
--- Sự kiện click nút Bật/Tắt
-ToggleButton.MouseButton1Click:Connect(function()
-    isBlocking = not isBlocking
-    if isBlocking then
-        ToggleButton.Text = "Block Damage: ON"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50) -- Xanh lá: Đang chặn
+-- =========================================================================
+-- KHỞI TẠO GIAO DIỆN ĐIỀU KHIỂN (GUI)
+-- =========================================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TakeDamageBlockerGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 260, 0, 130)
+MainFrame.Position = UDim2.new(0.5, -130, 0.4, -65)
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundTransparency = 1
+Title.Text = "🛑 TakeDamage Packet Blocker"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.SourceSansBold
+Title.Parent = MainFrame
+
+local StatusButton = Instance.new("TextButton")
+StatusButton.Size = UDim2.new(0, 220, 0, 45)
+StatusButton.Position = UDim2.new(0, 20, 0, 55)
+StatusButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+StatusButton.Text = "Trạng Thái: ĐANG TẮT (OFF)"
+StatusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+StatusButton.TextSize = 14
+StatusButton.Font = Enum.Font.SourceSansBold
+StatusButton.Parent = MainFrame
+Instance.new("UICorner", StatusButton).CornerRadius = UDim.new(0, 6)
+
+-- Xử lý tương tác nút bấm Bật / Tắt
+StatusButton.MouseButton1Click:Connect(function()
+    IsBlockActive = not IsBlockActive
+    
+    if IsBlockActive then
+        StatusButton.BackgroundColor3 = Color3.fromRGB(50, 150, 80)
+        StatusButton.Text = "Trạng Thái: ĐANG CHẶN (ON)"
+        print("🔓 Đã kích hoạt bộ lọc Chặn gói tin TakeDamage!")
     else
-        ToggleButton.Text = "Block Damage: OFF"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Đỏ: Dừng chặn
+        StatusButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        StatusButton.Text = "Trạng Thái: ĐANG TẮT (OFF)"
+        print("🔒 Đã tắt bộ lọc Chặn gói tin.")
     end
 end)
