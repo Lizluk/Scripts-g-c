@@ -1,124 +1,123 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
-local UserInputService = game:GetService("UserInputService")
 
--- Bộ lưu trữ dữ liệu
-local RemoteLogs = {}      
-local BlockedPaths = {}   
-local SelectedRemoteId = nil 
-local MAX_LOGS_PER_REMOTE = 50 -- Tăng lên 50 vẫn mượt vì không bị render liên tục nữa
+-- Bộ lưu trữ hệ thống
+local SpiedRemotes = {}
+local BlockedRemotes = {}
+local SelectedRemoteName = nil
 
--- Bộ lọc trạng thái
-local Filters = {
-    RemoteEvent = true,
-    RemoteFunction = true,
-    BindableEvent = true,   
-    BindableFunction = true
-}
-
--- Dọn dẹp GUI cũ
-local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("HydroSpyV11Pro")
+-- Dọn dẹp giao diện cũ tránh đè dữ liệu
+local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("HydroSpyUltimate")
 if oldGui then oldGui:Destroy() end
 
 -- =========================================================================
--- BỘ CHUYỂN ĐỔI THAM SỐ
+-- BỘ PHÂN TÍCH DỮ LIỆU CHUYÊN SÂU (ADVANCED ARGUMENT PARSER)
 -- =========================================================================
-local function getArgDetails(v)
-    local t = typeof(v)
-    if t == "string" then return "String", string.format('"%s"', v), string.format('"%s"', v)
-    elseif t == "number" then return "Number", tostring(v), tostring(v)
-    elseif t == "boolean" then return "Boolean", tostring(v):upper(), tostring(v)
-    elseif t == "Instance" then return "Instance", (v and v:GetFullName() or "nil"), string.format('game.%s', (v and v:GetFullName() or "nil"))
-    elseif t == "Vector3" then 
-        return "Vector3", string.format("(%.2f, %.2f, %.2f)", v.X, v.Y, v.Z), string.format("Vector3.new(%.2f, %.2f, %.2f)", v.X, v.Y, v.Z)
-    elseif t == "table" then
-        local success, json = pcall(function() return HttpService:JSONEncode(v) end)
-        return "Table", success and json or "{...}", success and json or "{}"
-    else
-        return t, tostring(v), tostring(v)
+local function parseArgs(...)
+    local args = {...}
+    local formatted = {}
+    
+    for i, v in ipairs(args) do
+        local typeStr = type(v)
+        local typeofStr = typeof(v)
+        
+        if typeStr == "string" then
+            table.insert(formatted, string.format("[%d] 📦 Type: String | Value: \"%s\"", i, v))
+        elseif typeStr == "number" then
+            table.insert(formatted, string.format("[%d] 📦 Type: Number | Value: %s", i, tostring(v)))
+        elseif typeStr == "boolean" then
+            table.insert(formatted, string.format("[%d] 📦 Type: Boolean | Value: %s", i, tostring(v):upper()))
+        elseif typeofStr == "Instance" then
+            table.insert(formatted, string.format("[%d] 📦 Type: Instance | Path: %s", i, v:GetFullName()))
+        elseif typeofStr == "Vector3" then
+            table.insert(formatted, string.format("[%d] 📦 Type: Vector3 | Value: Vector3.new(%.2f, %.2f, %.2f)", i, v.X, v.Y, v.Z))
+        elseif typeofStr == "CFrame" then
+            table.insert(formatted, string.format("[%d] 📦 Type: CFrame | Value: CFrame.new(%.2f, %.2f, %.2f)", i, v.X, v.Y, v.Z))
+        elseif typeofStr == "Color3" then
+            table.insert(formatted, string.format("[%d] 📦 Type: Color3 | RGB: %.0f, %.0f, %.0f", i, v.R*255, v.G*255, v.B*255))
+        elseif typeStr == "table" then
+            local success, json = pcall(function() return HttpService:JSONEncode(v) end)
+            table.insert(formatted, string.format("[%d] 📦 Type: Table | Data: %s", i, success and json or "{...}"))
+        else
+            table.insert(formatted, string.format("[%d] 📦 Type: %s | Value: %s", i, typeofStr, tostring(v)))
+        end
     end
+    
+    if #args == 0 then table.insert(formatted, "   (Không có tham số truyền vào / No Arguments)") end
+    return formatted
 end
 
 -- =========================================================================
--- KHỞI TẠO GIAO DIỆN CHUẨN HYDROSPY
+-- KHỞI TẠO GIAO DIỆN CHUẨN DARK STUDIO (HYDROSPY LAYOUT)
 -- =========================================================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "HydroSpyV11Pro"
+ScreenGui.Name = "HydroSpyUltimate"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 680, 0, 380)
-MainFrame.Position = UDim2.new(0.5, -340, 0.4, -190)
-MainFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+MainFrame.Size = UDim2.new(0, 580, 0, 360)
+MainFrame.Position = UDim2.new(0.5, -290, 0.4, -180)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 MainFrame.BorderSizePixel = 1
-MainFrame.BorderColor3 = Color3.fromRGB(40, 40, 45)
+MainFrame.BorderColor3 = Color3.fromRGB(45, 45, 50)
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 6)
 
+-- Thanh công cụ phía trên
 local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 35)
-TopBar.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+TopBar.Size = UDim2.new(1, 0, 0, 32)
+TopBar.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 TopBar.BorderSizePixel = 0
 TopBar.Parent = MainFrame
+local TopCorner = Instance.new("UICorner", TopBar)
+TopCorner.CornerRadius = UDim.new(0, 6)
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(0, 220, 1, 0)
+Title.Size = UDim2.new(1, -20, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "⚡ HydroSpy v11.0 Pro [Phím P để Ẩn]"
-Title.TextColor3 = Color3.fromRGB(170, 180, 200)
+Title.Text = "⚡ HydroSpy v2.0 - Real-Time Remote Monitor & Blocker"
+Title.TextColor3 = Color3.fromRGB(160, 170, 190)
 Title.TextSize = 13
 Title.Font = Enum.Font.Code
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = TopBar
 
--- ẨN / HIỆN GUI BẰNG PHÍM P
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.P then
-        MainFrame.Visible = not MainFrame.Visible
-    end
-end)
-
-local FilterContainer = Instance.new("Frame")
-FilterContainer.Size = UDim2.new(0, 400, 1, 0)
-FilterContainer.Position = UDim2.new(1, -410, 0, 0)
-FilterContainer.BackgroundTransparency = 1
-FilterContainer.Parent = TopBar
-
-local FilterLayout = Instance.new("UIListLayout")
-FilterLayout.FillDirection = Enum.FillDirection.Horizontal
-FilterLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-FilterLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-FilterLayout.Padding = UDim.new(0, 6)
-FilterLayout.Parent = FilterContainer
-
+-- PHÂN VÙNG TRÁI: Danh sách Remotes cuộn dọc
 local LeftPanel = Instance.new("ScrollingFrame")
-LeftPanel.Size = UDim2.new(0.4, -8, 1, -45)
-LeftPanel.Position = UDim2.new(0, 6, 0, 40)
-LeftPanel.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
-LeftPanel.BorderColor3 = Color3.fromRGB(30, 30, 35)
+LeftPanel.Size = UDim2.new(0.48, 0, 1, -38)
+LeftPanel.Position = UDim2.new(0, 6, 0, 38)
+LeftPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+LeftPanel.BorderSizePixel = 1
+LeftPanel.BorderColor3 = Color3.fromRGB(35, 35, 40)
 LeftPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
-LeftPanel.ScrollBarThickness = 4
+LeftPanel.ScrollBarThickness = 5
 LeftPanel.Parent = MainFrame
 
 local LeftLayout = Instance.new("UIListLayout")
-LeftLayout.Padding = UDim.new(0, 2)
+LeftLayout.Padding = UDim.new(0, 3)
 LeftLayout.Parent = LeftPanel
+LeftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    LeftPanel.CanvasSize = UDim2.new(0, 0, 0, LeftLayout.AbsoluteContentSize.Y + 10)
+end)
 
+-- PHÂN VÙNG PHẢI: Bảng xem thông số chi tiết + Nút Chặn
 local RightPanel = Instance.new("Frame")
-RightPanel.Size = UDim2.new(0.6, -4, 1, -45)
-RightPanel.Position = UDim2.new(0.4, 2, 0, 40)
-RightPanel.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
-RightPanel.BorderSizePixel = 0
+RightPanel.Size = UDim2.new(0.48, 0, 1, -38)
+RightPanel.Position = UDim2.new(0.52, -2, 0, 38)
+RightPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+RightPanel.BorderSizePixel = 1
+RightPanel.BorderColor3 = Color3.fromRGB(35, 35, 40)
 RightPanel.Visible = false
 RightPanel.Parent = MainFrame
 
 local DetailTitle = Instance.new("TextLabel")
-DetailTitle.Size = UDim2.new(1, -190, 0, 30)
-DetailTitle.Position = UDim2.new(0, 8, 0, 0)
+DetailTitle.Size = UDim2.new(1, -100, 0, 30)
+DetailTitle.Position = UDim2.new(0, 8, 0, 2)
 DetailTitle.BackgroundTransparency = 1
 DetailTitle.Text = "Remote"
 DetailTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -127,284 +126,130 @@ DetailTitle.Font = Enum.Font.SourceSansBold
 DetailTitle.TextXAlignment = Enum.TextXAlignment.Left
 DetailTitle.Parent = RightPanel
 
--- NÚT CẬP NHẬT LOG THỦ CÔNG (ĐỂ CHỐNG ĐƠ HÌNH)
-local RefreshButton = Instance.new("TextButton")
-RefreshButton.Size = UDim2.new(0, 90, 0, 24)
-RefreshButton.Position = UDim2.new(1, -180, 0, 3)
-RefreshButton.BackgroundColor3 = Color3.fromRGB(30, 70, 120)
-RefreshButton.BorderColor3 = Color3.fromRGB(50, 90, 150)
-RefreshButton.Text = "🔄 Tải lại log"
-RefreshButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-RefreshButton.TextSize = 12
-RefreshButton.Font = Enum.Font.SourceSansBold
-RefreshButton.Parent = RightPanel
-
 local BlockButton = Instance.new("TextButton")
 BlockButton.Size = UDim2.new(0, 80, 0, 24)
-BlockButton.Position = UDim2.new(1, -86, 0, 3)
-BlockButton.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-BlockButton.BorderColor3 = Color3.fromRGB(55, 55, 60)
+BlockButton.Position = UDim2.new(1, -88, 0, 5)
+BlockButton.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+BlockButton.BorderColor3 = Color3.fromRGB(60, 60, 65)
 BlockButton.Text = "⬜ Chặn"
 BlockButton.TextColor3 = Color3.fromRGB(200, 200, 200)
 BlockButton.TextSize = 12
 BlockButton.Font = Enum.Font.SourceSans
 BlockButton.Parent = RightPanel
+Instance.new("UICorner", BlockButton).CornerRadius = UDim.new(0, 4)
 
-local LogsFrame = Instance.new("ScrollingFrame")
-LogsFrame.Size = UDim2.new(1, -12, 1, -36)
-LogsFrame.Position = UDim2.new(0, 6, 0, 32)
-LogsFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
-LogsFrame.BorderColor3 = Color3.fromRGB(28, 28, 32)
-LogsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-LogsFrame.ScrollBarThickness = 4
-LogsFrame.Parent = RightPanel
+local ArgsFrame = Instance.new("ScrollingFrame")
+ArgsFrame.Size = UDim2.new(1, -12, 1, -42)
+ArgsFrame.Position = UDim2.new(0, 6, 0, 36)
+ArgsFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+ArgsFrame.BorderColor3 = Color3.fromRGB(30, 30, 35)
+ArgsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ArgsFrame.ScrollBarThickness = 4
+ArgsFrame.Parent = RightPanel
 
 local RightLayout = Instance.new("UIListLayout")
-RightLayout.Padding = UDim.new(0, 6)
-RightLayout.Parent = LogsFrame
-
-local ContextMenu = Instance.new("Frame")
-ContextMenu.Size = UDim2.new(0, 160, 0, 32)
-ContextMenu.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-ContextMenu.BorderColor3 = Color3.fromRGB(60, 60, 65)
-ContextMenu.ZIndex = 10
-ContextMenu.Visible = false
-ContextMenu.Parent = ScreenGui
-
-local GenScriptBtn = Instance.new("TextButton")
-GenScriptBtn.Size = UDim2.new(1, 0, 1, 0)
-GenScriptBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-GenScriptBtn.BorderSizePixel = 0
-GenScriptBtn.Text = "📄 Generate Script (Copy)"
-GenScriptBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
-GenScriptBtn.TextSize = 12
-GenScriptBtn.Font = Enum.Font.SourceSans
-GenScriptBtn.ZIndex = 11
-GenScriptBtn.Parent = ContextMenu
-
-LeftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    LeftPanel.CanvasSize = UDim2.new(0, 0, 0, LeftLayout.AbsoluteContentSize.Y)
-end)
+RightLayout.Padding = UDim.new(0, 3)
+RightLayout.Parent = ArgsFrame
 RightLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    LogsFrame.CanvasSize = UDim2.new(0, 0, 0, RightLayout.AbsoluteContentSize.Y)
+    ArgsFrame.CanvasSize = UDim2.new(0, 0, 0, RightLayout.AbsoluteContentSize.Y + 10)
 end)
 
-UserInputService.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
-        task.wait(0.1)
-        ContextMenu.Visible = false
-    end
-end)
-
--- =========================================================================
--- HIỂN THỊ LOG (CHỈ CHẠY KHI ĐƯỢC YÊU CẦU - KHÔNG CHẠY TỰ ĐỘNG)
--- =========================================================================
-local function viewRemoteLogs(remoteId)
-    SelectedRemoteId = remoteId
-    local remoteData = RemoteLogs[remoteId]
-    if not remoteData then return end
+-- LOGIC CẬP NHẬT GIAO DIỆN PHẢI KHI BẤM XEM
+local function updateRightPanel(remoteName)
+    SelectedRemoteName = remoteName
+    DetailTitle.Text = "🔥 " .. remoteName
     
-    local prefix = (remoteData.ClassName:find("Function") and "🔮 " or "⚡ ")
-    DetailTitle.Text = prefix .. remoteData.Name
-    
-    for _, child in pairs(LogsFrame:GetChildren()) do
-        if child:IsA("Frame") then child:Destroy() end
+    for _, child in pairs(ArgsFrame:GetChildren()) do
+        if child:IsA("TextLabel") then child:Destroy() end
     end
     
-    if BlockedPaths[remoteData.Path] then
-        BlockButton.BackgroundColor3 = Color3.fromRGB(150, 45, 45)
+    if BlockedRemotes[remoteName] then
+        BlockButton.BackgroundColor3 = Color3.fromRGB(160, 45, 45)
         BlockButton.Text = "🟥 Đang Chặn"
+        BlockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     else
-        BlockButton.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+        BlockButton.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
         BlockButton.Text = "⬜ Chặn"
+        BlockButton.TextColor3 = Color3.fromRGB(200, 200, 200)
     end
     
-    -- Render dữ liệu tĩnh từ RAM ra UI
-    for _, logData in ipairs(remoteData.Logs) do
-        local LogBox = Instance.new("Frame")
-        LogBox.Size = UDim2.new(1, -6, 0, #logData.DisplayArgs * 20 + 12)
-        LogBox.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
-        LogBox.BorderColor3 = Color3.fromRGB(40, 40, 45)
-        LogBox.Parent = LogsFrame
-        
-        local BoxLayout = Instance.new("UIListLayout")
-        BoxLayout.Padding = UDim.new(0, 2)
-        BoxLayout.Parent = LogBox
-        
-        local padding = Instance.new("UIPadding")
-        padding.PaddingTop = UDim.new(0, 4)
-        padding.PaddingLeft = UDim.new(0, 8)
-        padding.Parent = LogBox
-        
-        for _, argText in ipairs(logData.DisplayArgs) do
-            local argLabel = Instance.new("TextLabel")
-            argLabel.Size = UDim2.new(1, 0, 0, 18)
-            argLabel.BackgroundTransparency = 1
-            argLabel.Text = argText
-            argLabel.TextColor3 = Color3.fromRGB(210, 150, 90)
-            argLabel.TextSize = 12
-            argLabel.Font = Enum.Font.Code
-            argLabel.TextXAlignment = Enum.TextXAlignment.Left
-            argLabel.Parent = LogBox
+    local data = SpiedRemotes[remoteName]
+    if data and data.Args then
+        for _, argStr in ipairs(data.Args) do
+            local label = Instance.new("TextLabel")
+            label.Size = UDim2.new(1, -6, 0, 26)
+            label.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
+            label.BorderSizePixel = 0
+            label.Text = "  " .. argStr
+            label.TextColor3 = Color3.fromRGB(215, 155, 95)
+            label.TextSize = 12
+            label.Font = Enum.Font.Code
+            label.TextXAlignment = Enum.TextXAlignment.Left
+            label.Parent = ArgsFrame
+            Instance.new("UICorner", label).CornerRadius = UDim.new(0, 3)
         end
-        
-        LogBox.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton2 then
-                ContextMenu.Position = UDim2.new(0, input.Position.X, 0, input.Position.Y)
-                ContextMenu.Visible = true
-                
-                GenScriptBtn.MouseButton1Click:Connect(function()
-                    ContextMenu.Visible = false
-                    local method = "FireServer"
-                    if remoteData.ClassName == "RemoteFunction" then method = "InvokeServer"
-                    elseif remoteData.ClassName == "BindableEvent" then method = "Fire"
-                    elseif remoteData.ClassName == "BindableFunction" then method = "Invoke" end
-                    
-                    local codeString = string.format("-- Generated by HydroSpy V11 Pro\nlocal Target = game.%s\nTarget:%s(%s)", logData.Path, method, table.concat(logData.CodeArgs, ", "))
-                    if setclipboard then
-                        setclipboard(codeString)
-                        print("📋 Đã copy đoạn mã vào Clipboard thành công!")
-                    end
-                end)
-            end
-        end)
     end
     RightPanel.Visible = true
 end
 
-RefreshButton.MouseButton1Click:Connect(function()
-    if SelectedRemoteId then viewRemoteLogs(SelectedRemoteId) end
-end)
-
+-- TƯƠNG TÁC NÚT CHẶN GÓI TIN
 BlockButton.MouseButton1Click:Connect(function()
-    if not SelectedRemoteId or not RemoteLogs[SelectedRemoteId] then return end
-    local rPath = RemoteLogs[SelectedRemoteId].Path
-    if not rPath then return end
+    if not SelectedRemoteName then return end
+    BlockedRemotes[SelectedRemoteName] = not BlockedRemotes[SelectedRemoteName]
     
-    BlockedPaths[rPath] = not BlockedPaths[rPath]
-    viewRemoteLogs(SelectedRemoteId)
-    
-    local itemBtn = LeftPanel:FindFirstChild(tostring(SelectedRemoteId))
-    if itemBtn then
-        itemBtn.TextColor3 = BlockedPaths[rPath] and Color3.fromRGB(255, 90, 90) or Color3.fromRGB(220, 220, 230)
+    local itemBtn = LeftPanel:FindFirstChild("Btn_" .. SelectedRemoteName)
+    if BlockedRemotes[SelectedRemoteName] then
+        BlockButton.BackgroundColor3 = Color3.fromRGB(160, 45, 45)
+        BlockButton.Text = "🟥 Đang Chặn"
+        BlockButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        if itemBtn then itemBtn.TextColor3 = Color3.fromRGB(255, 90, 90) end
+    else
+        BlockButton.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        BlockButton.Text = "⬜ Chặn"
+        BlockButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+        if itemBtn then itemBtn.TextColor3 = Color3.fromRGB(220, 220, 230) end
     end
 end)
 
-local function refreshLeftPanel()
-    for _, btn in pairs(LeftPanel:GetChildren()) do
-        if btn:IsA("TextButton") then
-            local targetId = tonumber(btn.Name)
-            local data = RemoteLogs[targetId]
-            if data then
-                btn.Visible = (Filters[data.ClassName] == true)
-                if not btn.Visible and SelectedRemoteId == targetId then
-                    RightPanel.Visible = false
-                end
-            end
-        end
-    end
-end
-
-local function createCheckbox(filterKey, icon)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 72, 0, 24)
-    btn.BackgroundColor3 = Color3.fromRGB(30, 130, 70) 
-    btn.Text = "✓ " .. icon
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 11
-    btn.Font = Enum.Font.Code
-    btn.Parent = FilterContainer
+-- GHI NHẬN LOG REMOTE VÀO DANH SÁCH BÊN TRÁI
+local function registerRemoteLog(remoteName, argsTable)
+    SpiedRemotes[remoteName] = {
+        Args = argsTable,
+        Count = (SpiedRemotes[remoteName] and SpiedRemotes[remoteName].Count or 0) + 1
+    }
     
-    btn.MouseButton1Click:Connect(function()
-        Filters[filterKey] = not Filters[filterKey]
-        if Filters[filterKey] then
-            btn.BackgroundColor3 = Color3.fromRGB(30, 130, 70)
-            btn.Text = "✓ " .. icon
-        else
-            btn.BackgroundColor3 = Color3.fromRGB(45, 45, 50) 
-            btn.Text = "✗ " .. icon
-        end
-        refreshLeftPanel()
-    end)
-end
-
-createCheckbox("RemoteEvent", "⚡ R.Evt")
-createCheckbox("RemoteFunction", "🔮 R.Fnc")
-createCheckbox("BindableEvent", "⚡ B.Evt")
-createCheckbox("BindableFunction", "🔮 B.Fnc")
-
--- =========================================================================
--- GHI NHẬN LOG VÀO RAM (TUYỆT ĐỐI KHÔNG TỰ ĐỘNG RENDER RA MÀN HÌNH NÊN KHÔNG LAG)
--- =========================================================================
-local function addNewLog(remoteInstance, rawArgs)
-    if not remoteInstance or not remoteInstance.Parent then return end
-    local rPath = remoteInstance:GetFullName()
-    
-    if BlockedPaths[rPath] == true then return end
-    
-    local name = remoteInstance.Name
-    local className = remoteInstance.ClassName
-    local targetId = nil
-    
-    for id, data in pairs(RemoteLogs) do
-        if data.Path == rPath then targetId = id break end
-    end
-    
-    if not targetId then
-        targetId = #RemoteLogs + 1
-        RemoteLogs[targetId] = { Name = name, ClassName = className, Path = rPath, Logs = {}, TotalCount = 0 }
-    end
-    
-    local remoteData = RemoteLogs[targetId]
-    remoteData.TotalCount = remoteData.TotalCount + 1
-    
-    local displayList = {}
-    local codeList = {}
-    for i, v in ipairs(rawArgs) do
-        local argType, displayVal, codeVal = getArgDetails(v)
-        table.insert(displayList, string.format("[%d] 📦 Type: %s | Value: %s", i, argType, displayVal))
-        table.insert(codeList, codeVal)
-    end
-    if #rawArgs == 0 then table.insert(displayList, "   (No Arguments)") end
-    
-    table.insert(remoteData.Logs, { DisplayArgs = displayList, CodeArgs = codeList, Path = rPath })
-    
-    if #remoteData.Logs > MAX_LOGS_PER_REMOTE then
-        table.remove(remoteData.Logs, 1)
-    end
-    
-    -- Chỉ cập nhật text của nút bên cột trái, cực nhẹ, không gây tụt FPS
-    local existingBtn = LeftPanel:FindFirstChild(tostring(targetId))
-    local prefix = className:find("Function") and "🔮" or "⚡"
-    
+    local existingBtn = LeftPanel:FindFirstChild("Btn_" .. remoteName)
     if existingBtn then
-        existingBtn.Text = string.format("  %s (%d) %s", prefix, remoteData.TotalCount, name)
+        existingBtn.Text = string.format("  ⚡ (%d) %s", SpiedRemotes[remoteName].Count, remoteName)
+        if SelectedRemoteName == remoteName then
+            updateRightPanel(remoteName)
+        end
     else
         local RemoteItem = Instance.new("TextButton")
-        RemoteItem.Name = tostring(targetId)
+        RemoteItem.Name = "Btn_" .. remoteName
         RemoteItem.Size = UDim2.new(1, -6, 0, 30)
-        RemoteItem.BackgroundColor3 = Color3.fromRGB(26, 26, 30)
+        RemoteItem.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
         RemoteItem.BorderSizePixel = 0
-        RemoteItem.Text = string.format("  %s (1) %s", prefix, name)
+        RemoteItem.Text = string.format("  ⚡ (1) %s", remoteName)
         RemoteItem.TextColor3 = Color3.fromRGB(220, 220, 230)
         RemoteItem.TextSize = 13
         RemoteItem.Font = Enum.Font.SourceSans
         RemoteItem.TextXAlignment = Enum.TextXAlignment.Left
         RemoteItem.Parent = LeftPanel
+        Instance.new("UICorner", RemoteItem).CornerRadius = UDim.new(0, 4)
         
         RemoteItem.MouseButton1Click:Connect(function()
             for _, child in pairs(LeftPanel:GetChildren()) do
-                if child:IsA("TextButton") then child.BackgroundColor3 = Color3.fromRGB(26, 26, 30) end
+                if child:IsA("TextButton") then child.BackgroundColor3 = Color3.fromRGB(28, 28, 34) end
             end
-            RemoteItem.BackgroundColor3 = Color3.fromRGB(40, 40, 46)
-            viewRemoteLogs(targetId)
+            RemoteItem.BackgroundColor3 = Color3.fromRGB(44, 44, 52)
+            updateRightPanel(remoteName)
         end)
-        RemoteItem.Visible = (Filters[className] == true)
     end
 end
 
 -- =========================================================================
--- HOOK HỆ THỐNG
+-- HỆ THỐNG ĐÁNH CHẶN METAMETHOD LIVE-TRAFFIC (HOOK FIRESERVER)
 -- =========================================================================
 local success, err = pcall(function()
     local rawMetatable = getrawmetatable(game)
@@ -415,23 +260,20 @@ local success, err = pcall(function()
 
     rawMetatable.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
-        local args = {...}
         
-        if not checkcaller() and self and self.Parent then
-            local successPath, rPath = pcall(function() return self:GetFullName() end)
+        if not checkcaller() and method == "FireServer" and self:IsA("RemoteEvent") then
+            local remoteName = self.Name
+            local args = {...}
+            local formattedArgs = parseArgs(unpack(args))
             
-            if successPath then
-                if method == "FireServer" and self:IsA("RemoteEvent") then
-                    if BlockedPaths[rPath] == true then return end 
-                    task.spawn(addNewLog, self, args)
-                elseif method == "InvokeServer" and self:IsA("RemoteFunction") then
-                    if BlockedPaths[rPath] == true then return nil end 
-                    task.spawn(addNewLog, self, args)
-                elseif method == "Fire" and self:IsA("BindableEvent") then
-                    task.spawn(addNewLog, self, args)
-                elseif method == "Invoke" and self:IsA("BindableFunction") then
-                    task.spawn(addNewLog, self, args)
-                end
+            -- Đẩy tác vụ ghi log ra luồng chạy nền (Tránh gây đứng game)
+            task.spawn(function()
+                registerRemoteLog(remoteName, formattedArgs)
+            end)
+            
+            -- Cơ chế kích hoạt ngắt kết nối gói tin cụ thể
+            if BlockedRemotes[remoteName] == true then
+                return nil
             end
         end
         
@@ -441,4 +283,4 @@ local success, err = pcall(function()
     setReadOnly(rawMetatable, true)
 end)
 
-if not success then warn("Executor không hỗ trợ can thiệp sâu Metatable:", err) end
+if not success then warn("⚠️ Trình thực thi (Executor) của bạn chặn quyền getrawmetatable!", err) end
