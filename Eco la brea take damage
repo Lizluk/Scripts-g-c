@@ -1,24 +1,23 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- Cấu hình mục tiêu chặn gói tin
+-- Cấu hình mục tiêu duy nhất cần chặn
 local TARGET_EVENT_NAME = "TakeDamage"
 
--- Trạng thái kích hoạt chặn (Mặc định là tắt, bật/tắt qua GUI)
+-- Trạng thái chặn mặc định (Bật/Tắt qua GUI)
 local IsBlockActive = false
 
--- Dọn dẹp GUI cũ nếu chạy lại script nhiều lần
+-- Dọn dẹp GUI cũ nếu trùng lặp
 local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("TakeDamageBlockerGUI")
 if oldGui then oldGui:Destroy() end
 
 -- =========================================================================
--- KIẾN TRÚC CAN THIỆP: METATABLE HOOKING (CHẶN GÓI TIN FIRESERVER)
+-- KIẾN TRÚC CAN THIỆP CHỈ ĐỊNH: CHỈ CHẶN ĐÚNG TAKEDAMAGE
 -- =========================================================================
 local success, err = pcall(function()
     local rawMetatable = getrawmetatable(game)
     local setReadOnly = setreadonly or make_writeable
     
-    -- Mở khóa Metatable để can thiệp
     setReadOnly(rawMetatable, false)
     
     local oldNamecall = rawMetatable.__namecall
@@ -26,30 +25,30 @@ local success, err = pcall(function()
     rawMetatable.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
         
-        -- Kiểm tra nếu script của game gọi hàm FireServer
+        -- Kiểm tra nếu game thực hiện gọi FireServer
         if not checkcaller() and method == "FireServer" and self:IsA("RemoteEvent") then
-            local eventName = self.Name
-            
-            -- Thực hiện logic chặn gói tin dựa theo từ khóa giống cấu trúc bạn yêu cầu
-            if IsBlockActive and string.find(eventName, TARGET_EVENT_NAME) then
-                -- Trả về nil để hủy bỏ hoàn toàn gói tin, ngăn không cho gửi dữ liệu sát thương về Server
-                return nil
+            -- KIỂM TRA CHẶT CHẼ: 
+            -- 1. Tên của Event phải chính xác là "TakeDamage"
+            -- 2. Hoặc nó phải nằm trong thư mục mang tên "Events" để tránh chặn nhầm các Remote trùng tên ở nơi khác
+            if IsBlockActive and (self.Name == TARGET_EVENT_NAME or (self.Parent and self.Parent.Name == "Events" and self.Name == TARGET_EVENT_NAME)) then
+                -- Chỉ huỷ bỏ duy nhất gói tin sát thương này
+                return nil 
             end
         end
         
+        -- Tất cả các gói tin khác (Di chuyển, dùng chiêu, mua đồ, chat...) đi qua bình thường
         return oldNamecall(self, ...)
     end)
 
-    -- Khóa lại Metatable sau khi cấu hình xong
     setReadOnly(rawMetatable, true)
 end)
 
 if not success then 
-    warn("⚠️ Thiết bị/Executor của bạn không hỗ trợ can thiệp Metatable sâu: ", err) 
+    warn("⚠️ Thiết bị/Executor không hỗ trợ can thiệp Metatable: ", err) 
 end
 
 -- =========================================================================
--- KHỞI TẠO GIAO DIỆN ĐIỀU KHIỂN (GUI)
+-- KHỞI TẠO GIAO DIỆN PHẲNG ĐIỀU KHIỂN (GUI)
 -- =========================================================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "TakeDamageBlockerGUI"
@@ -59,7 +58,7 @@ ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 260, 0, 130)
 MainFrame.Position = UDim2.new(0.5, -130, 0.4, -65)
-MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
@@ -68,9 +67,9 @@ Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundTransparency = 1
-Title.Text = "🛑 TakeDamage Packet Blocker"
+Title.Text = "🛑 TakeDamage Blocker (Safe Mode)"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 14
+Title.TextSize = 13
 Title.Font = Enum.Font.SourceSansBold
 Title.Parent = MainFrame
 
@@ -80,7 +79,7 @@ StatusButton.Position = UDim2.new(0, 20, 0, 55)
 StatusButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
 StatusButton.Text = "Trạng Thái: ĐANG TẮT (OFF)"
 StatusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-StatusButton.TextSize = 14
+StatusButton.TextSize = 13
 StatusButton.Font = Enum.Font.SourceSansBold
 StatusButton.Parent = MainFrame
 Instance.new("UICorner", StatusButton).CornerRadius = UDim.new(0, 6)
@@ -90,12 +89,12 @@ StatusButton.MouseButton1Click:Connect(function()
     IsBlockActive = not IsBlockActive
     
     if IsBlockActive then
-        StatusButton.BackgroundColor3 = Color3.fromRGB(50, 150, 80)
+        StatusButton.BackgroundColor3 = Color3.fromRGB(46, 139, 87)
         StatusButton.Text = "Trạng Thái: ĐANG CHẶN (ON)"
-        print("🔓 Đã kích hoạt bộ lọc Chặn gói tin TakeDamage!")
+        print("🔓 [Bypass Active] Chỉ chặn duy nhất gói tin TakeDamage!")
     else
         StatusButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
         StatusButton.Text = "Trạng Thái: ĐANG TẮT (OFF)"
-        print("🔒 Đã tắt bộ lọc Chặn gói tin.")
+        print("🔒 [Bypass Disabled] Đã mở lại nhận sát thương.")
     end
 end)
