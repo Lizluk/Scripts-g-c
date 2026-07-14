@@ -1,4 +1,4 @@
---// LIZLUK ASSASSIN CORE (ANTI-BAN ON RESPAWN INTEGRATED)
+--// LIZLUK ASSASSIN CORE (FPS OPTIMIZED ESP & ANTI-BAN INTEGRATED)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -18,7 +18,7 @@ local targetHunger = 100
 local targetThirst = 100
 local targetStamina = 100
 local isLocking = false 
-local isSpawnSafe = true -- Biến kiểm tra trạng thái an toàn sau khi hồi sinh
+local isSpawnSafe = true 
 
 local targets = {}         
 local peccaryTargets = {}  
@@ -29,9 +29,9 @@ local autoDrinkActive = false
 local npcEspActive = true 
 
 local closestPlayerName = "" 
-local maxDetectDistance = 150 
+local maxDetectDistance = 30 
 
-local attackCooldown = 0.1
+local attackCooldown = 1.4
 local pounceCooldown = 2.0
 local npcAttackCooldown = 0.5
 
@@ -276,9 +276,7 @@ end)
 --======================================================================
 local function handleCharacterSafety(char)
     if not char then return end
-    isSpawnSafe = false -- Đóng băng can thiệp ngay khi nhân vật mới xuất hiện
-    
-    -- Đợi 3.5 giây để nhân vật ổn định hoàn toàn trên Server và Anti-cheat bỏ qua
+    isSpawnSafe = false 
     task.wait(3.5) 
     isSpawnSafe = true
 end
@@ -388,7 +386,7 @@ local charactersFolder = workspace:FindFirstChild("Characters")
 local npcsFolder = workspace:FindFirstChild("NPCs")
 
 --======================================================================
--- HỆ THỐNG ESP PLAYER CHUẨN MÀU
+-- HỆ THỐNG ESP PLAYER TỐI ƯU FPS (HẾT GIẬT LAG HÌNH)
 --======================================================================
 local function applyESP(character, playerName)
     if not character then return end
@@ -412,31 +410,31 @@ local function applyESP(character, playerName)
     txt.TextSize = 14
     txt.Parent = bb
 
-    local connection
-    connection = RunService.RenderStepped:Connect(function()
-        if not charactersFolder or not character:IsDescendantOf(charactersFolder) or not head:IsDescendantOf(character) then
-            connection:Disconnect()
-            bb:Destroy()
-            return
-        end
-        local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
-        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
-        
-        local distance = math.floor((myRoot.Position - head.Position).Magnitude)
-        
-        if targets[playerName] then
-            txt.Text = killAuraActive and string.format("[🎯 TARGET] %s\n[%d m]", playerName, distance) or string.format("[⏸️ TARGET] %s\n[%d m]", playerName, distance)
-            txt.TextColor3 = Color3.fromRGB(255, 30, 30)
-        else
-            if playerName == closestPlayerName then
-                txt.Text = string.format("[⭐ CẬN] %s\n[%d m]", playerName, distance)
-                txt.TextColor3 = Color3.fromRGB(50, 255, 130)
-            else
-                txt.Text = string.format("%s\n[%d m]", playerName, distance)
-                txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+    -- Tối ưu luồng xử lý: Thay thế RenderStepped bằng luồng tuần hoàn chờ để triệt tiêu hiện tượng lag giật
+    task.spawn(function()
+        while character and character:IsDescendantOf(charactersFolder) and head and head:IsDescendantOf(character) and bb and bb.Parent do
+            local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
+            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+            
+            if myRoot and head then
+                local distance = math.floor((myRoot.Position - head.Position).Magnitude)
+                
+                if targets[playerName] then
+                    txt.Text = killAuraActive and string.format("[🎯 TARGET] %s\n[%d m]", playerName, distance) or string.format("[⏸️ TARGET] %s\n[%d m]", playerName, distance)
+                    txt.TextColor3 = Color3.fromRGB(255, 30, 30)
+                else
+                    if playerName == closestPlayerName then
+                        txt.Text = string.format("[⭐ CẬN] %s\n[%d m]", playerName, distance)
+                        txt.TextColor3 = Color3.fromRGB(50, 255, 130)
+                    else
+                        txt.Text = string.format("%s\n[%d m]", playerName, distance)
+                        txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    end
+                end
             end
+            task.wait(0.1) -- Khoảng thời gian nghỉ hợp lý cho CPU, giúp loại bỏ lag giật "tốc biến" của player khác
         end
+        if bb then bb:Destroy() end
     end)
 end
 
@@ -458,6 +456,9 @@ task.spawn(function()
     end
 end)
 
+--======================================================================
+-- HỆ THỐNG ESP NPC TỐI ƯU FPS
+--======================================================================
 local function applyNPCEsp(npcModel, typeName)
     if not npcModel then return end
     if npcModel:FindFirstChild("NpcESP_Holder") then return end
@@ -491,27 +492,26 @@ local function applyNPCEsp(npcModel, typeName)
     end
     txt.Parent = bb
 
-    local connection
-    connection = RunService.RenderStepped:Connect(function()
-        if not npcModel:IsDescendantOf(workspace) or not targetPart:IsDescendantOf(npcModel) then
-            connection:Disconnect()
-            local idx = table.find(activeNpcEsps, bb)
-            if idx then table.remove(activeNpcEsps, idx) end
-            bb:Destroy()
-            return
+    task.spawn(function()
+        while npcModel and npcModel:IsDescendantOf(workspace) and targetPart and targetPart:IsDescendantOf(npcModel) and bb and bb.Parent do
+            local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
+            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+            
+            if myRoot and targetPart then
+                local distance = math.floor((myRoot.Position - targetPart.Position).Magnitude)
+                if peccaryTargets[npcModel.Name] then
+                    txt.Text = string.format("🐷 [MỤC TIÊU KHÓA]\n%s (%dm)", npcModel.Name, distance)
+                    txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                else
+                    local icon = (typeName == "Peccary") and "🐷" or (typeName == "Bird" and "🦅" or "🐹")
+                    txt.Text = string.format("%s [%s]\n%s (%dm)", icon, typeName, npcModel.Name, distance)
+                end
+            end
+            task.wait(0.1)
         end
-        local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
-        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
-        
-        local distance = math.floor((myRoot.Position - targetPart.Position).Magnitude)
-        if peccaryTargets[npcModel.Name] then
-            txt.Text = string.format("🐷 [MỤC TIÊU KHÓA]\n%s (%dm)", npcModel.Name, distance)
-            txt.TextColor3 = Color3.fromRGB(255, 50, 50)
-        else
-            local icon = (typeName == "Peccary") and "🐷" or (typeName == "Bird" and "🦅" or "🐹")
-            txt.Text = string.format("%s [%s]\n%s (%dm)", icon, typeName, npcModel.Name, distance)
-        end
+        local idx = table.find(activeNpcEsps, bb)
+        if idx then table.remove(activeNpcEsps, idx) end
+        if bb then bb:Destroy() end
     end)
 end
 
@@ -605,7 +605,6 @@ task.spawn(function()
         local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
         local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
-        -- Khóa chỉ số thông minh + Check độ an toàn sau khi hồi sinh
         if isLocking and isSpawnSafe and myCharacter then
             local attr = myCharacter:FindFirstChild("Attributes") or LocalPlayer
             if attr then
@@ -817,4 +816,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK ASSASSIN: RE-INJECTED WITH SAFETY ANTI-BAN DELAY OK! 🦋")
+print("🦋 LIZLUK ASSASSIN: RE-INJECTED WITH FPS OPTIMIZED ESP OK! 🦋")
