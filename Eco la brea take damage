@@ -1,0 +1,70 @@
+-- Tạo GUI cơ bản
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local ToggleButton = Instance.new("TextButton")
+local UIButtonCorner = Instance.new("UICorner")
+local UIFramCorner = Instance.new("UICorner")
+
+-- Cấu hình Giao diện
+ScreenGui.Name = "AntiDamageGUI"
+ScreenGui.Parent = game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.ResetOnSpawn = false
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
+MainFrame.Size = UDim2.new(0, 180, 0, 60)
+MainFrame.Active = true
+MainFrame.Draggable = true -- Giữ chuột để di chuyển GUI
+UIFramCorner.Parent = MainFrame
+
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Parent = MainFrame
+ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Đỏ: Đang tắt (Không chặn)
+ToggleButton.Position = UDim2.new(0.05, 0, 0.15, 0)
+ToggleButton.Size = UDim2.new(0, 164, 0, 42)
+ToggleButton.Font = Enum.Font.SourceSansBold
+ToggleButton.Text = "Block Damage: OFF"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 16
+UIButtonCorner.Parent = ToggleButton
+
+-- LOGIC CHẶN SỰ KIỆN TAKE DAMAGE (HOOKING)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- Thay đổi đường dẫn mục tiêu sang Events.TakeDamage
+local TargetEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("TakeDamage")
+
+local isBlocking = false
+local rawMeta = getrawmetatable(game)
+local oldInstanceMethod = rawMeta.__index.namecall -- Lưu phương thức gốc
+
+-- Mở khóa metatable để can thiệp mạng
+setreadonly(rawMeta, false)
+
+rawMeta.__index.namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    
+    -- Nếu đang BẬT chặn và đối tượng gọi là TakeDamage thông qua FireServer/InvokeServer
+    if isBlocking and self == TargetEvent and (method == "FireServer" or method == "InvokeServer") then
+        warn("[Anti-Damage] Đã chặn gói tin gửi sát thương về server thành công!")
+        return nil -- Ngắt kết nối gói tin tại đây, không cho truyền về server
+    end
+    
+    return oldInstanceMethod(self, unpack(args))
+end)
+
+setreadonly(rawMeta, true)
+
+-- Sự kiện click nút Bật/Tắt
+ToggleButton.MouseButton1Click:Connect(function()
+    isBlocking = not isBlocking
+    if isBlocking then
+        ToggleButton.Text = "Block Damage: ON"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50) -- Xanh lá: Đang chặn
+    else
+        ToggleButton.Text = "Block Damage: OFF"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Đỏ: Dừng chặn
+    end
+end)
