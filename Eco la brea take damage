@@ -1,22 +1,23 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
 
 -- Bộ lưu trữ dữ liệu
 local RemoteLogs = {}      
-local BlockedRemotes = {}   
+local BlockedRemotes = {}   -- Chuyển sang lưu theo Instance để bật/tắt động chính xác
 local SelectedRemoteId = nil 
 
--- Bộ lọc trạng thái (Mặc định bật hết cả 4 loại khi vào game)
+-- Bộ lọc trạng thái
 local Filters = {
     RemoteEvent = true,
     RemoteFunction = true,
-    BindableEvent = true,   -- Thay thế/Bổ sung cho 2 loại icon phụ tùy biến của game
+    BindableEvent = true,   
     BindableFunction = true
 }
 
 -- Dọn dẹp GUI cũ
-local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("HydroSpyV5Pro")
+local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("HydroSpyV7Pro")
 if oldGui then oldGui:Destroy() end
 
 -- =========================================================================
@@ -27,7 +28,7 @@ local function getArgDetails(v)
     if t == "string" then return "String", string.format('"%s"', v), string.format('"%s"', v)
     elseif t == "number" then return "Number", tostring(v), tostring(v)
     elseif t == "boolean" then return "Boolean", tostring(v):upper(), tostring(v)
-    elseif t == "Instance" then return "Instance", v:GetFullName(), string.format('game.%s', v:GetFullName())
+    elseif t == "Instance" then return "Instance", (v and v:GetFullName() or "nil"), string.format('game.%s', (v and v:GetFullName() or "nil"))
     elseif t == "Vector3" then 
         return "Vector3", string.format("(%.2f, %.2f, %.2f)", v.X, v.Y, v.Z), string.format("Vector3.new(%.2f, %.2f, %.2f)", v.X, v.Y, v.Z)
     elseif t == "table" then
@@ -42,7 +43,7 @@ end
 -- KHỞI TẠO GIAO DIỆN CHUẨN HYDROSPY
 -- =========================================================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "HydroSpyV5Pro"
+ScreenGui.Name = "HydroSpyV7Pro"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -63,17 +64,23 @@ TopBar.BorderSizePixel = 0
 TopBar.Parent = MainFrame
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(0, 200, 1, 0)
+Title.Size = UDim2.new(0, 220, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "⚡ HydroSpy v5.0 Pro"
+Title.Text = "⚡ HydroSpy v7.0 Pro [Phím P để Ẩn]"
 Title.TextColor3 = Color3.fromRGB(170, 180, 200)
 Title.TextSize = 13
 Title.Font = Enum.Font.Code
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = TopBar
 
--- KHU VỰC 4 Ô TICK BOX BỘ LỌC TRÊN THANH TOPBAR
+-- ẨN / HIỆN GUI BẰNG PHÍM P
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.P then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
+
 local FilterContainer = Instance.new("Frame")
 FilterContainer.Size = UDim2.new(0, 400, 1, 0)
 FilterContainer.Position = UDim2.new(1, -410, 0, 0)
@@ -84,10 +91,9 @@ local FilterLayout = Instance.new("UIListLayout")
 FilterLayout.FillDirection = Enum.FillDirection.Horizontal
 FilterLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 FilterLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-FilterLayout.Padding = UDim.new(0, 12)
+FilterLayout.Padding = UDim.new(0, 6)
 FilterLayout.Parent = FilterContainer
 
--- PANEL HIỂN THỊ DỮ LIỆU BÊN TRONG
 local LeftPanel = Instance.new("ScrollingFrame")
 LeftPanel.Size = UDim2.new(0.4, -8, 1, -45)
 LeftPanel.Position = UDim2.new(0, 6, 0, 40)
@@ -163,7 +169,6 @@ GenScriptBtn.Font = Enum.Font.SourceSans
 GenScriptBtn.ZIndex = 11
 GenScriptBtn.Parent = ContextMenu
 
--- Tự động giãn vùng cuộn (Canvas)
 LeftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     LeftPanel.CanvasSize = UDim2.new(0, 0, 0, LeftLayout.AbsoluteContentSize.Y)
 end)
@@ -171,7 +176,7 @@ RightLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     LogsFrame.CanvasSize = UDim2.new(0, 0, 0, RightLayout.AbsoluteContentSize.Y)
 end)
 
-game:GetService("UserInputService").InputBegan:Connect(function(input)
+UserInputService.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 then
         task.wait(0.1)
         ContextMenu.Visible = false
@@ -179,7 +184,7 @@ game:GetService("UserInputService").InputBegan:Connect(function(input)
 end)
 
 -- =========================================================================
--- HÀM THỰC THI BẬT/TẮT ĐẦU LỌC DANH SÁCH (REFRESH)
+-- HÀM LỌC HIỂN THỊ
 -- =========================================================================
 local function refreshLeftPanel()
     for _, btn in pairs(LeftPanel:GetChildren()) do
@@ -187,28 +192,22 @@ local function refreshLeftPanel()
             local targetId = tonumber(btn.Name)
             local data = RemoteLogs[targetId]
             if data then
-                -- Kiểm tra xem loại cấu trúc này có đang được bật tick hay không
-                if Filters[data.ClassName] == true then
-                    btn.Visible = true
-                else
-                    btn.Visible = false
-                    if SelectedRemoteId == targetId then
-                        RightPanel.Visible = false
-                    end
+                btn.Visible = (Filters[data.ClassName] == true)
+                if not btn.Visible and SelectedRemoteId == targetId then
+                    RightPanel.Visible = false
                 end
             end
         end
     end
 end
 
--- TẠO CÁC NÚT CHECKBOX TRÊN THANH MENU
 local function createCheckbox(filterKey, icon)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 75, 0, 24)
-    btn.BackgroundColor3 = Color3.fromRGB(30, 130, 70) -- Màu xanh lá báo hiệu đang bật
+    btn.Size = UDim2.new(0, 72, 0, 24)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 130, 70) 
     btn.Text = "✓ " .. icon
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 12
+    btn.TextSize = 11
     btn.Font = Enum.Font.Code
     btn.Parent = FilterContainer
     
@@ -218,7 +217,7 @@ local function createCheckbox(filterKey, icon)
             btn.BackgroundColor3 = Color3.fromRGB(30, 130, 70)
             btn.Text = "✓ " .. icon
         else
-            btn.BackgroundColor3 = Color3.fromRGB(45, 45, 50) -- Màu tối báo hiệu tắt
+            btn.BackgroundColor3 = Color3.fromRGB(45, 45, 50) 
             btn.Text = "✗ " .. icon
         end
         refreshLeftPanel()
@@ -231,7 +230,7 @@ createCheckbox("BindableEvent", "⚡ B.Evt")
 createCheckbox("BindableFunction", "🔮 B.Fnc")
 
 -- =========================================================================
--- LOGIC CẬP NHẬT CHI TIẾT LƯỢT GỌI BÊN PHẢI
+-- XEM CHI TIẾT LOG BÊN PHẢI
 -- =========================================================================
 local function viewRemoteLogs(remoteId)
     SelectedRemoteId = remoteId
@@ -245,7 +244,8 @@ local function viewRemoteLogs(remoteId)
         if child:IsA("Frame") then child:Destroy() end
     end
     
-    if BlockedRemotes[remoteData.Name] then
+    -- Kiểm tra trạng thái chặn của thực thể cụ thể này
+    if BlockedRemotes[remoteData.Object] then
         BlockButton.BackgroundColor3 = Color3.fromRGB(150, 45, 45)
         BlockButton.Text = "🟥 Đang Chặn"
     else
@@ -293,7 +293,7 @@ local function viewRemoteLogs(remoteId)
                     elseif remoteData.ClassName == "BindableEvent" then method = "Fire"
                     elseif remoteData.ClassName == "BindableFunction" then method = "Invoke" end
                     
-                    local codeString = string.format("-- Generated by HydroSpy V5 Pro\nlocal Target = game.%s\nTarget:%s(%s)", logData.Path, method, table.concat(logData.CodeArgs, ", "))
+                    local codeString = string.format("-- Generated by HydroSpy V7 Pro\nlocal Target = game.%s\nTarget:%s(%s)", logData.Path, method, table.concat(logData.CodeArgs, ", "))
                     if setclipboard then
                         setclipboard(codeString)
                         print("📋 Đã copy đoạn mã vào Clipboard thành công!")
@@ -307,30 +307,33 @@ end
 
 BlockButton.MouseButton1Click:Connect(function()
     if not SelectedRemoteId or not RemoteLogs[SelectedRemoteId] then return end
-    local rName = RemoteLogs[SelectedRemoteId].Name
-    BlockedRemotes[rName] = not BlockedRemotes[rName]
+    local rObj = RemoteLogs[SelectedRemoteId].Object
+    if not rObj then return end
+    
+    BlockedRemotes[rObj] = not BlockedRemotes[rObj]
     viewRemoteLogs(SelectedRemoteId)
     
     local itemBtn = LeftPanel:FindFirstChild(tostring(SelectedRemoteId))
     if itemBtn then
-        itemBtn.TextColor3 = BlockedRemotes[rName] and Color3.fromRGB(255, 90, 90) or Color3.fromRGB(220, 220, 230)
+        itemBtn.TextColor3 = BlockedRemotes[rObj] and Color3.fromRGB(255, 90, 90) or Color3.fromRGB(220, 220, 230)
     end
 end)
 
--- GHI NHẬN VÀ PHÂN LOẠI LOG
+-- GHI NHẬN LOG
 local function addNewLog(remoteInstance, rawArgs)
+    if not remoteInstance or not remoteInstance.Parent then return end
     local name = remoteInstance.Name
     local className = remoteInstance.ClassName
     local rPath = remoteInstance:GetFullName()
     local targetId = nil
     
     for id, data in pairs(RemoteLogs) do
-        if data.Path == rPath then targetId = id break end
+        if data.Object == remoteInstance then targetId = id break end
     end
     
     if not targetId then
         targetId = #RemoteLogs + 1
-        RemoteLogs[targetId] = { Name = name, ClassName = className, Path = rPath, Logs = {} }
+        RemoteLogs[targetId] = { Name = name, ClassName = className, Path = rPath, Object = remoteInstance, Logs = {} }
     end
     
     local displayList = {}
@@ -372,13 +375,12 @@ local function addNewLog(remoteInstance, rawArgs)
             viewRemoteLogs(targetId)
         end)
         
-        -- Cập nhật ẩn/hiện ngay lập tức theo bộ lọc hiện tại
-        RemoteItem.Visible = Filters[className] == true
+        RemoteItem.Visible = (Filters[className] == true)
     end
 end
 
 -- =========================================================================
--- ĐỒNG BỘ HOOK TOÀN DIỆN CẢ 4 DẠNG GIAO TIẾP MÁY CHỦ
+-- ĐỒNG BỘ HOOK AN TOÀN TUYỆT ĐỐI KHÔNG ĐƠ GAME
 -- =========================================================================
 local success, err = pcall(function()
     local rawMetatable = getrawmetatable(game)
@@ -391,18 +393,24 @@ local success, err = pcall(function()
         local method = getnamecallmethod()
         local args = {...}
         
-        if not checkcaller() then
+        if not checkcaller() and self and self.Parent then
+            -- 1. Xử lý RemoteEvent
             if method == "FireServer" and self:IsA("RemoteEvent") then
                 task.spawn(function() addNewLog(self, args) end)
-                if BlockedRemotes[self.Name] == true then return nil end
+                if BlockedRemotes[self] == true then return end -- Bỏ qua gói tin hoàn toàn nếu đang chặn
                 
+            -- 2. Xử lý RemoteFunction (An toàn, không deadlock)
             elseif method == "InvokeServer" and self:IsA("RemoteFunction") then
                 task.spawn(function() addNewLog(self, args) end)
-                if BlockedRemotes[self.Name] == true then return nil end
+                if BlockedRemotes[self] == true then 
+                    return nil -- Trả về nil ngay lập tức thay vì bắt luồng game chờ vô hạn
+                end
                 
+            -- 3. Xử lý BindableEvent
             elseif method == "Fire" and self:IsA("BindableEvent") then
                 task.spawn(function() addNewLog(self, args) end)
                 
+            -- 4. Xử lý BindableFunction
             elseif method == "Invoke" and self:IsA("BindableFunction") then
                 task.spawn(function() addNewLog(self, args) end)
             end
@@ -414,4 +422,4 @@ local success, err = pcall(function()
     setReadOnly(rawMetatable, true)
 end)
 
-if not success then warn("Executor không hỗ trợ can thiệp nâng cao Metatable:", err) end
+if not success then warn("Executor không hỗ trợ can thiệp sâu Metatable:", err) end
