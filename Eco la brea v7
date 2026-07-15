@@ -732,7 +732,7 @@ task.spawn(function()
                         if tr and th and tb and (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
                             local rootPart = tc:FindFirstChild("RootPart")
                             local torso = rootPart and rootPart:FindFirstChild("Torso")
-                            local latchPoint = torso and (torso:FindFirstChild("LatchPoint2.R") or torso:GetChildren()[1])
+                            local latchPoint = torso and (torso:FindFirstChild("LatchPoint2.R") or torso:GetChildren()[2])
                             if latchPoint then
                                 pcall(function() attackRemote:FireServer(th, tb, 2, latchPoint) end)
                             end
