@@ -1,0 +1,871 @@
+--// LIZLUK ASSASSIN CORE (STAMINA ONLY & FPS OPTIMIZED & ANTI-BAN)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 10)
+
+--======================================================================
+-- CẤU HÌNH & TRẠNG THÁI KHỞI TẠO
+--======================================================================
+local targetStamina = 100
+local isLocking = false
+local isSpawnSafe = true
+
+local targets = {}         
+local peccaryTargets = {} 
+
+local killAuraActive = true
+local autoPounceActive = false
+local autoDrinkActive = false
+local npcEspActive = true
+local followActive = false -- Trạng thái đi theo (Phím J)
+
+local closestPlayerName = ""
+local maxDetectDistance = 150
+
+local attackCooldown = 1.4
+local pounceCooldown = 2.0
+local npcAttackCooldown = 0.5
+local followCooldown = 1.0 -- Tần suất gửi event Grumpy để heo đi theo
+
+local activeNpcEsps = {}
+
+--======================================================================
+-- HÀM ĐỊNH VỊ NPC KHÔNG PHỤ THUỘC VÀO TÊN HOẶC TRẠNG THÁI KHÓA ARCHIVABLE
+--======================================================================
+local function getNPCTargetPart(npcModel)
+    if not npcModel then return nil end
+    return npcModel.PrimaryPart or npcModel:FindFirstChild("HRP") or npcModel:FindFirstChild("Body_m") or npcModel:FindFirstChild("Head") or npcModel:FindFirstChildOfClass("Part") or npcModel:FindFirstChildOfClass("MeshPart")
+end
+
+--======================================================================
+-- 1. ÉP BUỘC GIAO DIỆN VÀO CORE_GUI TRÁNH BỊ CHẶN (LIZLUK STYLE)
+--======================================================================
+if CoreGui:FindFirstChild("LizlukKillGUI") then
+    CoreGui.LizlukKillGUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "LizlukKillGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 240, 0, 580) -- Tăng nhẹ chiều cao để chứa thêm thông tin
+MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(255, 255, 255)
+UIStroke.Thickness = 2
+UIStroke.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundTransparency = 1
+Title.Text = "🦋 LIZLUK AUTOMATION [P] 🦋"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 13
+Title.Parent = MainFrame
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, -20, 0, 30)
+StatusLabel.Position = UDim2.new(0, 10, 0, 45)
+StatusLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+StatusLabel.Text = "KILL AURA: RUNNING [Q]"
+StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+StatusLabel.Font = Enum.Font.GothamBold
+StatusLabel.TextSize = 12
+StatusLabel.Parent = MainFrame
+
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 6)
+StatusCorner.Parent = StatusLabel
+
+local StatusStroke = Instance.new("UIStroke")
+StatusStroke.Color = Color3.fromRGB(40, 40, 40)
+StatusStroke.Thickness = 1
+StatusStroke.Parent = StatusLabel
+
+local function createUtilityButton(posIndex, defaultText)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -20, 0, 30)
+    btn.Position = UDim2.new(0, 10, 0, 45 + (posIndex * 35))
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.Text = defaultText
+    btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    btn.Parent = MainFrame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(50, 50, 50)
+    stroke.Thickness = 1
+    stroke.Parent = btn
+
+    return btn, stroke
+end
+
+local PounceBtn, PounceStroke = createUtilityButton(1, "AUTO POUNCE: OFF [F]")
+local DrinkBtn, DrinkStroke = createUtilityButton(2, "AUTO DRINK: OFF [L]")
+local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "NPC ESP: DISABLED [K]")
+local FollowBtn, FollowStroke = createUtilityButton(4, "PECCARY FOLLOW: OFF [J]") -- Nút đi theo mới
+
+local DistanceInputFrame = Instance.new("Frame")
+DistanceInputFrame.Size = UDim2.new(1, -20, 0, 35)
+DistanceInputFrame.Position = UDim2.new(0, 10, 0, 220)
+DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+DistanceInputFrame.BorderSizePixel = 0
+DistanceInputFrame.Parent = MainFrame
+
+local InputFrameCorner = Instance.new("UICorner")
+InputFrameCorner.CornerRadius = UDim.new(0, 6)
+InputFrameCorner.Parent = DistanceInputFrame
+
+local DistanceLabel = Instance.new("TextLabel")
+DistanceLabel.Size = UDim2.new(0, 150, 1, 0)
+DistanceLabel.Position = UDim2.new(0, 10, 0, 0)
+DistanceLabel.BackgroundTransparency = 1
+DistanceLabel.Text = "📍 Khoảng cách (m):"
+DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+DistanceLabel.Font = Enum.Font.GothamMedium
+DistanceLabel.TextSize = 11
+DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistanceLabel.Parent = DistanceInputFrame
+
+local DistanceBox = Instance.new("TextBox")
+DistanceBox.Size = UDim2.new(0, 55, 0, 23)
+DistanceBox.Position = UDim2.new(1, -65, 0.5, -11)
+DistanceBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+DistanceBox.BorderSizePixel = 0
+DistanceBox.Text = tostring(maxDetectDistance)
+DistanceBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+DistanceBox.Font = Enum.Font.GothamBold
+DistanceBox.TextSize = 12
+DistanceBox.ClearTextOnFocus = false
+DistanceBox.Parent = DistanceInputFrame
+
+local DistanceBoxCorner = Instance.new("UICorner")
+DistanceBoxCorner.CornerRadius = UDim.new(0, 4)
+DistanceBoxCorner.Parent = DistanceBox
+
+DistanceBox.FocusLost:Connect(function()
+    local number = tonumber(DistanceBox.Text)
+    if number and number >= 0 then
+        maxDetectDistance = number
+        DistanceBox.Text = tostring(number)
+    else
+        DistanceBox.Text = tostring(maxDetectDistance)
+    end
+end)
+
+local Divider = Instance.new("Frame")
+Divider.Size = UDim2.new(1, -20, 0, 1)
+Divider.Position = UDim2.new(0, 10, 0, 267)
+Divider.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+Divider.BorderSizePixel = 0
+Divider.Parent = MainFrame
+
+local label = Instance.new("TextLabel")
+label.Size = UDim2.new(0, 85, 0, 28)
+label.Position = UDim2.new(0, 15, 0, 280)
+label.BackgroundTransparency = 1
+label.Text = "⚡ Stamina:"
+label.TextColor3 = Color3.fromRGB(180, 180, 180)
+label.TextSize = 12
+label.Font = Enum.Font.GothamMedium
+label.TextXAlignment = Enum.TextXAlignment.Left
+label.Parent = MainFrame
+
+local InputStamina = Instance.new("TextBox")
+InputStamina.Size = UDim2.new(0, 110, 0, 28)
+InputStamina.Position = UDim2.new(0, 115, 0, 280)
+InputStamina.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+InputStamina.BorderSizePixel = 0
+InputStamina.Text = "100"
+InputStamina.TextColor3 = Color3.fromRGB(255, 255, 255)
+InputStamina.TextSize = 12
+InputStamina.Font = Enum.Font.Gotham
+InputStamina.Parent = MainFrame
+
+local boxCorner = Instance.new("UICorner")
+boxCorner.CornerRadius = UDim.new(0, 5)
+boxCorner.Parent = InputStamina
+
+local boxStroke = Instance.new("UIStroke")
+boxStroke.Color = Color3.fromRGB(45, 45, 45)
+boxStroke.Thickness = 1
+boxStroke.Parent = InputStamina
+
+InputStamina.Focused:Connect(function() boxStroke.Color = Color3.fromRGB(255, 255, 255) end)
+InputStamina.FocusLost:Connect(function() boxStroke.Color = Color3.fromRGB(45, 45, 45) end)
+
+local ToggleLockBtn = Instance.new("TextButton")
+ToggleLockBtn.Size = UDim2.new(1, -20, 0, 35)
+ToggleLockBtn.Position = UDim2.new(0, 10, 0, 320)
+ToggleLockBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+ToggleLockBtn.Font = Enum.Font.GothamBold
+ToggleLockBtn.Text = "CHƯA KHÓA STAMINA (OFF)"
+ToggleLockBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
+ToggleLockBtn.TextSize = 11
+ToggleLockBtn.Parent = MainFrame
+
+local LockCorner = Instance.new("UICorner")
+LockCorner.CornerRadius = UDim.new(0, 6)
+LockCorner.Parent = ToggleLockBtn
+
+local LockStroke = Instance.new("UIStroke")
+LockStroke.Color = Color3.fromRGB(60, 60, 60)
+LockStroke.Thickness = 1
+LockStroke.Parent = ToggleLockBtn
+
+local Divider2 = Instance.new("Frame")
+Divider2.Size = UDim2.new(1, -20, 0, 1)
+Divider2.Position = UDim2.new(0, 10, 0, 367)
+Divider2.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+Divider2.BorderSizePixel = 0
+Divider2.Parent = MainFrame
+
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Size = UDim2.new(1, -20, 1, -385)
+ScrollingFrame.Position = UDim2.new(0, 10, 0, 375)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.BorderSizePixel = 0
+ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollingFrame.ScrollBarThickness = 3
+ScrollingFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ScrollingFrame
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end)
+
+--======================================================================
+-- CƠ CHẾ THEO DÕI HỒI SINH AN TOÀN
+--======================================================================
+local function handleCharacterSafety(char)
+    if not char then return end
+    isSpawnSafe = false
+    task.wait(3.5)
+    isSpawnSafe = true
+end
+
+LocalPlayer.CharacterAdded:Connect(handleCharacterSafety)
+if LocalPlayer.Character then
+    task.spawn(handleCharacterSafety, LocalPlayer.Character)
+end
+
+--======================================================================
+-- TRỰC QUAN HÓA TRẠNG THÁI UTILITY BUTTONS
+--======================================================================
+local function updateUtilityVisuals()
+    if autoPounceActive then
+        PounceBtn.BackgroundColor3 = Color3.fromRGB(130, 25, 130)
+        PounceBtn.Text = "AUTO POUNCE: ON [F]"
+        PounceBtn.TextColor3 = Color3.fromRGB(255, 180, 255)
+        PounceStroke.Color = Color3.fromRGB(200, 50, 200)
+    else
+        PounceBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        PounceBtn.Text = "AUTO POUNCE: OFF [F]"
+        PounceBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        PounceStroke.Color = Color3.fromRGB(50, 50, 50)
+    end
+
+    if autoDrinkActive then
+        DrinkBtn.BackgroundColor3 = Color3.fromRGB(20, 100, 150)
+        DrinkBtn.Text = "AUTO DRINK: ON [L]"
+        DrinkBtn.TextColor3 = Color3.fromRGB(150, 255, 255)
+        DrinkStroke.Color = Color3.fromRGB(0, 180, 255)
+    else
+        DrinkBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        DrinkBtn.Text = "AUTO DRINK: OFF [L]"
+        DrinkBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        DrinkStroke.Color = Color3.fromRGB(50, 50, 50)
+    end
+
+    if npcEspActive then
+        NpcEspBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 150)
+        NpcEspBtn.Text = "NPC ESP: ENABLED [K]"
+        NpcEspBtn.TextColor3 = Color3.fromRGB(150, 255, 255)
+        NpcEspStroke.Color = Color3.fromRGB(0, 230, 255)
+    else
+        NpcEspBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        NpcEspBtn.Text = "NPC ESP: DISABLED [K]"
+        NpcEspBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        NpcEspStroke.Color = Color3.fromRGB(50, 50, 50)
+    end
+
+    if followActive then
+        FollowBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
+        FollowBtn.Text = "PECCARY FOLLOW: ON [J]"
+        FollowBtn.TextColor3 = Color3.fromRGB(255, 220, 180)
+        FollowStroke.Color = Color3.fromRGB(255, 150, 0)
+    else
+        FollowBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        FollowBtn.Text = "PECCARY FOLLOW: OFF [J]"
+        FollowBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        FollowStroke.Color = Color3.fromRGB(50, 50, 50)
+    end
+    
+    for _, gui in pairs(activeNpcEsps) do
+        if gui and gui:IsA("BillboardGui") then
+            gui.Enabled = npcEspActive
+        end
+    end
+end
+
+PounceBtn.MouseButton1Click:Connect(function() autoPounceActive = not autoPounceActive updateUtilityVisuals() end)
+DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
+NpcEspBtn.MouseButton1Click:Connect(function() npcEspActive = not npcEspActive updateUtilityVisuals() end)
+FollowBtn.MouseButton1Click:Connect(function() followActive = not followActive updateUtilityVisuals() end)
+
+ToggleLockBtn.MouseButton1Click:Connect(function()
+    isLocking = not isLocking
+    if isLocking then
+        targetStamina = tonumber(InputStamina.Text) or 100
+        ToggleLockBtn.Text = "ĐANG KHÓA STAMINA (ON) 🔒"
+        TweenService:Create(ToggleLockBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
+        LockStroke.Color = Color3.fromRGB(255, 255, 255)
+    else
+        ToggleLockBtn.Text = "CHƯA KHÓA STAMINA (OFF)"
+        TweenService:Create(ToggleLockBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 30), TextColor3 = Color3.fromRGB(160, 160, 160)}):Play()
+        LockStroke.Color = Color3.fromRGB(60, 60, 60)
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if UserInputService:GetFocusedTextBox() or gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
+    if input.KeyCode == Enum.KeyCode.F then autoPounceActive = not autoPounceActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.K then npcEspActive = not npcEspActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.J then followActive = not followActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.Q then
+        killAuraActive = not killAuraActive
+        if killAuraActive then
+            StatusLabel.Text = "KILL AURA: RUNNING [Q]"
+            StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+            StatusStroke.Color = Color3.fromRGB(0, 180, 0)
+        else
+            StatusLabel.Text = "KILL AURA: PAUSED [Q]"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+            StatusStroke.Color = Color3.fromRGB(180, 130, 0)
+        end
+    end
+end)
+
+--======================================================================
+-- KẾT NỐI REMOTES AN TOÀN
+--======================================================================
+local eventsFolder = ReplicatedStorage:FindFirstChild("Events")
+local attackRemote = eventsFolder and eventsFolder:FindFirstChild("Attack")
+local grumpyRemote = eventsFolder and eventsFolder:FindFirstChild("PeccaryGrumpy") -- Remote khiến heo đi theo
+local drinkRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("DrinkRemote")
+
+local interactionsFolder = workspace:FindFirstChild("Interactions")
+local charactersFolder = workspace:FindFirstChild("Characters")
+local npcsFolder = workspace:FindFirstChild("NPCs")
+
+--======================================================================
+-- HỆ THỐNG ESP PLAYER TỐI ƯU FPS
+--======================================================================
+local function applyESP(character, playerName)
+    if not character then return end
+    local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 5)
+    if not head then return end
+    if head:FindFirstChild("PlayerESP") then head.PlayerESP:Destroy() end
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "PlayerESP"
+    bb.Size = UDim2.new(0, 200, 0, 50)
+    bb.AlwaysOnTop = true
+    bb.ExtentsOffset = Vector3.new(0, 2.5, 0)
+    bb.Adornee = head
+    bb.Parent = head
+
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.TextStrokeTransparency = 0
+    txt.Font = Enum.Font.SourceSansBold
+    txt.TextSize = 14
+    txt.Parent = bb
+
+    task.spawn(function()
+        while character and character:IsDescendantOf(charactersFolder) and head and head:IsDescendantOf(character) and bb and bb.Parent do
+            local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
+            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+            
+            if myRoot and head then
+                local distance = math.floor((myRoot.Position - head.Position).Magnitude)
+                
+                if targets[playerName] then
+                    txt.Text = killAuraActive and string.format("[🎯 TARGET] %s\n[%d m]", playerName, distance) or string.format("[⏸️ TARGET] %s\n[%d m]", playerName, distance)
+                    txt.TextColor3 = Color3.fromRGB(255, 30, 30)
+                else
+                    if playerName == closestPlayerName then
+                        txt.Text = string.format("[⭐ CẬN] %s\n[%d m]", playerName, distance)
+                        txt.TextColor3 = Color3.fromRGB(50, 255, 130)
+                    else
+                        txt.Text = string.format("%s\n[%d m]", playerName, distance)
+                        txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    end
+                end
+            end
+            task.wait(0.1)
+        end
+        if bb then bb:Destroy() end
+    end)
+end
+
+task.spawn(function()
+    if charactersFolder then
+        charactersFolder.ChildAdded:Connect(function(child)
+            local p = Players:GetPlayerFromCharacter(child) or Players:FindFirstChild(child.Name)
+            if p and p ~= LocalPlayer and p.Name ~= "Lubakixa" then
+                task.wait(0.5)
+                applyESP(child, p.Name)
+            end
+        end)
+        for _, child in pairs(charactersFolder:GetChildren()) do
+            local p = Players:GetPlayerFromCharacter(child) or Players:FindFirstChild(child.Name)
+            if p and p ~= LocalPlayer and p.Name ~= "Lubakixa" then
+                applyESP(child, p.Name)
+            end
+        end
+    end
+end)
+
+--======================================================================
+-- HỆ THỐNG ESP NPC TỐI ƯU FPS
+--======================================================================
+local function applyNPCEsp(npcModel, typeName)
+    if not npcModel then return end
+    if npcModel:FindFirstChild("NpcESP_Holder") then return end
+    
+    local targetPart = getNPCTargetPart(npcModel)
+    if not targetPart then return end
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "NpcESP_Holder"
+    bb.Size = UDim2.new(0, 180, 0, 40)
+    bb.AlwaysOnTop = true
+    bb.ExtentsOffset = Vector3.new(0, 2, 0)
+    bb.Adornee = targetPart
+    bb.Enabled = npcEspActive
+    bb.Parent = targetPart
+    table.insert(activeNpcEsps, bb)
+
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.TextStrokeTransparency = 0
+    txt.Font = Enum.Font.SourceSansBold
+    txt.TextSize = 12
+    
+    if typeName == "Peccary" then
+        txt.TextColor3 = Color3.fromRGB(255, 150, 200)
+    elseif typeName == "Bird" then
+        txt.TextColor3 = Color3.fromRGB(255, 255, 100)
+    else
+        txt.TextColor3 = Color3.fromRGB(100, 230, 255)
+    end
+    txt.Parent = bb
+
+    task.spawn(function()
+        while npcModel and npcModel:IsDescendantOf(workspace) and targetPart and targetPart:IsDescendantOf(npcModel) and bb and bb.Parent do
+            local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
+            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+            
+            if myRoot and targetPart then
+                local distance = math.floor((myRoot.Position - targetPart.Position).Magnitude)
+                if peccaryTargets[npcModel.Name] then
+                    if followActive then
+                        txt.Text = string.format("🐷 [ĐANG ĐI THEO]\n%s (%dm)", npcModel.Name, distance)
+                        txt.TextColor3 = Color3.fromRGB(255, 165, 0)
+                    else
+                        txt.Text = string.format("🐷 [MỤC TIÊU KHÓA]\n%s (%dm)", npcModel.Name, distance)
+                        txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                    end
+                else
+                    local icon = (typeName == "Peccary") and "🐷" or (typeName == "Bird" and "🦅" or "🐹")
+                    txt.Text = string.format("%s [%s]\n%s (%dm)", icon, typeName, npcModel.Name, distance)
+                end
+            end
+            task.wait(0.1)
+        end
+        local idx = table.find(activeNpcEsps, bb)
+        if idx then table.remove(activeNpcEsps, idx) end
+        if bb then bb:Destroy() end
+    end)
+end
+
+--======================================================================
+-- CƠ CHẾ QUÉT MỞ RỘNG (GOM TOÀN BỘ CHIM, THÚ NHỎ VÀ HEO)
+--======================================================================
+local playerButtons = {}
+local peccaryButtons = {}
+local scannedNPCModels = {}
+
+local function scanNpcAndPlayers()
+    for _, btn in pairs(ScrollingFrame:GetChildren()) do
+        if btn:IsA("TextButton") then btn:Destroy() end
+    end
+    playerButtons = {}
+    peccaryButtons = {}
+    scannedNPCModels = {}
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Name ~= "Lubakixa" then
+            local pName = player.Name
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, 0, 0, 28)
+            Btn.Font = Enum.Font.SourceSansBold
+            Btn.TextSize = 12
+            Btn.BorderSizePixel = 0
+            Btn.Parent = ScrollingFrame
+            Instance.new("UICorner").Parent = Btn
+
+            Btn.MouseButton1Click:Connect(function() targets[pName] = not targets[pName] end)
+            playerButtons[pName] = Btn
+            
+            if charactersFolder and charactersFolder:FindFirstChild(pName) then
+                applyESP(charactersFolder[pName], pName)
+            end
+        end
+    end
+
+    if npcsFolder then
+        local allObjects = npcsFolder:GetDescendants()
+        for _, obj in pairs(allObjects) do
+            if obj:IsA("Model") and obj.Parent and obj.Parent ~= npcsFolder then
+                table.insert(scannedNPCModels, obj)
+                
+                local parentName = obj.Parent.Name
+                local isPeccary = string.match(obj.Name, "Peccary") or string.match(parentName, "Peccary") or string.match(parentName, "Flat")
+                local isBird = string.match(parentName, "Bird") or string.match(obj.Name, "Bird")
+                local isSmall = string.match(parentName, "Small") or string.match(obj.Name, "Small")
+
+                if isPeccary then
+                    applyNPCEsp(obj, "Peccary")
+                    local pigName = obj.Name
+                    if not peccaryButtons[pigName] then
+                        local Btn = Instance.new("TextButton")
+                        Btn.Size = UDim2.new(1, 0, 0, 28)
+                        Btn.Font = Enum.Font.SourceSansBold
+                        Btn.TextSize = 12
+                        Btn.BorderSizePixel = 0
+                        Btn.Parent = ScrollingFrame
+                        Instance.new("UICorner").Parent = Btn
+
+                        Btn.MouseButton1Click:Connect(function() peccaryTargets[pigName] = not peccaryTargets[pigName] end)
+                        peccaryButtons[pigName] = Btn
+                    end
+                elseif isBird then
+                    applyNPCEsp(obj, "Bird")
+                elseif isSmall then
+                    applyNPCEsp(obj, "Small")
+                else
+                    applyNPCEsp(obj, parentName)
+                end
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    task.wait(0.5)
+    scanNpcAndPlayers()
+    while true do
+        scanNpcAndPlayers()
+        task.wait(3.5)
+    end
+end)
+
+--======================================================================
+-- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT GUI & CHỈ KHÓA DUY NHẤT STAMINA
+--======================================================================
+task.spawn(function()
+    while true do
+        local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+
+        if isLocking and isSpawnSafe and myCharacter then
+            local attr = myCharacter:FindFirstChild("Attributes") or LocalPlayer
+            if attr then
+                pcall(function()
+                    local currentStamina = attr:GetAttribute("Stamina") or 100
+                    if currentStamina < targetStamina then
+                        attr:SetAttribute("Stamina", targetStamina)
+                    end
+                end)
+            end
+        end
+
+        local minDistance = math.huge
+        local tempClosest = ""
+
+        for pName, Btn in pairs(playerButtons) do
+            if Btn and Btn.Parent then
+                local pChar = charactersFolder and charactersFolder:FindFirstChild(pName)
+                local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
+                if pRoot and myRoot then
+                    local dist = (myRoot.Position - pRoot.Position).Magnitude
+                    if dist <= maxDetectDistance and dist < minDistance then
+                        minDistance = dist
+                        tempClosest = pName
+                    end
+                    Btn.LayoutOrder = targets[pName] and (math.floor(dist) - 100000) or math.floor(dist)
+                    
+                    if targets[pName] then
+                        Btn.BackgroundColor3 = killAuraActive and Color3.fromRGB(180, 40, 40) or Color3.fromRGB(160, 120, 30)
+                        Btn.Text = killAuraActive and pName .. " [KILLING]" or pName .. " [PAUSED]"
+                        Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    else
+                        if pName == closestPlayerName then
+                            Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30)
+                            Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
+                            Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
+                        else
+                            Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                            Btn.Text = pName .. string.format(" (%dm)", math.floor(dist))
+                            Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                        end
+                    end
+                else
+                    Btn.LayoutOrder = 999999
+                    Btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+                    Btn.Text = pName .. " (FAR/OFF)"
+                    Btn.TextColor3 = Color3.fromRGB(100, 100, 100)
+                end
+            end
+        end
+        closestPlayerName = tempClosest
+
+        for npcName, Btn in pairs(peccaryButtons) do
+            if Btn and Btn.Parent then
+                local pigModel = nil
+                for _, model in pairs(scannedNPCModels) do
+                    if model.Name == npcName then
+                        pigModel = model
+                        break
+                    end
+                end
+
+                local body = getNPCTargetPart(pigModel)
+                if body and myRoot then
+                    local dist = (myRoot.Position - body.Position).Magnitude
+                    Btn.LayoutOrder = peccaryTargets[npcName] and (math.floor(dist) - 50000) or (math.floor(dist) + 50000)
+                    
+                    if peccaryTargets[npcName] then
+                        if followActive then
+                            Btn.BackgroundColor3 = Color3.fromRGB(220, 130, 30)
+                            Btn.Text = "🐷 " .. npcName .. " [FOLLOWING]"
+                        else
+                            Btn.BackgroundColor3 = Color3.fromRGB(230, 50, 120)
+                            Btn.Text = "🐷 " .. npcName .. " [TARGET LOCK]"
+                        end
+                        Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    else
+                        Btn.BackgroundColor3 = Color3.fromRGB(25, 35, 45)
+                        Btn.Text = "🐷 " .. npcName .. string.format(" (%dm)", math.floor(dist))
+                        Btn.TextColor3 = Color3.fromRGB(200, 220, 245)
+                    end
+                else
+                    Btn.LayoutOrder = 999999
+                    Btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+                    Btn.Text = "❌ " .. npcName .. " (OUT RANGE)"
+                    Btn.TextColor3 = Color3.fromRGB(100, 100, 100)
+                end
+            end
+        end
+
+        if autoDrinkActive and drinkRemote and interactionsFolder then
+            local lake = interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
+            if lake then pcall(function() drinkRemote:FireServer(lake) end) end
+        end
+
+        task.wait(0.3)
+    end
+end)
+
+--======================================================================
+-- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER & ĐỘNG VẬT ĂN THỊT (SỐ 1)
+--======================================================================
+task.spawn(function()
+    while true do
+        if killAuraActive and attackRemote and charactersFolder then
+            local myChar = charactersFolder:FindFirstChild(LocalPlayer.Name) or LocalPlayer.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if myRoot then
+                for pName, isTargeted in pairs(targets) do
+                    if isTargeted then
+                        local tc = charactersFolder:FindFirstChild(pName)
+                        local tr = tc and tc:FindFirstChild("HumanoidRootPart")
+                        local th = tc and tc:FindFirstChildOfClass("Humanoid")
+                        local tb = tc and tc:FindFirstChild("BodyHitbox")
+                        if tr and th and tb and (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
+                            pcall(function() attackRemote:FireServer(th, tb, 1) end)
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(attackCooldown)
+    end
+end)
+
+--======================================================================
+-- 5. VÒNG LẶP SKILL VỒ PLAYER (SỐ 2 VÀ CÓ LATCHPOINT)
+--======================================================================
+task.spawn(function()
+    while true do
+        if autoPounceActive and attackRemote and charactersFolder then
+            local myChar = charactersFolder:FindFirstChild(LocalPlayer.Name) or LocalPlayer.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if myRoot then
+                for pName, isTargeted in pairs(targets) do
+                    if isTargeted then
+                        local tc = charactersFolder:FindFirstChild(pName)
+                        local tr = tc and tc:FindFirstChild("HumanoidRootPart")
+                        local th = tc and tc:FindFirstChildOfClass("Humanoid")
+                        local tb = tc and tc:FindFirstChild("BodyHitbox")
+                        if tr and th and tb and (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
+                            local rootPart = tc:FindFirstChild("RootPart")
+                            local torso = rootPart and rootPart:FindFirstChild("Torso")
+                            local latchPoint = torso and (torso:FindFirstChild("LatchPoint2.R") or torso:GetChildren()[1])
+                            if latchPoint then
+                                pcall(function() attackRemote:FireServer(th, tb, 2, latchPoint) end)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(pounceCooldown)
+    end
+end)
+
+--======================================================================
+-- 6. VÒNG LẶP TẤN CÔNG ĐỘNG VẬT ĂN CỎ (SỐ 2) - CHỈ KHI KHÔNG BẬT FOLLOW (J)
+--======================================================================
+task.spawn(function()
+    while true do
+        if killAuraActive and not followActive and attackRemote then
+            local myChar = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if myRoot then
+                for _, npcModel in pairs(scannedNPCModels) do
+                    if npcModel and npcModel:IsDescendantOf(workspace) then
+                        -- Chỉ đánh những con heo không bị khóa mục tiêu hoặc đang không bật đi theo
+                        local pigName = npcModel.Name
+                        if not peccaryTargets[pigName] then
+                            local targetPart = getNPCTargetPart(npcModel)
+                            if targetPart and (myRoot.Position - targetPart.Position).Magnitude <= maxDetectDistance then
+                                local humanoid = npcModel:FindFirstChildOfClass("Humanoid")
+                                local hitbox = npcModel:FindFirstChild("BodyHitbox") or targetPart
+                                
+                                if humanoid then
+                                    pcall(function() 
+                                        attackRemote:FireServer(humanoid, hitbox, 2) 
+                                    end)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(npcAttackCooldown)
+    end
+end)
+
+--======================================================================
+-- 6.5 VÒNG LẶP ĐI THEO - PECCARY GRUMPY (PHÍM J)
+--======================================================================
+task.spawn(function()
+    while true do
+        if followActive and grumpyRemote then
+            local myChar = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if myRoot then
+                for npcName, isSelected in pairs(peccaryTargets) do
+                    if isSelected then
+                        -- Tìm model tương ứng trong danh sách quét được
+                        local targetModel = nil
+                        for _, model in pairs(scannedNPCModels) do
+                            if model.Name == npcName then
+                                targetModel = model
+                                break
+                            end
+                        end
+
+                        if targetModel and targetModel:IsDescendantOf(workspace) then
+                            local hrp = targetModel:FindFirstChild("HRP") or targetModel:FindFirstChild("HumanoidRootPart") or getNPCTargetPart(targetModel)
+                            if hrp then
+                                pcall(function()
+                                    grumpyRemote:FireServer(hrp)
+                                end)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(followCooldown)
+    end
+end)
+
+--======================================================================
+-- 7. TỰ ĐỘNG THẮNG MINIGAME (SPACE)
+--======================================================================
+task.spawn(function()
+    while true do
+        if PlayerGui then
+            local minigameFrame = PlayerGui:FindFirstChild("Stats") and PlayerGui.Stats:FindFirstChild("Frame") and PlayerGui.Stats.Frame:FindFirstChild("Minigame")
+            if minigameFrame and minigameFrame.Visible == true then
+                pcall(function()
+                    local movingRing = minigameFrame:FindFirstChild("Ring") or minigameFrame:FindFirstChild("Indicator") or minigameFrame:FindFirstChildOfClass("ImageLabel")
+                    local targetRing = minigameFrame:FindFirstChild("Target") or minigameFrame:FindFirstChild("Zone") or minigameFrame:FindFirstChild("LeafRing")
+                    if movingRing and targetRing then
+                        local diff = math.abs(movingRing.Size.X.Scale - targetRing.Size.X.Scale)
+                        if diff <= 0.05 then
+                            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                            task.wait(0.01)
+                            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+                            task.wait(0.3)
+                        end
+                    end
+                end)
+            end
+        end
+        RunService.Heartbeat:Wait()
+    end
+end)
+
+updateUtilityVisuals()
+print("🦋 LIZLUK ASSASSIN: LOADED WITH DUAL-ATTACK CODES & PECCARY FOLLOW (J) OK! 🦋")
