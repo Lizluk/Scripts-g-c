@@ -124,7 +124,7 @@ local function createUtilityButton(posIndex, defaultText)
     return btn, stroke
 end
 
-local PounceBtn, PounceStroke = createUtilityButton(1, "AUTO POUNCE: OFF [F]")
+local PounceBtn, PounceStroke = createUtilityButton(1, "AUTO POUNCE: OFF [G]")
 local DrinkBtn, DrinkStroke = createUtilityButton(2, "AUTO DRINK: OFF [L]")
 local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "NPC ESP: DISABLED [K]") 
 
@@ -345,7 +345,7 @@ end)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if UserInputService:GetFocusedTextBox() or gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
-    if input.KeyCode == Enum.KeyCode.F then autoPounceActive = not autoPounceActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.G then autoPounceActive = not autoPounceActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.K then npcEspActive = not npcEspActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.Q then
