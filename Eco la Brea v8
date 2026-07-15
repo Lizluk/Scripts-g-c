@@ -22,7 +22,7 @@ local targets = {}
 local peccaryTargets = {} 
 
 local killAuraActive = true
-local autoPounceActive = false
+local autoPounceActive = false -- Đây chính là nút bật tắt chiêu Vồ (Ăn thịt) / Đá (Ăn cỏ)
 local autoDrinkActive = false
 local npcEspActive = true
 local followActive = false -- Trạng thái đi theo (Phím J)
@@ -31,7 +31,7 @@ local closestPlayerName = ""
 local maxDetectDistance = 150
 
 local attackCooldown = 1.4
-local pounceCooldown = 2.0
+local pounceCooldown = 2.0 -- Cooldown của chiêu Vồ / Đá
 local npcAttackCooldown = 0.5
 local followCooldown = 1.0 -- Tần suất gửi event Grumpy để heo đi theo
 
@@ -58,7 +58,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 580) -- Tăng nhẹ chiều cao để chứa thêm thông tin
+MainFrame.Size = UDim2.new(0, 240, 0, 580)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BorderSizePixel = 0
@@ -126,10 +126,11 @@ local function createUtilityButton(posIndex, defaultText)
     return btn, stroke
 end
 
-local PounceBtn, PounceStroke = createUtilityButton(1, "AUTO POUNCE: OFF [F]")
+-- Đổi tên hiển thị nút cho rõ ràng hơn cả hai lối chơi
+local PounceBtn, PounceStroke = createUtilityButton(1, "SPECIAL SKILL (VỒ/ĐÁ): OFF [F]")
 local DrinkBtn, DrinkStroke = createUtilityButton(2, "AUTO DRINK: OFF [L]")
 local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "NPC ESP: DISABLED [K]")
-local FollowBtn, FollowStroke = createUtilityButton(4, "PECCARY FOLLOW: OFF [J]") -- Nút đi theo mới
+local FollowBtn, FollowStroke = createUtilityButton(4, "PECCARY FOLLOW: OFF [J]")
 
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -20, 0, 35)
@@ -285,12 +286,12 @@ end
 local function updateUtilityVisuals()
     if autoPounceActive then
         PounceBtn.BackgroundColor3 = Color3.fromRGB(130, 25, 130)
-        PounceBtn.Text = "AUTO POUNCE: ON [F]"
+        PounceBtn.Text = "SPECIAL SKILL (VỒ/ĐÁ): ON [F]"
         PounceBtn.TextColor3 = Color3.fromRGB(255, 180, 255)
         PounceStroke.Color = Color3.fromRGB(200, 50, 200)
     else
         PounceBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        PounceBtn.Text = "AUTO POUNCE: OFF [F]"
+        PounceBtn.Text = "SPECIAL SKILL (VỒ/ĐÁ): OFF [F]"
         PounceBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
         PounceStroke.Color = Color3.fromRGB(50, 50, 50)
     end
@@ -740,7 +741,8 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 5. VÒNG LẶP SKILL VỒ PLAYER (SỐ 2 VÀ CÓ LATCHPOINT)
+-- 5. VÒNG LẶP SKILL VỒ/ĐÁ PLAYER (SỐ 2 VÀ CÓ LATCHPOINT) 
+-- (ĐỐI VỚI ĐỘNG VẬT ĂN CỎ - CHIÊU SỐ 2 SẼ LÀ CHIÊU ĐÁ 2 PHÁT ĐẶC TRƯNG)
 --======================================================================
 task.spawn(function()
     while true do
@@ -759,6 +761,7 @@ task.spawn(function()
                             local torso = rootPart and rootPart:FindFirstChild("Torso")
                             local latchPoint = torso and (torso:FindFirstChild("LatchPoint2.R") or torso:GetChildren()[1])
                             if latchPoint then
+                                -- Đây chính là hàm gốc ông gửi: Gửi đòn số 2 kèm latchPoint lên đối thủ
                                 pcall(function() attackRemote:FireServer(th, tb, 2, latchPoint) end)
                             end
                         end
@@ -771,29 +774,25 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 6. VÒNG LẶP TẤN CÔNG ĐỘNG VẬT ĂN CỎ (SỐ 2) - CHỈ KHI KHÔNG BẬT FOLLOW (J)
+-- 6. VÒNG LẶP TẤN CÔNG ĐỘNG VẬT ĂN CỎ NPC (SỐ 2)
 --======================================================================
 task.spawn(function()
     while true do
-        if killAuraActive and not followActive and attackRemote then
+        if killAuraActive and attackRemote then
             local myChar = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             if myRoot then
                 for _, npcModel in pairs(scannedNPCModels) do
                     if npcModel and npcModel:IsDescendantOf(workspace) then
-                        -- Chỉ đánh những con heo không bị khóa mục tiêu hoặc đang không bật đi theo
-                        local pigName = npcModel.Name
-                        if not peccaryTargets[pigName] then
-                            local targetPart = getNPCTargetPart(npcModel)
-                            if targetPart and (myRoot.Position - targetPart.Position).Magnitude <= maxDetectDistance then
-                                local humanoid = npcModel:FindFirstChildOfClass("Humanoid")
-                                local hitbox = npcModel:FindFirstChild("BodyHitbox") or targetPart
-                                
-                                if humanoid then
-                                    pcall(function() 
-                                        attackRemote:FireServer(humanoid, hitbox, 2) 
-                                    end)
-                                end
+                        local targetPart = getNPCTargetPart(npcModel)
+                        if targetPart and (myRoot.Position - targetPart.Position).Magnitude <= maxDetectDistance then
+                            local humanoid = npcModel:FindFirstChildOfClass("Humanoid")
+                            local hitbox = npcModel:FindFirstChild("BodyHitbox") or targetPart
+                            
+                            if humanoid then
+                                pcall(function() 
+                                    attackRemote:FireServer(humanoid, hitbox, 2) 
+                                end)
                             end
                         end
                     end
@@ -805,7 +804,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 6.5 VÒNG LẶP ĐI THEO - PECCARY GRUMPY (PHÍM J)
+-- 6.5 VÒNG LẶP ĐI THEO - PECCARY GRUMPY (PHÍM J) (RIÊNG BIỆT KHÔNG ẢNH HƯỞNG ATTACK)
 --======================================================================
 task.spawn(function()
     while true do
@@ -825,6 +824,7 @@ task.spawn(function()
                         end
 
                         if targetModel and targetModel:IsDescendantOf(workspace) then
+                            -- Gửi chính xác event Grumpy đến HRP của con heo được chọn
                             local hrp = targetModel:FindFirstChild("HRP") or targetModel:FindFirstChild("HumanoidRootPart") or getNPCTargetPart(targetModel)
                             if hrp then
                                 pcall(function()
