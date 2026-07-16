@@ -25,19 +25,20 @@ local killAuraActive = true
 local autoPounceActive = false 
 local autoDrinkActive = false 
 local npcEspActive = true 
-local followActive = false -- Trạng thái đi theo (Phím J)
-local peccaryAttackActive = false -- Trạng thái tự động tấn công (Phím G)
+local followActive = false 
+local peccaryAttackActive = false 
 
 local closestPlayerName = "" 
 local maxDetectDistance = 30 
+local fossilNumber = "1" 
 
 local attackCooldown = 1.4
 local pounceCooldown = 2.0
 local npcAttackCooldown = 0.5
-local followCooldown = 1.0 -- Tần suất gửi event Grumpy
-local threatenCooldown = 1.0 -- Tần suất gửi lệnh đe dọa
+local followCooldown = 1.0 
+local threatenCooldown = 1.0 
 
-local activeNpcEsps = {} -- Lưu trữ: { [npcModel] = { billboard = bb, textLabel = txt, typeName = string } }
+local activeNpcEsps = {} 
 
 --======================================================================
 -- HÀM ĐỊNH VỊ NPC KHÔNG PHỤ THUỘC VÀO TÊN HOẶC TRẠNG THÁI KHÓA ARCHIVABLE
@@ -60,8 +61,8 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 615) -- Tăng lại chiều cao để vừa các nút heo
-MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
+MainFrame.Size = UDim2.new(0, 240, 0, 690) 
+MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -80,7 +81,7 @@ UIStroke.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundTransparency = 1
-Title.Text = "🦋 LIZLUK AUTOMATION [P] 🦋" --
+Title.Text = "🦋 LIZLUK AUTOMATION [P] 🦋" 
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
@@ -134,6 +135,7 @@ local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "NPC ESP: DISABLED [K]")
 local FollowBtn, FollowStroke = createUtilityButton(4, "PECCARY FOLLOW: OFF [J]")
 local ThreatenBtn, ThreatenStroke = createUtilityButton(5, "PECCARY ATTACK: OFF [G]")
 
+-- Khoảng cách phát hiện (m)
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -20, 0, 35)
 DistanceInputFrame.Position = UDim2.new(0, 10, 0, 255)
@@ -250,9 +252,105 @@ Divider2.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 Divider2.BorderSizePixel = 0
 Divider2.Parent = MainFrame
 
+--======================================================================
+-- KHU VỰC TÌM KIẾM FOSSIL (HÓA THẠCH)
+--======================================================================
+local FossilFrame = Instance.new("Frame")
+FossilFrame.Size = UDim2.new(1, -20, 0, 70)
+FossilFrame.Position = UDim2.new(0, 10, 0, 412)
+FossilFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+FossilFrame.BorderSizePixel = 0
+FossilFrame.Parent = MainFrame
+
+local FossilCorner = Instance.new("UICorner")
+FossilCorner.CornerRadius = UDim.new(0, 6)
+FossilCorner.Parent = FossilFrame
+
+local FossilStroke = Instance.new("UIStroke")
+FossilStroke.Color = Color3.fromRGB(70, 70, 70)
+FossilStroke.Thickness = 1
+FossilStroke.Parent = FossilFrame
+
+local FossilLabel = Instance.new("TextLabel")
+FossilLabel.Size = UDim2.new(0, 110, 0, 30)
+FossilLabel.Position = UDim2.new(0, 10, 0, 5)
+FossilLabel.BackgroundTransparency = 1
+FossilLabel.Text = "🦴 Nhập Số Fossil:"
+FossilLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+FossilLabel.Font = Enum.Font.GothamMedium
+FossilLabel.TextSize = 11
+FossilLabel.TextXAlignment = Enum.TextXAlignment.Left
+FossilLabel.Parent = FossilFrame
+
+local FossilInput = Instance.new("TextBox")
+FossilInput.Size = UDim2.new(0, 90, 0, 24)
+FossilInput.Position = UDim2.new(1, -100, 0, 8)
+FossilInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+FossilInput.BorderSizePixel = 0
+FossilInput.Text = "1"
+FossilInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+FossilInput.Font = Enum.Font.GothamBold
+FossilInput.TextSize = 12
+FossilInput.ClearTextOnFocus = false
+FossilInput.Parent = FossilFrame
+
+local FossilInputCorner = Instance.new("UICorner")
+FossilInputCorner.CornerRadius = UDim.new(0, 4)
+FossilInputCorner.Parent = FossilInput
+
+FossilInput.FocusLost:Connect(function()
+    fossilNumber = FossilInput.Text
+end)
+
+local RunFossilBtn = Instance.new("TextButton")
+RunFossilBtn.Size = UDim2.new(1, -20, 0, 25)
+RunFossilBtn.Position = UDim2.new(0, 10, 0, 38)
+RunFossilBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 100)
+RunFossilBtn.Font = Enum.Font.GothamBold
+RunFossilBtn.Text = "TÌM FOSSIL [RUN]"
+RunFossilBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+RunFossilBtn.TextSize = 10
+RunFossilBtn.Parent = FossilFrame
+
+local RunFossilCorner = Instance.new("UICorner")
+RunFossilCorner.CornerRadius = UDim.new(0, 5)
+RunFossilCorner.Parent = RunFossilBtn
+
+RunFossilBtn.MouseButton1Click:Connect(function()
+    local targetFossil = "Fossil" .. tostring(fossilNumber)
+    
+    local originalColor = RunFossilBtn.BackgroundColor3
+    RunFossilBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    RunFossilBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+    task.delay(0.15, function()
+        RunFossilBtn.BackgroundColor3 = originalColor
+        RunFossilBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end)
+    
+    local showTutorialRemote = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("ShowTutorial")
+    if showTutorialRemote then
+        pcall(function()
+            showTutorialRemote:InvokeServer(targetFossil)
+            print("🦴 Đã kích hoạt tìm kiếm: " .. targetFossil)
+        end)
+    else
+        warn("⚠️ Không tìm thấy Remote 'ShowTutorial' trong ReplicatedStorage.Events!")
+    end
+end)
+
+local Divider3 = Instance.new("Frame")
+Divider3.Size = UDim2.new(1, -20, 0, 1)
+Divider3.Position = UDim2.new(0, 10, 0, 492)
+Divider3.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+Divider3.BorderSizePixel = 0
+Divider3.Parent = MainFrame
+
+--======================================================================
+-- CUỘN DANH SÁCH MỤC TIÊU
+--======================================================================
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -20, 1, -410)
-ScrollingFrame.Position = UDim2.new(0, 10, 0, 410)
+ScrollingFrame.Size = UDim2.new(1, -20, 1, -500)
+ScrollingFrame.Position = UDim2.new(0, 10, 0, 500)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -269,7 +367,7 @@ UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 end)
 
 --======================================================================
--- CƠ CHẾ THEO DÕI HỒI SINH AN TOÀN (ANTI-BAN ON RESPAWN)
+-- CƠ CHẾ THEO DÕI HỒI SINH AN TOÀN
 --======================================================================
 local function handleCharacterSafety(char)
     if not char then return end
@@ -347,7 +445,6 @@ local function updateUtilityVisuals()
         ThreatenStroke.Color = Color3.fromRGB(50, 50, 50)
     end
     
-    -- Ẩn/Hiện billboard dựa trên nút toggle ESP NPC
     for npcModel, data in pairs(activeNpcEsps) do
         if data and data.billboard then
             data.billboard.Enabled = npcEspActive
@@ -412,7 +509,7 @@ local charactersFolder = workspace:FindFirstChild("Characters")
 local npcsFolder = workspace:FindFirstChild("NPCs")
 
 --======================================================================
--- HỆ THỐNG ESP PLAYER TỐI ƯU FPS
+-- HỆ THỐNG ESP PLAYER
 --======================================================================
 local function applyESP(character, playerName)
     if not character then return end
@@ -482,7 +579,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- [TỐI ƯU FPS TRIỆT ĐỂ] KHỞI TẠO KHUNG ESP NPC (KHÔNG CHỨA VÒNG LẶP RIÊNG)
+-- KHỞI TẠO KHUNG ESP NPC
 --======================================================================
 local function applyNPCEsp(npcModel, typeName)
     if not npcModel then return end
@@ -516,7 +613,6 @@ local function applyNPCEsp(npcModel, typeName)
     end
     txt.Parent = bb
 
-    -- Lưu dữ liệu vào cache tổng để xử lý tập trung
     activeNpcEsps[npcModel] = {
         billboard = bb,
         textLabel = txt,
@@ -524,7 +620,6 @@ local function applyNPCEsp(npcModel, typeName)
         targetPart = targetPart
     }
 
-    -- Tự dọn dẹp khi NPC bị xóa
     npcModel.AncestryChanged:Connect(function(_, parent)
         if not parent then
             if activeNpcEsps[npcModel] then
@@ -536,7 +631,7 @@ local function applyNPCEsp(npcModel, typeName)
 end
 
 --======================================================================
--- [TỐI ƯU FPS TRIỆT ĐỂ] LUỒNG ĐỒNG BỘ KHOẢNG CÁCH NPC TRUNG TÂM (CHỈ CHẠY 1 VÒNG LẶP)
+-- ĐỒNG BỘ KHOẢNG CÁCH NPC
 --======================================================================
 task.spawn(function()
     while true do
@@ -580,12 +675,12 @@ task.spawn(function()
                 end
             end
         end
-        task.wait(0.4) -- Chu kỳ quét hoàn hảo giúp giảm tải tối đa cho CPU
+        task.wait(0.4) 
     end
 end)
 
 --======================================================================
--- CƠ CHẾ QUÉT MỞ RỘNG (GOM TOÀN BỘ CHIM, THÚ NHỎ VÀ HEO)
+-- CƠ CHẾ QUÉT NPC VÀ PLAYERS
 --======================================================================
 local playerButtons = {}
 local peccaryButtons = {}
@@ -667,7 +762,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT GUI & CHỈ KHÓA DUY NHẤT STAMINA (AN TOÀN TUYỆT ĐỐI)
+-- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT GUI & STAMINA
 --======================================================================
 task.spawn(function()
     while true do
@@ -777,7 +872,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER
+-- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER - Q (HỖ TRỢ CẢ THÚ LỚN & THÚ BÉ)
 --======================================================================
 task.spawn(function()
     while true do
@@ -790,9 +885,16 @@ task.spawn(function()
                         local tc = charactersFolder:FindFirstChild(pName)
                         local tr = tc and tc:FindFirstChild("HumanoidRootPart")
                         local th = tc and tc:FindFirstChildOfClass("Humanoid")
-                        local tb = tc and tc:FindFirstChild("BodyHitbox")
+                        local tb = tc and tc:FindFirstChild("BodyHitbox") or tc:FindFirstChild("HeadHitbox")
+                        
                         if tr and th and tb and (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
-                            pcall(function() attackRemote:FireServer(th, tb, 1) end)
+                            pcall(function() 
+                                -- Tự động bọc tham số thành Table nếu đang dùng Thú Lớn (Voi, vv...)
+                                local targetHumanoid = { [1] = th }
+                                local targetHitbox = { [1] = tb }
+                                
+                                attackRemote:FireServer(targetHumanoid, targetHitbox, 1)
+                            end)
                         end
                     end
                 end
@@ -803,7 +905,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 5. VÒNG LẶP SKILL ĐỘNG VẬT ĂN CỎ - HÚC VÀ ĐÁ [CẬP NHẬT MỚI]
+-- 5. [NEW CHÍNH] VÒNG LẶP SKILL F - VỒ/ĐÁ/HÚC (ĐÃ CHUYỂN HOÀN TOÀN SANG TABLE)
 --======================================================================
 task.spawn(function()
     while true do
@@ -816,11 +918,15 @@ task.spawn(function()
                         local tc = charactersFolder:FindFirstChild(pName)
                         local tr = tc and tc:FindFirstChild("HumanoidRootPart")
                         local th = tc and tc:FindFirstChildOfClass("Humanoid")
-                        local tb = tc and tc:FindFirstChild("BodyHitbox")
+                        local tb = tc and tc:FindFirstChild("BodyHitbox") or tc:FindFirstChild("HeadHitbox")
+                        
                         if tr and th and tb and (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
-                            -- Sử dụng phương thức tấn công số 2 (húc & đá) của loài ăn cỏ gửi trực tiếp lên Server
                             pcall(function() 
-                                attackRemote:FireServer(th, tb, 2) 
+                                -- Đồng bộ dạng Table { [1] = ... } và truyền tham số đánh là 2 (Skill F) cho thú lớn
+                                local targetHumanoid = { [1] = th }
+                                local targetHitbox = { [1] = tb }
+                                
+                                attackRemote:FireServer(targetHumanoid, targetHitbox, 2) 
                             end)
                         end
                     end
@@ -958,4 +1064,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK ASSASSIN: UPDATE HERBIVORE POUNCE SKILL SUCCESSFUL! 🦋") --
+print("🦋 LIZLUK ASSASSIN: GIANT ANIMALS SKILL F COMPATIBILITY ACTIVE! 🦋")
