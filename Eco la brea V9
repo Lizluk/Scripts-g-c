@@ -32,9 +32,10 @@ local closestPlayerName = ""
 local maxDetectDistance = 30 
 local fossilNumber = "1" 
 
-local attackCooldown = 1.4
-local pounceCooldown = 2.0
-local npcAttackCooldown = 0.5
+-- Cooldown tối ưu hóa siêu tốc, không lo delay
+local attackCooldown = 0.2     -- Tốc độ đánh Q cực nhanh
+local pounceCooldown = 0.3     -- Tốc độ vồ F cực nhạy
+local npcAttackCooldown = 0.3
 local followCooldown = 1.0 
 local threatenCooldown = 1.0 
 
@@ -872,7 +873,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER - Q (HỖ TRỢ CẢ THÚ LỚN & THÚ BÉ)
+-- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER (PHÍM Q - AUTO ĐÁNH 1)
 --======================================================================
 task.spawn(function()
     while true do
@@ -885,14 +886,16 @@ task.spawn(function()
                         local tc = charactersFolder:FindFirstChild(pName)
                         local tr = tc and tc:FindFirstChild("HumanoidRootPart")
                         local th = tc and tc:FindFirstChildOfClass("Humanoid")
-                        local tb = tc and tc:FindFirstChild("BodyHitbox") or tc:FindFirstChild("HeadHitbox")
+                        
+                        -- FIX CỨNG: Bắt buộc tìm BodyHitbox cho phím Q
+                        local tb = tc and tc:FindFirstChild("BodyHitbox")
                         
                         if tr and th and tb and (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
                             pcall(function() 
-                                -- Tự động bọc tham số thành Table nếu đang dùng Thú Lớn (Voi, vv...)
                                 local targetHumanoid = { [1] = th }
                                 local targetHitbox = { [1] = tb }
                                 
+                                -- ohNumber3 = 1 (Chuẩn 100% gói tin của Q)
                                 attackRemote:FireServer(targetHumanoid, targetHitbox, 1)
                             end)
                         end
@@ -905,7 +908,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 5. [NEW CHÍNH] VÒNG LẶP SKILL F - VỒ/ĐÁ/HÚC (ĐÃ CHUYỂN HOÀN TOÀN SANG TABLE)
+-- 5. VÒNG LẶP SKILL F - VỒ/ĐÁ/HÚC (PHÍM F - AUTO ĐÁNH 2)
 --======================================================================
 task.spawn(function()
     while true do
@@ -918,14 +921,16 @@ task.spawn(function()
                         local tc = charactersFolder:FindFirstChild(pName)
                         local tr = tc and tc:FindFirstChild("HumanoidRootPart")
                         local th = tc and tc:FindFirstChildOfClass("Humanoid")
-                        local tb = tc and tc:FindFirstChild("BodyHitbox") or tc:FindFirstChild("HeadHitbox")
+                        
+                        -- FIX CỨNG: Bắt buộc tìm HeadHitbox cho phím F
+                        local tb = tc and tc:FindFirstChild("HeadHitbox")
                         
                         if tr and th and tb and (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
                             pcall(function() 
-                                -- Đồng bộ dạng Table { [1] = ... } và truyền tham số đánh là 2 (Skill F) cho thú lớn
                                 local targetHumanoid = { [1] = th }
                                 local targetHitbox = { [1] = tb }
                                 
+                                -- ohNumber3 = 2 (Chuẩn 100% gói tin của F)
                                 attackRemote:FireServer(targetHumanoid, targetHitbox, 2) 
                             end)
                         end
@@ -1064,4 +1069,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK ASSASSIN: GIANT ANIMALS SKILL F COMPATIBILITY ACTIVE! 🦋")
+print("🦋 LIZLUK ASSASSIN: FIXED Q (BODYHITBOX) & F (HEADHITBOX) SUCCESSFUL! 🦋")
