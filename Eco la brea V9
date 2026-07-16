@@ -32,12 +32,12 @@ local closestPlayerName = ""
 local maxDetectDistance = 150
 
 local attackCooldown = 1.4
-local pounceCooldown = 2.0 -- Cooldown của chiêu Vồ / Đá
+local pounceCooldown = 2.0 -- Cooldown của chiêu Vồ (Cắn chân) / Đá
 local npcAttackCooldown = 0.5
 local followCooldown = 1.0 -- Tần suất gửi event Grumpy để heo đi theo
 local threatenCooldown = 1.0 -- Tần suất gửi lệnh đe dọa/tấn công
 
-local activeNpcEsps = {}
+local activeNpcEsps = {} -- Lưu trữ: { [npcModel] = { billboard = bb, textLabel = txt, typeName = string } }
 
 --======================================================================
 -- HÀM ĐỊNH VỊ NPC KHÔNG PHỤ THUỘC VÀO TÊN HOẶC TRẠNG THÁI KHÓA ARCHIVABLE
@@ -60,7 +60,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 615) -- Tăng nhẹ chiều cao để vừa nút mới
+MainFrame.Size = UDim2.new(0, 240, 0, 615) 
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BorderSizePixel = 0
@@ -132,11 +132,11 @@ local PounceBtn, PounceStroke = createUtilityButton(1, "SPECIAL SKILL (VỒ/ĐÁ
 local DrinkBtn, DrinkStroke = createUtilityButton(2, "AUTO DRINK: OFF [L]")
 local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "NPC ESP: DISABLED [K]")
 local FollowBtn, FollowStroke = createUtilityButton(4, "PECCARY FOLLOW: OFF [J]")
-local ThreatenBtn, ThreatenStroke = createUtilityButton(5, "PECCARY ATTACK: OFF [G]") -- Nút bấm G mới
+local ThreatenBtn, ThreatenStroke = createUtilityButton(5, "PECCARY ATTACK: OFF [G]") 
 
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -20, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 10, 0, 255) -- Dịch chuyển nhẹ xuống
+DistanceInputFrame.Position = UDim2.new(0, 10, 0, 255) 
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -346,9 +346,10 @@ local function updateUtilityVisuals()
         ThreatenStroke.Color = Color3.fromRGB(50, 50, 50)
     end
     
-    for _, gui in pairs(activeNpcEsps) do
-        if gui and gui:IsA("BillboardGui") then
-            gui.Enabled = npcEspActive
+    -- Bật/Tắt hiển thị ESP NPC
+    for model, data in pairs(activeNpcEsps) do
+        if data and data.billboard then
+            data.billboard.Enabled = npcEspActive
         end
     end
 end
@@ -400,8 +401,8 @@ end)
 --======================================================================
 local eventsFolder = ReplicatedStorage:FindFirstChild("Events")
 local attackRemote = eventsFolder and eventsFolder:FindFirstChild("Attack")
-local grumpyRemote = eventsFolder and eventsFolder:FindFirstChild("PeccaryGrumpy") -- Heo đi theo
-local threatenRemote = eventsFolder and eventsFolder:FindFirstChild("PeccaryThreaten") -- Heo tấn công Player
+local grumpyRemote = eventsFolder and eventsFolder:FindFirstChild("PeccaryGrumpy") 
+local threatenRemote = eventsFolder and eventsFolder:FindFirstChild("PeccaryThreaten") 
 local drinkRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("DrinkRemote")
 
 local interactionsFolder = workspace:FindFirstChild("Interactions")
@@ -454,7 +455,7 @@ local function applyESP(character, playerName)
                     end
                 end
             end
-            task.wait(0.1)
+            task.wait(0.2)
         end
         if bb then bb:Destroy() end
     end)
@@ -479,11 +480,11 @@ task.spawn(function()
 end)
 
 --======================================================================
--- HỆ THỐNG ESP NPC TỐI ƯU FPS
+-- [ĐÃ TỐI ƯU FPS] HỆ THỐNG TẠO ESP NPC CỰC NHẸ (KHÔNG TỰ CHẠY VÒNG LẶP RIÊNG)
 --======================================================================
 local function applyNPCEsp(npcModel, typeName)
     if not npcModel then return end
-    if npcModel:FindFirstChild("NpcESP_Holder") then return end
+    if activeNpcEsps[npcModel] then return end
     
     local targetPart = getNPCTargetPart(npcModel)
     if not targetPart then return end
@@ -496,7 +497,6 @@ local function applyNPCEsp(npcModel, typeName)
     bb.Adornee = targetPart
     bb.Enabled = npcEspActive
     bb.Parent = targetPart
-    table.insert(activeNpcEsps, bb)
 
     local txt = Instance.new("TextLabel")
     txt.Size = UDim2.new(1, 0, 1, 0)
@@ -514,36 +514,75 @@ local function applyNPCEsp(npcModel, typeName)
     end
     txt.Parent = bb
 
-    task.spawn(function()
-        while npcModel and npcModel:IsDescendantOf(workspace) and targetPart and targetPart:IsDescendantOf(npcModel) and bb and bb.Parent do
+    -- Lưu trữ thông tin thay vì để tự chạy while-loop
+    activeNpcEsps[npcModel] = {
+        billboard = bb,
+        textLabel = txt,
+        typeName = typeName,
+        targetPart = targetPart
+    }
+
+    -- Tự dọn dẹp bộ nhớ khi NPC biến mất khỏi game
+    npcModel.AncestryChanged:Connect(function(_, parent)
+        if not parent then
+            if activeNpcEsps[npcModel] then
+                if bb then bb:Destroy() end
+                activeNpcEsps[npcModel] = nil
+            end
+        end
+    end)
+end
+
+--======================================================================
+-- [ĐÃ TỐI ƯU FPS] LUỒNG CẬP NHẬT KHOẢNG CÁCH NPC TRUNG TÂM (CHỈ CHẠY 1 VÒNG LẶP)
+--======================================================================
+task.spawn(function()
+    while true do
+        if npcEspActive then
             local myCharacter = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
             local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
             
-            if myRoot and targetPart then
-                local distance = math.floor((myRoot.Position - targetPart.Position).Magnitude)
-                if peccaryTargets[npcModel.Name] then
-                    if followActive then
-                        txt.Text = string.format("🐷 [ĐANG ĐI THEO]\n%s (%dm)", npcModel.Name, distance)
-                        txt.TextColor3 = Color3.fromRGB(255, 165, 0)
-                    elseif peccaryAttackActive then
-                        txt.Text = string.format("🐷 [ĐANG TẤN CÔNG]\n%s (%dm)", npcModel.Name, distance)
-                        txt.TextColor3 = Color3.fromRGB(255, 0, 0)
+            if myRoot then
+                local myPos = myRoot.Position
+                for npcModel, data in pairs(activeNpcEsps) do
+                    if npcModel and npcModel:IsDescendantOf(workspace) and data.targetPart and data.targetPart:IsDescendantOf(npcModel) then
+                        local distance = math.floor((myPos - data.targetPart.Position).Magnitude)
+                        
+                        if peccaryTargets[npcModel.Name] then
+                            if followActive then
+                                data.textLabel.Text = string.format("🐷 [ĐANG ĐI THEO]\n%s (%dm)", npcModel.Name, distance)
+                                data.textLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+                            elseif peccaryAttackActive then
+                                data.textLabel.Text = string.format("🐷 [ĐANG TẤN CÔNG]\n%s (%dm)", npcModel.Name, distance)
+                                data.textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                            else
+                                data.textLabel.Text = string.format("🐷 [MỤC TIÊU KHÓA]\n%s (%dm)", npcModel.Name, distance)
+                                data.textLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+                            end
+                        else
+                            local icon = (data.typeName == "Peccary") and "🐷" or (data.typeName == "Bird" and "🦅" or "🐹")
+                            data.textLabel.Text = string.format("%s [%s]\n%s (%dm)", icon, data.typeName, npcModel.Name, distance)
+                            
+                            -- Đặt lại màu chuẩn nếu không được chọn làm mục tiêu heo
+                            if data.typeName == "Peccary" then
+                                data.textLabel.TextColor3 = Color3.fromRGB(255, 150, 200)
+                            elseif data.typeName == "Bird" then
+                                data.textLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
+                            else
+                                data.textLabel.TextColor3 = Color3.fromRGB(100, 230, 255)
+                            end
+                        end
                     else
-                        txt.Text = string.format("🐷 [MỤC TIÊU KHÓA]\n%s (%dm)", npcModel.Name, distance)
-                        txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                        -- Dọn dẹp rác nếu model bị lỗi hoặc không còn hợp lệ
+                        if data.billboard then data.billboard:Destroy() end
+                        activeNpcEsps[npcModel] = nil
                     end
-                else
-                    local icon = (typeName == "Peccary") and "🐷" or (typeName == "Bird" and "🦅" or "🐹")
-                    txt.Text = string.format("%s [%s]\n%s (%dm)", icon, typeName, npcModel.Name, distance)
                 end
             end
-            task.wait(0.1)
         end
-        local idx = table.find(activeNpcEsps, bb)
-        if idx then table.remove(activeNpcEsps, idx) end
-        if bb then bb:Destroy() end
-    end)
-end
+        task.wait(0.5) -- Tần suất cập nhật 0.5s cực kỳ tối ưu, triệt tiêu hoàn toàn độ trễ (FPS drop)
+    end
+end)
 
 --======================================================================
 -- CƠ CHẾ QUÉT MỞ RỘNG (GOM TOÀN BỘ CHIM, THÚ NHỎ VÀ HEO)
@@ -738,7 +777,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER & ĐỘNG VẬT ĂN THỊT (SỐ 1)
+-- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER (CHIÊU 1)
 --======================================================================
 task.spawn(function()
     while true do
@@ -764,7 +803,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 5. VÒNG LẶP SKILL VỒ/ĐÁ PLAYER (SỐ 2 VÀ CÓ LATCHPOINT) 
+-- 5. VÒNG LẶP SKILL VỒ/ĐÁ PLAYER (CHIÊU 2 - KHÔNG BỊ KẸT LATCHPOINT)
 --======================================================================
 task.spawn(function()
     while true do
@@ -778,13 +817,25 @@ task.spawn(function()
                         local tr = tc and tc:FindFirstChild("HumanoidRootPart")
                         local th = tc and tc:FindFirstChildOfClass("Humanoid")
                         local tb = tc and tc:FindFirstChild("BodyHitbox")
+                        
                         if tr and th and tb and (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
+                            -- Tìm xương LatchPoint dự phòng một cách linh hoạt, không kẹt cứng ở một tên duy nhất
                             local rootPart = tc:FindFirstChild("RootPart")
                             local torso = rootPart and rootPart:FindFirstChild("Torso")
-                            local latchPoint = torso and (torso:FindFirstChild("LatchPoint2.R") or torso:GetChildren()[1])
-                            if latchPoint then
-                                pcall(function() attackRemote:FireServer(th, tb, 2, latchPoint) end)
+                            local latchPoint = nil
+                            
+                            if torso then
+                                latchPoint = torso:FindFirstChild("LatchPoint2.R") or torso:FindFirstChildOfClass("Attachment") or torso:FindFirstChildOfClass("Part") or torso
                             end
+                            
+                            -- Nếu vẫn không có LatchPoint nào, lấy chính BodyHitbox của kẻ địch làm điểm bấu víu
+                            if not latchPoint then
+                                latchPoint = tb
+                            end
+                            
+                            pcall(function() 
+                                attackRemote:FireServer(th, tb, 2, latchPoint) 
+                            end)
                         end
                     end
                 end
@@ -795,7 +846,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 6. VÒNG LẶP TẤN CÔNG ĐỘNG VẬT ĂN CỎ NPC (SỐ 2)
+-- 6. VÒNG LẶP TẤN CÔNG TOÀN BỘ NPC (Bao gồm Heo, Chim, Thú nhỏ...)
 --======================================================================
 task.spawn(function()
     while true do
@@ -812,7 +863,9 @@ task.spawn(function()
                             
                             if humanoid then
                                 pcall(function() 
-                                    attackRemote:FireServer(humanoid, hitbox, 2) 
+                                    attackRemote:FireServer(humanoid, hitbox, 1)
+                                    task.wait(0.05)
+                                    attackRemote:FireServer(humanoid, hitbox, 2, hitbox) -- Áp dụng cắn chân lên cả NPC
                                 end)
                             end
                         end
@@ -865,20 +918,17 @@ end)
 task.spawn(function()
     while true do
         if peccaryAttackActive and threatenRemote and charactersFolder then
-            -- 1. Tìm mục tiêu Player được ông tick đỏ
             local targetedPlayerName = nil
             for pName, isSelected in pairs(targets) do
                 if isSelected then
                     targetedPlayerName = pName
-                    break -- Lấy mục tiêu đầu tiên được tick đỏ
+                    break 
                 end
             end
 
-            -- 2. Nếu tìm thấy Player mục tiêu
             if targetedPlayerName then
                 local playerChar = charactersFolder:FindFirstChild(targetedPlayerName)
                 if playerChar then
-                    -- 3. Duyệt danh sách các con heo (Peccary) được ông chọn (tick đỏ) để ra lệnh đe dọa
                     for npcName, isSelected in pairs(peccaryTargets) do
                         if isSelected then
                             local targetModel = nil
@@ -889,10 +939,8 @@ task.spawn(function()
                                 end
                             end
 
-                            -- 4. Nếu heo tồn tại trong Workspace, gửi lệnh bắt heo đe dọa Player đó!
                             if targetModel and targetModel:IsDescendantOf(workspace) then
                                 pcall(function()
-                                    -- Gửi chính xác Model con heo và đối thủ (Player Character)
                                     threatenRemote:FireServer(targetModel, playerChar)
                                 end)
                             end
@@ -933,4 +981,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK ASSASSIN: LOADED WITH DUAL-ATTACK CODES, PECCARY FOLLOW (J) & THREATEN (G) OK! 🦋")
+print("🦋 LIZLUK ASSASSIN FIXED: NPC ESP FPS LAG FIX SUCCESSFULLY DEPLOYED! 🦋")
