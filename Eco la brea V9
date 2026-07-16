@@ -850,24 +850,15 @@ end)
 --======================================================================
 task.spawn(function()
     while true do
-        if killAuraActive and attackRemote then
+        if killAuraActive and attackNPCRemote then
             local myChar = LocalPlayer.Character or (charactersFolder and charactersFolder:FindFirstChild(LocalPlayer.Name))
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             if myRoot then
                 for _, npcModel in pairs(scannedNPCModels) do
                     if npcModel and npcModel:IsDescendantOf(workspace) then
-                        local targetPart = getNPCTargetPart(npcModel)
-                        if targetPart and (myRoot.Position - targetPart.Position).Magnitude <= maxDetectDistance then
-                            local humanoid = npcModel:FindFirstChildOfClass("Humanoid")
-                            local hitbox = npcModel:FindFirstChild("BodyHitbox") or targetPart
-                            
-                            if humanoid then
-                                pcall(function() 
-                                    attackRemote:FireServer(humanoid, hitbox, 1)
-                                    task.wait(0.05)
-                                    attackRemote:FireServer(humanoid, hitbox, 2, hitbox) -- Áp dụng cắn chân lên cả NPC
-                                end)
-                            end
+                        local body = getNPCTargetPart(npcModel)
+                        if body and (myRoot.Position - body.Position).Magnitude <= maxDetectDistance then
+                            pcall(function() attackNPCRemote:FireServer(body, 1) end)
                         end
                     end
                 end
