@@ -33,9 +33,9 @@ local maxDetectDistance = 30
 local fossilNumber = "1" 
 
 -- Cooldown tối ưu hóa siêu tốc, không lo delay
-local attackCooldown = 0.2     -- Tốc độ đánh Q cực nhanh
-local pounceCooldown = 0.3     -- Tốc độ vồ F cực nhạy
-local npcAttackCooldown = 0.3
+local attackCooldown = 1.4     -- Tốc độ đánh Q cực nhanh
+local pounceCooldown = 1.4     -- Tốc độ vồ F cực nhạy
+local npcAttackCooldown = 0.5
 local followCooldown = 1.0 
 local threatenCooldown = 1.0 
 
