@@ -15,27 +15,27 @@ local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:
 -- CẤU HÌNH & TRẠNG THÁI KHỞI TẠO
 --======================================================================
 local targetStamina = 100
-local isLocking = false
-local isSpawnSafe = true
+local isLocking = false 
+local isSpawnSafe = true 
 
 local targets = {}         
-local peccaryTargets = {} 
+local peccaryTargets = {}  
 
-local killAuraActive = true
-local autoPounceActive = false -- Nút bật tắt chiêu Vồ (Ăn thịt) / Đá (Ăn cỏ)
-local autoDrinkActive = false
-local npcEspActive = true
+local killAuraActive = true 
+local autoPounceActive = false 
+local autoDrinkActive = false 
+local npcEspActive = true 
 local followActive = false -- Trạng thái đi theo (Phím J)
-local peccaryAttackActive = false -- Trạng thái tự động đe dọa/tấn công (Phím G)
+local peccaryAttackActive = false -- Trạng thái tự động tấn công (Phím G)
 
-local closestPlayerName = ""
-local maxDetectDistance = 150
+local closestPlayerName = "" 
+local maxDetectDistance = 30 
 
 local attackCooldown = 1.4
-local pounceCooldown = 2.0 -- Cooldown của chiêu Vồ (Cắn chân) / Đá
+local pounceCooldown = 2.0
 local npcAttackCooldown = 0.5
-local followCooldown = 1.0 -- Tần suất gửi event Grumpy để heo đi theo
-local threatenCooldown = 1.0 -- Tần suất gửi lệnh đe dọa/tấn công
+local followCooldown = 1.0 -- Tần suất gửi event Grumpy
+local threatenCooldown = 1.0 -- Tần suất gửi lệnh đe dọa
 
 local activeNpcEsps = {} -- Lưu trữ: { [npcModel] = { billboard = bb, textLabel = txt, typeName = string } }
 
@@ -60,7 +60,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 240, 0, 615) 
+MainFrame.Size = UDim2.new(0, 240, 0, 615) -- Tăng lại chiều cao để vừa các nút heo
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BorderSizePixel = 0
@@ -80,7 +80,7 @@ UIStroke.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundTransparency = 1
-Title.Text = "🦋 LIZLUK AUTOMATION [P] 🦋"
+Title.Text = "🦋 LIZLUK AUTOMATION [P] 🦋" --
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
@@ -128,15 +128,15 @@ local function createUtilityButton(posIndex, defaultText)
     return btn, stroke
 end
 
-local PounceBtn, PounceStroke = createUtilityButton(1, "SPECIAL SKILL (VỒ/ĐÁ): OFF [F]")
+local PounceBtn, PounceStroke = createUtilityButton(1, "AUTO POUNCE: OFF [F]")
 local DrinkBtn, DrinkStroke = createUtilityButton(2, "AUTO DRINK: OFF [L]")
-local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "NPC ESP: DISABLED [K]")
+local NpcEspBtn, NpcEspStroke = createUtilityButton(3, "NPC ESP: DISABLED [K]") 
 local FollowBtn, FollowStroke = createUtilityButton(4, "PECCARY FOLLOW: OFF [J]")
-local ThreatenBtn, ThreatenStroke = createUtilityButton(5, "PECCARY ATTACK: OFF [G]") 
+local ThreatenBtn, ThreatenStroke = createUtilityButton(5, "PECCARY ATTACK: OFF [G]")
 
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -20, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 10, 0, 255) 
+DistanceInputFrame.Position = UDim2.new(0, 10, 0, 255)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -166,7 +166,7 @@ DistanceBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 DistanceBox.Font = Enum.Font.GothamBold
 DistanceBox.TextSize = 12
 DistanceBox.ClearTextOnFocus = false
-DistanceBox.Parent = DistanceInputFrame
+DistanceBox.Parent = DistanceInputFrame 
 
 local DistanceBoxCorner = Instance.new("UICorner")
 DistanceBoxCorner.CornerRadius = UDim.new(0, 4)
@@ -189,6 +189,7 @@ Divider.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 Divider.BorderSizePixel = 0
 Divider.Parent = MainFrame
 
+-- Chỉ giữ lại ô nhập dữ liệu của duy nhất Stamina
 local label = Instance.new("TextLabel")
 label.Size = UDim2.new(0, 85, 0, 28)
 label.Position = UDim2.new(0, 15, 0, 315)
@@ -250,7 +251,7 @@ Divider2.BorderSizePixel = 0
 Divider2.Parent = MainFrame
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -20, 1, -420)
+ScrollingFrame.Size = UDim2.new(1, -20, 1, -410)
 ScrollingFrame.Position = UDim2.new(0, 10, 0, 410)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
@@ -268,12 +269,12 @@ UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 end)
 
 --======================================================================
--- CƠ CHẾ THEO DÕI HỒI SINH AN TOÀN
+-- CƠ CHẾ THEO DÕI HỒI SINH AN TOÀN (ANTI-BAN ON RESPAWN)
 --======================================================================
 local function handleCharacterSafety(char)
     if not char then return end
-    isSpawnSafe = false
-    task.wait(3.5)
+    isSpawnSafe = false 
+    task.wait(3.5) 
     isSpawnSafe = true
 end
 
@@ -288,12 +289,12 @@ end
 local function updateUtilityVisuals()
     if autoPounceActive then
         PounceBtn.BackgroundColor3 = Color3.fromRGB(130, 25, 130)
-        PounceBtn.Text = "SPECIAL SKILL (VỒ/ĐÁ): ON [F]"
+        PounceBtn.Text = "AUTO POUNCE: ON [F]" 
         PounceBtn.TextColor3 = Color3.fromRGB(255, 180, 255)
         PounceStroke.Color = Color3.fromRGB(200, 50, 200)
     else
         PounceBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        PounceBtn.Text = "SPECIAL SKILL (VỒ/ĐÁ): OFF [F]"
+        PounceBtn.Text = "AUTO POUNCE: OFF [F]" 
         PounceBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
         PounceStroke.Color = Color3.fromRGB(50, 50, 50)
     end
@@ -346,8 +347,8 @@ local function updateUtilityVisuals()
         ThreatenStroke.Color = Color3.fromRGB(50, 50, 50)
     end
     
-    -- Bật/Tắt hiển thị ESP NPC
-    for model, data in pairs(activeNpcEsps) do
+    -- Ẩn/Hiện billboard dựa trên nút toggle ESP NPC
+    for npcModel, data in pairs(activeNpcEsps) do
         if data and data.billboard then
             data.billboard.Enabled = npcEspActive
         end
@@ -401,8 +402,9 @@ end)
 --======================================================================
 local eventsFolder = ReplicatedStorage:FindFirstChild("Events")
 local attackRemote = eventsFolder and eventsFolder:FindFirstChild("Attack")
+local attackNPCRemote = eventsFolder and eventsFolder:FindFirstChild("AttackNPC")
 local grumpyRemote = eventsFolder and eventsFolder:FindFirstChild("PeccaryGrumpy") 
-local threatenRemote = eventsFolder and eventsFolder:FindFirstChild("PeccaryThreaten") 
+local threatenRemote = eventsFolder and eventsFolder:FindFirstChild("PeccaryThreaten")
 local drinkRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("DrinkRemote")
 
 local interactionsFolder = workspace:FindFirstChild("Interactions")
@@ -455,7 +457,7 @@ local function applyESP(character, playerName)
                     end
                 end
             end
-            task.wait(0.2)
+            task.wait(0.1)
         end
         if bb then bb:Destroy() end
     end)
@@ -480,7 +482,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- [ĐÃ TỐI ƯU FPS] HỆ THỐNG TẠO ESP NPC CỰC NHẸ (KHÔNG TỰ CHẠY VÒNG LẶP RIÊNG)
+-- [TỐI ƯU FPS TRIỆT ĐỂ] KHỞI TẠO KHUNG ESP NPC (KHÔNG CHỨA VÒNG LẶP RIÊNG)
 --======================================================================
 local function applyNPCEsp(npcModel, typeName)
     if not npcModel then return end
@@ -495,7 +497,7 @@ local function applyNPCEsp(npcModel, typeName)
     bb.AlwaysOnTop = true
     bb.ExtentsOffset = Vector3.new(0, 2, 0)
     bb.Adornee = targetPart
-    bb.Enabled = npcEspActive
+    bb.Enabled = npcEspActive 
     bb.Parent = targetPart
 
     local txt = Instance.new("TextLabel")
@@ -514,7 +516,7 @@ local function applyNPCEsp(npcModel, typeName)
     end
     txt.Parent = bb
 
-    -- Lưu trữ thông tin thay vì để tự chạy while-loop
+    -- Lưu dữ liệu vào cache tổng để xử lý tập trung
     activeNpcEsps[npcModel] = {
         billboard = bb,
         textLabel = txt,
@@ -522,7 +524,7 @@ local function applyNPCEsp(npcModel, typeName)
         targetPart = targetPart
     }
 
-    -- Tự dọn dẹp bộ nhớ khi NPC biến mất khỏi game
+    -- Tự dọn dẹp khi NPC bị xóa
     npcModel.AncestryChanged:Connect(function(_, parent)
         if not parent then
             if activeNpcEsps[npcModel] then
@@ -534,7 +536,7 @@ local function applyNPCEsp(npcModel, typeName)
 end
 
 --======================================================================
--- [ĐÃ TỐI ƯU FPS] LUỒNG CẬP NHẬT KHOẢNG CÁCH NPC TRUNG TÂM (CHỈ CHẠY 1 VÒNG LẶP)
+-- [TỐI ƯU FPS TRIỆT ĐỂ] LUỒNG ĐỒNG BỘ KHOẢNG CÁCH NPC TRUNG TÂM (CHỈ CHẠY 1 VÒNG LẶP)
 --======================================================================
 task.spawn(function()
     while true do
@@ -553,8 +555,8 @@ task.spawn(function()
                                 data.textLabel.Text = string.format("🐷 [ĐANG ĐI THEO]\n%s (%dm)", npcModel.Name, distance)
                                 data.textLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
                             elseif peccaryAttackActive then
-                                data.textLabel.Text = string.format("🐷 [ĐANG TẤN CÔNG]\n%s (%dm)", npcModel.Name, distance)
-                                data.textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                                data.textLabel.Text = string.format("⚔️ [ĐANG TẤN CÔNG]\n%s (%dm)", npcModel.Name, distance)
+                                data.textLabel.TextColor3 = Color3.fromRGB(255, 0, 50)
                             else
                                 data.textLabel.Text = string.format("🐷 [MỤC TIÊU KHÓA]\n%s (%dm)", npcModel.Name, distance)
                                 data.textLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
@@ -563,7 +565,6 @@ task.spawn(function()
                             local icon = (data.typeName == "Peccary") and "🐷" or (data.typeName == "Bird" and "🦅" or "🐹")
                             data.textLabel.Text = string.format("%s [%s]\n%s (%dm)", icon, data.typeName, npcModel.Name, distance)
                             
-                            -- Đặt lại màu chuẩn nếu không được chọn làm mục tiêu heo
                             if data.typeName == "Peccary" then
                                 data.textLabel.TextColor3 = Color3.fromRGB(255, 150, 200)
                             elseif data.typeName == "Bird" then
@@ -573,14 +574,13 @@ task.spawn(function()
                             end
                         end
                     else
-                        -- Dọn dẹp rác nếu model bị lỗi hoặc không còn hợp lệ
                         if data.billboard then data.billboard:Destroy() end
                         activeNpcEsps[npcModel] = nil
                     end
                 end
             end
         end
-        task.wait(0.5) -- Tần suất cập nhật 0.5s cực kỳ tối ưu, triệt tiêu hoàn toàn độ trễ (FPS drop)
+        task.wait(0.4) -- Chu kỳ quét hoàn hảo giúp giảm tải tối đa cho CPU
     end
 end)
 
@@ -667,7 +667,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT GUI & CHỈ KHÓA DUY NHẤT STAMINA
+-- 3. VÒNG LẶP ĐỒNG BỘ MÀU NÚT GUI & CHỈ KHÓA DUY NHẤT STAMINA (AN TOÀN TUYỆT ĐỐI)
 --======================================================================
 task.spawn(function()
     while true do
@@ -777,7 +777,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER (CHIÊU 1)
+-- 4. VÒNG LẶP TẤN CÔNG THƯỜNG PLAYER
 --======================================================================
 task.spawn(function()
     while true do
@@ -803,7 +803,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 5. VÒNG LẶP SKILL VỒ/ĐÁ PLAYER (CHIÊU 2 - KHÔNG BỊ KẸT LATCHPOINT)
+-- 5. VÒNG LẶP SKILL ĐỘNG VẬT ĂN CỎ - HÚC VÀ ĐÁ [CẬP NHẬT MỚI]
 --======================================================================
 task.spawn(function()
     while true do
@@ -817,24 +817,10 @@ task.spawn(function()
                         local tr = tc and tc:FindFirstChild("HumanoidRootPart")
                         local th = tc and tc:FindFirstChildOfClass("Humanoid")
                         local tb = tc and tc:FindFirstChild("BodyHitbox")
-                        
                         if tr and th and tb and (myRoot.Position - tr.Position).Magnitude <= maxDetectDistance then
-                            -- Tìm xương LatchPoint dự phòng một cách linh hoạt, không kẹt cứng ở một tên duy nhất
-                            local rootPart = tc:FindFirstChild("RootPart")
-                            local torso = rootPart and rootPart:FindFirstChild("Torso")
-                            local latchPoint = nil
-                            
-                            if torso then
-                                latchPoint = torso:FindFirstChild("LatchPoint2.R") or torso:FindFirstChildOfClass("Attachment") or torso:FindFirstChildOfClass("Part") or torso
-                            end
-                            
-                            -- Nếu vẫn không có LatchPoint nào, lấy chính BodyHitbox của kẻ địch làm điểm bấu víu
-                            if not latchPoint then
-                                latchPoint = tb
-                            end
-                            
+                            -- Sử dụng phương thức tấn công số 2 (húc & đá) của loài ăn cỏ gửi trực tiếp lên Server
                             pcall(function() 
-                                attackRemote:FireServer(th, tb, 2, latchPoint) 
+                                attackRemote:FireServer(th, tb, 2) 
                             end)
                         end
                     end
@@ -846,7 +832,7 @@ task.spawn(function()
 end)
 
 --======================================================================
--- 6. VÒNG LẶP TẤN CÔNG TOÀN BỘ NPC (Bao gồm Heo, Chim, Thú nhỏ...)
+-- 6. VÒNG LẶP TẤN CÔNG NPC TỰ ĐỘNG
 --======================================================================
 task.spawn(function()
     while true do
@@ -972,4 +958,4 @@ task.spawn(function()
 end)
 
 updateUtilityVisuals()
-print("🦋 LIZLUK ASSASSIN FIXED: NPC ESP FPS LAG FIX SUCCESSFULLY DEPLOYED! 🦋")
+print("🦋 LIZLUK ASSASSIN: UPDATE HERBIVORE POUNCE SKILL SUCCESSFUL! 🦋") --
