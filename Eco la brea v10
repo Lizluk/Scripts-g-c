@@ -24,7 +24,7 @@ local peccaryTargets = {}
 local killAuraActive = true 
 local autoPounceActive = false 
 local autoDrinkActive = false 
-local npcEspActive = true 
+local npcEspActive = false 
 local followActive = false 
 local peccaryAttackActive = false 
 
