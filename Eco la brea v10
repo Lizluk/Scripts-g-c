@@ -29,7 +29,7 @@ local followActive = false
 local peccaryAttackActive = false 
 
 local closestPlayerName = "" 
-local maxDetectDistance = 30 
+local maxDetectDistance = 15 
 local fossilNumber = "1" 
 
 -- Cooldown tối ưu hóa siêu tốc, không lo delay
