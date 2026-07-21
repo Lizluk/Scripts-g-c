@@ -1,0 +1,118 @@
+-- Services
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+local FightRemote = ReplicatedStorage:WaitForChild("CLIENT_REMOTES"):WaitForChild("Fight")
+
+-- Variables
+local enabled = false
+local attackSpeed = 0.1 -- Tốc độ mặc định (giây). Càng nhỏ càng nhanh!
+local keybind = Enum.KeyCode.X
+
+-- Tham số remote của bạn
+local ohString1 = "Use1"
+local ohVector32 = Vector3.new(3728.668212890625, 127.35263061523438, 2791.09228515625)
+local ohCFrame3 = CFrame.new(3727.16309, 135.066177, 2762.37427, -0.998629451, 0.0135587566, -0.0505492501, -1.38518549e-17, 0.965858281, 0.259070903, 0.0523360856, 0.258715838, -0.9645347)
+
+-- Tạo GUI Control Panel
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "KillAuraGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 220, 0, 130)
+MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true -- Có thể kéo thả trên màn hình
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundTransparency = 1
+Title.Text = "Kill Aura [Phím X]"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 16
+Title.Font = Enum.Font.SourceSansBold
+Title.Parent = MainFrame
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 0, 25)
+StatusLabel.Position = UDim2.new(0, 0, 0, 30)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "Trạng thái: OFF"
+StatusLabel.TextColor3 = Color3.fromRGB(255, 60, 60)
+StatusLabel.TextSize = 14
+StatusLabel.Font = Enum.Font.SourceSans
+StatusLabel.Parent = MainFrame
+
+local SpeedBox = Instance.new("TextBox")
+SpeedBox.Size = UDim2.new(0.8, 0, 0, 30)
+SpeedBox.Position = UDim2.new(0.1, 0, 0, 60)
+SpeedBox.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+SpeedBox.Text = tostring(attackSpeed)
+SpeedBox.PlaceholderText = "Nhập delay (s)..."
+SpeedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedBox.TextSize = 14
+SpeedBox.Font = Enum.Font.SourceSans
+SpeedBox.Parent = MainFrame
+
+local BoxCorner = Instance.new("UICorner")
+BoxCorner.CornerRadius = UDim.new(0, 6)
+BoxCorner.Parent = SpeedBox
+
+local SpeedLabel = Instance.new("TextLabel")
+SpeedLabel.Size = UDim2.new(1, 0, 0, 20)
+SpeedLabel.Position = UDim2.new(0, 0, 0, 95)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Text = "Delay (giây) - Càng nhỏ càng nhanh"
+SpeedLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+SpeedLabel.TextSize = 11
+SpeedLabel.Font = Enum.Font.SourceSansItalic
+SpeedLabel.Parent = MainFrame
+
+--- Hàm cập nhật tốc độ từ ô nhập
+SpeedBox.FocusLost:Connect(function(enterPressed)
+    local num = tonumber(SpeedBox.Text)
+    if num and num >= 0 then
+        attackSpeed = num
+    else
+        SpeedBox.Text = tostring(attackSpeed)
+    end
+end)
+
+--- Vòng lặp Kill Aura
+task.spawn(function()
+    while true do
+        if enabled then
+            pcall(function()
+                FightRemote:FireServer(ohString1, ohVector32, ohCFrame3)
+            end)
+        end
+        task.wait(attackSpeed)
+    end
+end)
+
+--- Lắng nghe sự kiện bấm phím X
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end -- Không kích hoạt khi đang gõ chat
+    
+    if input.KeyCode == keybind then
+        enabled = not enabled
+        if enabled then
+            StatusLabel.Text = "Trạng thái: ON"
+            StatusLabel.TextColor3 = Color3.fromRGB(60, 255, 60)
+        else
+            StatusLabel.Text = "Trạng thái: OFF"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 60, 60)
+        end
+    end
+end)
