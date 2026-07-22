@@ -146,7 +146,7 @@ end
 -- Lắng nghe phím V để kích hoạt
 UIS.InputBegan:Connect(function(input, chat)
     if chat then return end
-    if input.KeyCode == Enum.KeyCode.V then
+    if input.KeyCode == Enum.KeyCode.G then
         toggleInvisibility()
     end
 end)
