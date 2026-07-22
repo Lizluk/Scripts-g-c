@@ -21,27 +21,32 @@ statusLabel.Font = Enum.Font.SourceSansBold
 statusLabel.Text = "Trạng thái: TẮT (X)"
 statusLabel.Parent = screenGui
 
--- Thêm góc bo tròn cho GUI
 local uiCorner = Instance.new("UICorner")
 uiCorner.CornerRadius = UDim.new(0, 8)
 uiCorner.Parent = statusLabel
 
--- 2. Hàm xử lý đoạn code của bạn
+-- 2. Hàm thực thi (Đã thêm FireServer)
 local function executeAction()
-    local ohString1 = "Sử dụng1"
+    local ohString1 = "Use1"
     local ohVector32 = Vector3.new(3728.668212890625, 127.35263061523438, 2791.09228515625)
     local ohCFrame3 = CFrame.new(3727.16309, 135.066177, 2762.37427, -0.998629451, 0.0135587566, -0.0505492501, -1.38518549e-17, 0.965858281, 0.259070903, 0.0523360856, 0.258715838, -0.9645347)
-    
-    -- Bạn có thể thêm lệnh gửi RemoteEvent / RemoteFunction ở đây nếu cần
-    -- Ví dụ: game:GetService("ReplicatedStorage").RemoteEvent:FireServer(ohString1, ohVector32, ohCFrame3)
+
+    -- Tìm RemoteEvent và thực thi
+    local remote = game:GetService("ReplicatedStorage"):FindFirstChild("CLIENT_REMOTES") 
+        and game:GetService("ReplicatedStorage").CLIENT_REMOTES:FindFirstChild("Fight")
+
+    if remote then
+        remote:FireServer(ohString1, ohVector32, ohCFrame3)
+    else
+        warn("Không tìm thấy RemoteEvent CLIENT_REMOTES.Fight!")
+    end
 end
 
--- 3. Bắt sự kiện bàn phím & chuột
+-- 3. Lắng nghe sự kiện phím & chuột
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    -- Bỏ qua nếu người chơi đang gõ chat hoặc tương tác với GUI hệ thống
     if gameProcessed then return end
 
-    -- Bật / Tắt khi nhấn phím X
+    -- Bật/Tắt bằng phím X
     if input.KeyCode == Enum.KeyCode.X then
         isActive = not isActive
         if isActive then
@@ -53,7 +58,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
     end
 
-    -- Kích hoạt 10 luồng song song khi nhấn chuột trái
+    -- Bấm chuột trái -> Gọi 10 luồng song song
     if input.UserInputType == Enum.UserInputType.MouseButton1 and isActive then
         for i = 1, 10 do
             task.spawn(executeAction)
