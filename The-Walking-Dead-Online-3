@@ -1,67 +1,139 @@
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
 
--- Flag quản lý trạng thái bật/tắt (mặc định tắt)
-local isActive = false
+-- Đảm bảo người chơi và PlayerGui đã tải hoàn tất
+local LocalPlayer = Players.LocalPlayer or Players:GetPlayerFromCharacter(script.Parent)
+local playerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
 
--- 1. Tạo GUI hiển thị trạng thái
+if not playerGui then
+    warn("[LỖI GUI]: Không tìm thấy PlayerGui!")
+    return
+end
+
+-- Biến quản lý trạng thái
+local modeX = false -- Trạng thái phím X
+local modeV = false -- Trạng thái phím V
+local loopAmount = 10 -- Giá trị mặc định
+
+-- 1. Tạo GUI giao diện
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ToggleStatusGui"
+screenGui.Name = "MultiComboGui"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+screenGui.Parent = playerGui
 
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(0, 200, 0, 40)
-statusLabel.Position = UDim2.new(0.5, -100, 0.1, 0)
-statusLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-statusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-statusLabel.TextSize = 16
-statusLabel.Font = Enum.Font.SourceSansBold
-statusLabel.Text = "Trạng thái: TẮT (X)"
-statusLabel.Parent = screenGui
+-- Bảng thông báo X
+local statusX = Instance.new("TextLabel")
+statusX.Size = UDim2.new(0, 220, 0, 30)
+statusX.Position = UDim2.new(0.5, -110, 0.1, 0)
+statusX.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+statusX.TextColor3 = Color3.fromRGB(255, 50, 50)
+statusX.TextSize = 14
+statusX.Font = Enum.Font.SourceSansBold
+statusX.Text = "Chế độ X (Use1): TẮT"
+statusX.Parent = screenGui
 
-local uiCorner = Instance.new("UICorner")
-uiCorner.CornerRadius = UDim.new(0, 8)
-uiCorner.Parent = statusLabel
+local corner1 = Instance.new("UICorner")
+corner1.CornerRadius = UDim.new(0, 6)
+corner1.Parent = statusX
 
--- 2. Hàm thực thi (Đã thêm FireServer)
-local function executeAction()
-    local ohString1 = "Use1"
-    local ohVector32 = Vector3.new(3728.668212890625, 127.35263061523438, 2791.09228515625)
-    local ohCFrame3 = CFrame.new(3727.16309, 135.066177, 2762.37427, -0.998629451, 0.0135587566, -0.0505492501, -1.38518549e-17, 0.965858281, 0.259070903, 0.0523360856, 0.258715838, -0.9645347)
+-- Bảng thông báo V
+local statusV = Instance.new("TextLabel")
+statusV.Size = UDim2.new(0, 220, 0, 30)
+statusV.Position = UDim2.new(0.5, -110, 0.1, 35)
+statusV.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+statusV.TextColor3 = Color3.fromRGB(255, 50, 50)
+statusV.TextSize = 14
+statusV.Font = Enum.Font.SourceSansBold
+statusV.Text = "Chế độ V (Jab L/R): TẮT"
+statusV.Parent = screenGui
 
-    -- Tìm RemoteEvent và thực thi
-    local remote = game:GetService("ReplicatedStorage"):FindFirstChild("CLIENT_REMOTES") 
-        and game:GetService("ReplicatedStorage").CLIENT_REMOTES:FindFirstChild("Fight")
+local corner2 = Instance.new("UICorner")
+corner2.CornerRadius = UDim.new(0, 6)
+corner2.Parent = statusV
 
-    if remote then
-        remote:FireServer(ohString1, ohVector32, ohCFrame3)
+-- Ô nhập số lần gọi
+local countBox = Instance.new("TextBox")
+countBox.Size = UDim2.new(0, 220, 0, 30)
+countBox.Position = UDim2.new(0.5, -110, 0.1, 70)
+countBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+countBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+countBox.TextSize = 13
+countBox.Font = Enum.Font.SourceSans
+countBox.PlaceholderText = "Nhập số lần (Mặc định: 10)"
+countBox.Text = "10"
+countBox.ClearTextOnFocus = false
+countBox.Parent = screenGui
+
+local corner3 = Instance.new("UICorner")
+corner3.CornerRadius = UDim.new(0, 6)
+corner3.Parent = countBox
+
+-- Lắng nghe khi thay đổi số trong TextBox
+countBox.FocusLost:Connect(function()
+    local num = tonumber(countBox.Text)
+    if num and num > 0 then
+        loopAmount = math.floor(num)
+        countBox.Text = tostring(loopAmount)
     else
-        warn("Không tìm thấy RemoteEvent CLIENT_REMOTES.Fight!")
+        countBox.Text = tostring(loopAmount)
+    end
+end)
+
+-- 2. Định nghĩa các hành động
+
+-- Code của phím X (Use1 + Vị trí Vector/CFrame)
+local function executeX()
+    local clientRemotes = game:GetService("ReplicatedStorage"):FindFirstChild("CLIENT_REMOTES")
+    if clientRemotes and clientRemotes:FindFirstChild("Fight") then
+        local ohString1 = "Use1"
+        local ohVector32 = Vector3.new(3728.668212890625, 127.35263061523438, 2791.09228515625)
+        local ohCFrame3 = CFrame.new(3727.16309, 135.066177, 2762.37427, -0.998629451, 0.0135587566, -0.0505492501, -1.38518549e-17, 0.965858281, 0.259070903, 0.0523360856, 0.258715838, -0.9645347)
+        
+        clientRemotes.Fight:FireServer(ohString1, ohVector32, ohCFrame3)
     end
 end
 
--- 3. Lắng nghe sự kiện phím & chuột
+-- Code của phím V (Jab_L & Jab_R)
+local function executeV()
+    local clientRemotes = game:GetService("ReplicatedStorage"):FindFirstChild("CLIENT_REMOTES")
+    if clientRemotes and clientRemotes:FindFirstChild("Fight") then
+        clientRemotes.Fight:FireServer("Jab_L")
+        clientRemotes.Fight:FireServer("Jab_R")
+    end
+end
+
+-- 3. Xử lý sự kiện bàn phím & chuột
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
 
-    -- Bật/Tắt bằng phím X
+    -- Bật/Tắt chế độ X
     if input.KeyCode == Enum.KeyCode.X then
-        isActive = not isActive
-        if isActive then
-            statusLabel.Text = "Trạng thái: BẬT (X)"
-            statusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
-        else
-            statusLabel.Text = "Trạng thái: TẮT (X)"
-            statusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-        end
+        modeX = not modeX
+        statusX.Text = modeX and "Chế độ X (Use1): BẬT" or "Chế độ X (Use1): TẮT"
+        statusX.TextColor3 = modeX and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
     end
 
-    -- Bấm chuột trái -> Gọi 10 luồng song song
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and isActive then
-        for i = 1, 10 do
-            task.spawn(executeAction)
+    -- Bật/Tắt chế độ V
+    if input.KeyCode == Enum.KeyCode.V then
+        modeV = not modeV
+        statusV.Text = modeV and "Chế độ V (Jab L/R): BẬT" or "Chế độ V (Jab L/R): TẮT"
+        statusV.TextColor3 = modeV and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
+    end
+
+    -- Khi nhấn chuột trái (MouseButton1)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        -- Nếu chế độ X đang BẬT
+        if modeX then
+            for i = 1, loopAmount do
+                task.spawn(executeX)
+            end
+        end
+
+        -- Nếu chế độ V đang BẬT
+        if modeV then
+            for i = 1, loopAmount do
+                task.spawn(executeV)
+            end
         end
     end
 end)
