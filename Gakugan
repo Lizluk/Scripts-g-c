@@ -1,0 +1,37 @@
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Khai báo Remote
+local serverRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Server")
+
+-- Dữ liệu truyền vào Remote
+local ohTable1 = {
+    ["Type"] = "Combat",
+    ["Func"] = "Activated",
+    ["Action"] = "Block"
+}
+local ohNumber2 = 1784825892.205078
+
+-- Biến trạng thái (Bật/Tắt)
+local toggled = false
+
+-- Bắt sự kiện nhấn phím H
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    -- Nếu đang chat hoặc nhập văn bản thì không kích hoạt
+    if gameProcessed then return end
+
+    if input.KeyCode == Enum.KeyCode.H then
+        toggled = not toggled
+        print("Lặp Block:", toggled and "ĐÃ BẬT" or "ĐÃ TẮT")
+    end
+end)
+
+-- Vòng lặp chạy ngầm để gửi tín hiệu khi toggled = true
+task.spawn(function()
+    while true do
+        if toggled then
+            serverRemote:FireServer(ohTable1, ohNumber2)
+        end
+        task.wait(0.1) -- Khoảng thời gian giữa mỗi lần gửi (0.1 giây). Điều chỉnh nếu cần.
+    end
+end)
