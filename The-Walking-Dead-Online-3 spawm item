@@ -17,15 +17,14 @@ screenGui.Parent = PlayerGui
 -- 2. Khung giao diện chính (Main Frame)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 350, 0, 450)
-mainFrame.Position = UDim2.new(0.5, -175, 0.5, -225)
+mainFrame.Size = UDim2.new(0, 360, 0, 480)
+mainFrame.Position = UDim2.new(0.5, -180, 0.5, -240)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
 mainFrame.Parent = screenGui
 
--- Bo góc khung chính
 local mainCorner = Instance.new("UICorner")
 mainCorner.CornerRadius = UDim.new(0, 8)
 mainCorner.Parent = mainFrame
@@ -33,8 +32,8 @@ mainCorner.Parent = mainFrame
 -- Tiêu đề GUI
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Name = "Title"
-titleLabel.Size = UDim2.new(1, -70, 0, 40)
-titleLabel.Position = UDim2.new(0, 10, 0, 0)
+titleLabel.Size = UDim2.new(1, -70, 0, 35)
+titleLabel.Position = UDim2.new(0, 10, 0, 5)
 titleLabel.BackgroundTransparency = 1
 titleLabel.Text = "Loot Item Transfer"
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -78,11 +77,31 @@ closeBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- 3. Khung cuộn danh sách (ScrollingFrame)
+-- 3. Ô nhập liệu tìm kiếm (Search Box)
+local searchBox = Instance.new("TextBox")
+searchBox.Name = "SearchBox"
+searchBox.Size = UDim2.new(1, -20, 0, 32)
+searchBox.Position = UDim2.new(0, 10, 0, 42)
+searchBox.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+searchBox.BorderSizePixel = 0
+searchBox.PlaceholderText = "Nhập tên vật phẩm (ví dụ: Metal Parts)..."
+searchBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 160)
+searchBox.Text = ""
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.TextSize = 14
+searchBox.Font = Enum.Font.SourceSans
+searchBox.ClearTextOnFocus = false
+searchBox.Parent = mainFrame
+
+local searchCorner = Instance.new("UICorner")
+searchCorner.CornerRadius = UDim.new(0, 6)
+searchCorner.Parent = searchBox
+
+-- 4. Khung cuộn danh sách (ScrollingFrame)
 local scrollFrame = Instance.new("ScrollingFrame")
 scrollFrame.Name = "ItemList"
-scrollFrame.Size = UDim2.new(1, -20, 1, -55)
-scrollFrame.Position = UDim2.new(0, 10, 0, 45)
+scrollFrame.Size = UDim2.new(1, -20, 1, -90)
+scrollFrame.Position = UDim2.new(0, 10, 0, 80)
 scrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
 scrollFrame.BorderSizePixel = 0
 scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -98,12 +117,11 @@ uiList.Parent = scrollFrame
 uiList.SortOrder = Enum.SortOrder.LayoutOrder
 uiList.Padding = UDim.new(0, 5)
 
--- Cập nhật kích thước khung cuộn tự động
 uiList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     scrollFrame.CanvasSize = UDim2.new(0, 0, 0, uiList.AbsoluteContentSize.Y + 10)
 end)
 
--- 4. Hàm chuyển đổi vật phẩm
+-- 5. Hàm gửi Remote
 local function transferItem(itemId)
     local remote = ReplicatedStorage:FindFirstChild("CLIENT_REMOTES") and ReplicatedStorage.CLIENT_REMOTES:FindFirstChild("TransferItem")
     if remote then
@@ -114,9 +132,9 @@ local function transferItem(itemId)
     end
 end
 
--- 5. Hàm quét và tải danh sách vật phẩm
+-- 6. Hàm quét và lọc danh sách vật phẩm
 local function scanLootables()
-    -- Xóa các nút cũ
+    -- Xóa nút cũ
     for _, child in ipairs(scrollFrame:GetChildren()) do
         if child:IsA("TextButton") then
             child:Destroy()
@@ -129,39 +147,52 @@ local function scanLootables()
         return
     end
 
-    -- Tìm kiếm tất cả các đối tượng bên trong Lootables
+    local filterText = string.lower(searchBox.Text)
+
+    -- Duyệt tìm tất cả các đối tượng bên trong Lootables
     for _, item in ipairs(lootablesFolder:GetDescendants()) do
         local itemId = item:GetAttribute("ID")
         if itemId then
-            local itemName = item:GetAttribute("ItemName") or item.Name
-            local itemType = item:GetAttribute("Type") or "Unknown"
+            local itemName = tostring(item:GetAttribute("ItemName") or item.Name)
+            local itemType = tostring(item:GetAttribute("Type") or "Unknown")
 
-            -- Tạo nút cho mỗi vật phẩm tìm thấy
-            local itemBtn = Instance.new("TextButton")
-            itemBtn.Name = "ItemBtn_" .. tostring(itemName)
-            itemBtn.Size = UDim2.new(1, -10, 0, 40)
-            itemBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-            itemBtn.Text = string.format("  [%s] %s\n  ID: %s", tostring(itemType), tostring(itemName), tostring(itemId))
-            itemBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
-            itemBtn.TextSize = 13
-            itemBtn.Font = Enum.Font.SourceSans
-            itemBtn.TextXAlignment = Enum.TextXAlignment.Left
-            itemBtn.Parent = scrollFrame
+            -- Kiểm tra điều kiện tìm kiếm (nếu ô trống hoặc tên chứa từ khóa)
+            if filterText == "" or string.find(string.lower(itemName), filterText, 1, true) then
+                local itemBtn = Instance.new("TextButton")
+                itemBtn.Name = "ItemBtn_" .. itemName
+                itemBtn.Size = UDim2.new(1, -10, 0, 42)
+                itemBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+                itemBtn.Text = string.format("  [%s] %s\n  ID: %s", itemType, itemName, tostring(itemId))
+                itemBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+                itemBtn.TextSize = 13
+                itemBtn.Font = Enum.Font.SourceSans
+                itemBtn.TextXAlignment = Enum.TextXAlignment.Left
+                itemBtn.Parent = scrollFrame
 
-            local btnCorner = Instance.new("UICorner")
-            btnCorner.CornerRadius = UDim.new(0, 4)
-            btnCorner.Parent = itemBtn
+                local btnCorner = Instance.new("UICorner")
+                btnCorner.CornerRadius = UDim.new(0, 4)
+                btnCorner.Parent = itemBtn
 
-            -- Sự kiện khi nhấp vào nút
-            itemBtn.MouseButton1Click:Connect(function()
-                transferItem(itemId)
-            end)
+                -- Click vào nút để thực thi chuyển đồ
+                itemBtn.MouseButton1Click:Connect(function()
+                    transferItem(itemId)
+                end)
+            end
         end
     end
 end
 
+-- Lọc khi nhấn Enter hoặc khi người dùng nhập từ khóa
+searchBox.FocusLost:Connect(function(enterPressed)
+    scanLootables()
+end)
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    scanLootables()
+end)
+
 -- Sự kiện nhấn nút Refresh
 refreshBtn.MouseButton1Click:Connect(scanLootables)
 
--- Lần quét đầu tiên khi chạy script
+-- Quét lần đầu khi bật GUI
 scanLootables()
