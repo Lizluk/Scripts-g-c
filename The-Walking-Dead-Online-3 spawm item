@@ -1,0 +1,167 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Xóa GUI cũ nếu tồn tại
+if PlayerGui:FindFirstChild("LootTransferGUI") then
+    PlayerGui.LootTransferGUI:Destroy()
+end
+
+-- 1. Khởi tạo ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "LootTransferGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = PlayerGui
+
+-- 2. Khung giao diện chính (Main Frame)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 350, 0, 450)
+mainFrame.Position = UDim2.new(0.5, -175, 0.5, -225)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+-- Bo góc khung chính
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 8)
+mainCorner.Parent = mainFrame
+
+-- Tiêu đề GUI
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "Title"
+titleLabel.Size = UDim2.new(1, -70, 0, 40)
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "Loot Item Transfer"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 18
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = mainFrame
+
+-- Nút Làm mới (Refresh)
+local refreshBtn = Instance.new("TextButton")
+refreshBtn.Name = "RefreshButton"
+refreshBtn.Size = UDim2.new(0, 30, 0, 30)
+refreshBtn.Position = UDim2.new(1, -65, 0, 5)
+refreshBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 200)
+refreshBtn.Text = "🔄"
+refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+refreshBtn.TextSize = 16
+refreshBtn.Parent = mainFrame
+
+local refreshCorner = Instance.new("UICorner")
+refreshCorner.CornerRadius = UDim.new(0, 6)
+refreshCorner.Parent = refreshBtn
+
+-- Nút Tắt (Close)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Name = "CloseButton"
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -30, 0, 5)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 16
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.Parent = mainFrame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeBtn
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- 3. Khung cuộn danh sách (ScrollingFrame)
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Name = "ItemList"
+scrollFrame.Size = UDim2.new(1, -20, 1, -55)
+scrollFrame.Position = UDim2.new(0, 10, 0, 45)
+scrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
+scrollFrame.BorderSizePixel = 0
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.ScrollBarThickness = 6
+scrollFrame.Parent = mainFrame
+
+local scrollCorner = Instance.new("UICorner")
+scrollCorner.CornerRadius = UDim.new(0, 6)
+scrollCorner.Parent = scrollFrame
+
+local uiList = Instance.new("UIListLayout")
+uiList.Parent = scrollFrame
+uiList.SortOrder = Enum.SortOrder.LayoutOrder
+uiList.Padding = UDim.new(0, 5)
+
+-- Cập nhật kích thước khung cuộn tự động
+uiList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, uiList.AbsoluteContentSize.Y + 10)
+end)
+
+-- 4. Hàm chuyển đổi vật phẩm
+local function transferItem(itemId)
+    local remote = ReplicatedStorage:FindFirstChild("CLIENT_REMOTES") and ReplicatedStorage.CLIENT_REMOTES:FindFirstChild("TransferItem")
+    if remote then
+        remote:FireServer(itemId, "Main", "Storage")
+        print("Đã gửi Remote TransferItem cho ID:", itemId)
+    else
+        warn("Không tìm thấy RemoteEvent: ReplicatedStorage.CLIENT_REMOTES.TransferItem")
+    end
+end
+
+-- 5. Hàm quét và tải danh sách vật phẩm
+local function scanLootables()
+    -- Xóa các nút cũ
+    for _, child in ipairs(scrollFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    local lootablesFolder = workspace:FindFirstChild("Lootables")
+    if not lootablesFolder then
+        warn("Không tìm thấy thư mục workspace.Lootables")
+        return
+    end
+
+    -- Tìm kiếm tất cả các đối tượng bên trong Lootables
+    for _, item in ipairs(lootablesFolder:GetDescendants()) do
+        local itemId = item:GetAttribute("ID")
+        if itemId then
+            local itemName = item:GetAttribute("ItemName") or item.Name
+            local itemType = item:GetAttribute("Type") or "Unknown"
+
+            -- Tạo nút cho mỗi vật phẩm tìm thấy
+            local itemBtn = Instance.new("TextButton")
+            itemBtn.Name = "ItemBtn_" .. tostring(itemName)
+            itemBtn.Size = UDim2.new(1, -10, 0, 40)
+            itemBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+            itemBtn.Text = string.format("  [%s] %s\n  ID: %s", tostring(itemType), tostring(itemName), tostring(itemId))
+            itemBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+            itemBtn.TextSize = 13
+            itemBtn.Font = Enum.Font.SourceSans
+            itemBtn.TextXAlignment = Enum.TextXAlignment.Left
+            itemBtn.Parent = scrollFrame
+
+            local btnCorner = Instance.new("UICorner")
+            btnCorner.CornerRadius = UDim.new(0, 4)
+            btnCorner.Parent = itemBtn
+
+            -- Sự kiện khi nhấp vào nút
+            itemBtn.MouseButton1Click:Connect(function()
+                transferItem(itemId)
+            end)
+        end
+    end
+end
+
+-- Sự kiện nhấn nút Refresh
+refreshBtn.MouseButton1Click:Connect(scanLootables)
+
+-- Lần quét đầu tiên khi chạy script
+scanLootables()
