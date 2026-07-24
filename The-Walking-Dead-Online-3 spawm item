@@ -10,6 +10,7 @@ if PlayerGui:FindFirstChild("LootTransferGUI") then
 end
 
 local currentMode = "Transfer"
+local isTransferringAll = false -- Biến trạng thái kiểm tra có đang lấy tất cả không
 
 -- 1. Khởi tạo ScreenGui
 local screenGui = Instance.new("ScreenGui")
@@ -20,8 +21,8 @@ screenGui.Parent = PlayerGui
 -- 2. Khung giao diện chính (Main Frame)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 360, 0, 520)
-mainFrame.Position = UDim2.new(0.5, -180, 0.5, -260)
+mainFrame.Size = UDim2.new(0, 360, 0, 560)
+mainFrame.Position = UDim2.new(0.5, -180, 0.5, -280)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -143,11 +144,27 @@ local searchCorner = Instance.new("UICorner")
 searchCorner.CornerRadius = UDim.new(0, 6)
 searchCorner.Parent = searchBox
 
--- 5. Khung cuộn danh sách (ScrollingFrame)
+-- 5. Nút Lấy Tất Cả (Transfer All Button)
+local transferAllBtn = Instance.new("TextButton")
+transferAllBtn.Name = "TransferAllBtn"
+transferAllBtn.Size = UDim2.new(1, -20, 0, 32)
+transferAllBtn.Position = UDim2.new(0, 10, 0, 118)
+transferAllBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 90)
+transferAllBtn.Text = "📥 Transfer All (Lấy tất cả trong danh sách)"
+transferAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+transferAllBtn.TextSize = 14
+transferAllBtn.Font = Enum.Font.SourceSansBold
+transferAllBtn.Parent = mainFrame
+
+local transferAllCorner = Instance.new("UICorner")
+transferAllCorner.CornerRadius = UDim.new(0, 6)
+transferAllCorner.Parent = transferAllBtn
+
+-- 6. Khung cuộn danh sách (ScrollingFrame)
 local scrollFrame = Instance.new("ScrollingFrame")
 scrollFrame.Name = "ItemList"
-scrollFrame.Size = UDim2.new(1, -20, 1, -128)
-scrollFrame.Position = UDim2.new(0, 10, 0, 118)
+scrollFrame.Size = UDim2.new(1, -20, 1, -165)
+scrollFrame.Position = UDim2.new(0, 10, 0, 155)
 scrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
 scrollFrame.BorderSizePixel = 0
 scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -167,7 +184,7 @@ uiList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     scrollFrame.CanvasSize = UDim2.new(0, 0, 0, uiList.AbsoluteContentSize.Y + 10)
 end)
 
--- Mode Controls
+-- Controls Chuyển Mode
 transferModeBtn.MouseButton1Click:Connect(function()
     currentMode = "Transfer"
     transferModeBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 250)
@@ -184,39 +201,23 @@ teleportModeBtn.MouseButton1Click:Connect(function()
     transferModeBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
 end)
 
--- 6. Hàm tìm vị trí CFrame chuẩn xác nhất
+-- 7. Các hàm xử lý CFrame & Remote
 local function getTargetCFrame(instance)
     if not instance then return nil end
-
-    -- Nếu là BasePart
-    if instance:IsA("BasePart") then
-        return instance.CFrame
-    end
-
-    -- Nếu là Model
+    if instance:IsA("BasePart") then return instance.CFrame end
     if instance:IsA("Model") then
         local primary = instance.PrimaryPart or instance:FindFirstChildWhichIsA("BasePart", true)
-        if primary then
-            return primary.CFrame
-        end
+        if primary then return primary.CFrame end
         return instance:GetPivot()
     end
-
-    -- Nếu là Folder hoặc loại khác, tìm Part bên trong nó
     local foundPart = instance:FindFirstChildWhichIsA("BasePart", true)
-    if foundPart then
-        return foundPart.CFrame
-    end
-
-    -- Nếu không thấy Part bên trong, tìm ngược lên Cha (Parent)
+    if foundPart then return foundPart.CFrame end
     if instance.Parent and instance.Parent ~= workspace then
         return getTargetCFrame(instance.Parent)
     end
-
     return nil
 end
 
--- 7. Các hàm thực thi chính
 local function transferItem(itemId)
     local remote = ReplicatedStorage:FindFirstChild("CLIENT_REMOTES") and ReplicatedStorage.CLIENT_REMOTES:FindFirstChild("TransferItem")
     if remote then
@@ -234,27 +235,20 @@ local function teleportAndInteract(targetInstance)
     if not hrp then return end
 
     local targetCFrame = getTargetCFrame(targetInstance)
-
     if targetCFrame then
-        -- Dịch chuyển nhân vật đến vị trí (dịch lên cao 1 xíu để tránh kẹt đất)
         hrp.CFrame = targetCFrame * CFrame.new(0, 2, 0)
-        
-        -- Reset vận tốc rơi/di chuyển để không bị văng lại
         hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        
         task.wait(0.15)
-
-        -- Giả lập ấn phím F
         VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, true, game)
         task.wait(0.05)
         VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, false, game)
-        print("Đã Teleport thành công tới:", targetInstance:GetFullName())
+        print("Đã Teleport tới:", targetInstance:GetFullName())
     else
-        warn("Không thể tìm thấy tọa độ CFrame hợp lệ của:", targetInstance:GetFullName())
+        warn("Không tìm thấy CFrame của:", targetInstance:GetFullName())
     end
 end
 
--- 8. Quét danh sách
+-- 8. Quét danh sách vật phẩm
 local function scanLootables()
     for _, child in ipairs(scrollFrame:GetChildren()) do
         if child:IsA("TextButton") then
@@ -288,10 +282,14 @@ local function scanLootables()
                 itemBtn.TextXAlignment = Enum.TextXAlignment.Left
                 itemBtn.Parent = scrollFrame
 
+                -- Lưu thông tin ID trực tiếp vào nút để dùng cho Transfer All
+                itemBtn:SetAttribute("TargetID", itemId)
+
                 local btnCorner = Instance.new("UICorner")
                 btnCorner.CornerRadius = UDim.new(0, 4)
                 btnCorner.Parent = itemBtn
 
+                -- Bấm thủ công từng món
                 itemBtn.MouseButton1Click:Connect(function()
                     if currentMode == "Transfer" then
                         transferItem(itemId)
@@ -303,6 +301,34 @@ local function scanLootables()
         end
     end
 end
+
+-- 9. Xử lý sự kiện bấm "Transfer All"
+transferAllBtn.MouseButton1Click:Connect(function()
+    if isTransferringAll then return end
+    isTransferringAll = true
+    transferAllBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 50)
+    transferAllBtn.Text = "⏳ Đang lấy tất cả..."
+
+    task.spawn(function()
+        for _, child in ipairs(scrollFrame:GetChildren()) do
+            if child:IsA("TextButton") then
+                local targetId = child:GetAttribute("TargetID")
+                if targetId then
+                    transferItem(targetId)
+                    task.wait(0.1) -- Khoảng hoãn nhỏ để tránh gửi Remote quá nhanh bị Kick
+                end
+            end
+        end
+
+        transferAllBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 90)
+        transferAllBtn.Text = "📥 Transfer All (Lấy tất cả trong danh sách)"
+        isTransferringAll = false
+
+        -- Quét lại danh sách sau khi lấy xong
+        task.wait(0.5)
+        scanLootables()
+    end)
+end)
 
 -- Events
 searchBox.FocusLost:Connect(scanLootables)
