@@ -9,7 +9,6 @@ if PlayerGui:FindFirstChild("LootTransferGUI") then
     PlayerGui.LootTransferGUI:Destroy()
 end
 
--- Biến lưu trạng thái Chế độ: "Transfer" hoặc "Teleport"
 local currentMode = "Transfer"
 
 -- 1. Khởi tạo ScreenGui
@@ -168,7 +167,7 @@ uiList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     scrollFrame.CanvasSize = UDim2.new(0, 0, 0, uiList.AbsoluteContentSize.Y + 10)
 end)
 
--- 6. Xử lý Chuyển đổi Mode
+-- Mode Controls
 transferModeBtn.MouseButton1Click:Connect(function()
     currentMode = "Transfer"
     transferModeBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 250)
@@ -185,7 +184,39 @@ teleportModeBtn.MouseButton1Click:Connect(function()
     transferModeBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
 end)
 
--- 7. Các hàm chức năng chính
+-- 6. Hàm tìm vị trí CFrame chuẩn xác nhất
+local function getTargetCFrame(instance)
+    if not instance then return nil end
+
+    -- Nếu là BasePart
+    if instance:IsA("BasePart") then
+        return instance.CFrame
+    end
+
+    -- Nếu là Model
+    if instance:IsA("Model") then
+        local primary = instance.PrimaryPart or instance:FindFirstChildWhichIsA("BasePart", true)
+        if primary then
+            return primary.CFrame
+        end
+        return instance:GetPivot()
+    end
+
+    -- Nếu là Folder hoặc loại khác, tìm Part bên trong nó
+    local foundPart = instance:FindFirstChildWhichIsA("BasePart", true)
+    if foundPart then
+        return foundPart.CFrame
+    end
+
+    -- Nếu không thấy Part bên trong, tìm ngược lên Cha (Parent)
+    if instance.Parent and instance.Parent ~= workspace then
+        return getTargetCFrame(instance.Parent)
+    end
+
+    return nil
+end
+
+-- 7. Các hàm thực thi chính
 local function transferItem(itemId)
     local remote = ReplicatedStorage:FindFirstChild("CLIENT_REMOTES") and ReplicatedStorage.CLIENT_REMOTES:FindFirstChild("TransferItem")
     if remote then
@@ -198,38 +229,32 @@ end
 
 local function teleportAndInteract(targetInstance)
     local character = LocalPlayer.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    if not character then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
 
-    -- Xác định tọa độ CFrame của vật phẩm
-    local targetCFrame = nil
-    if targetInstance:IsA("Model") then
-        targetCFrame = targetInstance:GetPivot()
-    elseif targetInstance:IsA("BasePart") then
-        targetCFrame = targetInstance.CFrame
-    else
-        -- Trường hợp là Folder hoặc Object chứa part bên trong
-        local part = targetInstance:FindFirstChildWhichIsA("BasePart", true)
-        if part then
-            targetCFrame = part.CFrame
-        end
-    end
+    local targetCFrame = getTargetCFrame(targetInstance)
 
     if targetCFrame then
-        -- Teleport nhân vật tới sát vị trí vật phẩm
-        character.HumanoidRootPart.CFrame = targetCFrame * CFrame.new(0, 1, 1.5)
-        task.wait(0.1)
+        -- Dịch chuyển nhân vật đến vị trí (dịch lên cao 1 xíu để tránh kẹt đất)
+        hrp.CFrame = targetCFrame * CFrame.new(0, 2, 0)
+        
+        -- Reset vận tốc rơi/di chuyển để không bị văng lại
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        task.wait(0.15)
 
-        -- Tự động giả lập bấm phím F
+        -- Giả lập ấn phím F
         VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, true, game)
         task.wait(0.05)
         VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, false, game)
-        print("Đã Teleport và bấm phím F tới:", targetInstance:GetFullName())
+        print("Đã Teleport thành công tới:", targetInstance:GetFullName())
     else
-        warn("Không thể xác định vị trí của vật phẩm trong Workspace.")
+        warn("Không thể tìm thấy tọa độ CFrame hợp lệ của:", targetInstance:GetFullName())
     end
 end
 
--- 8. Quét và hiển thị danh sách
+-- 8. Quét danh sách
 local function scanLootables()
     for _, child in ipairs(scrollFrame:GetChildren()) do
         if child:IsA("TextButton") then
@@ -267,7 +292,6 @@ local function scanLootables()
                 btnCorner.CornerRadius = UDim.new(0, 4)
                 btnCorner.Parent = itemBtn
 
-                -- Click xử lý dựa theo Mode đang chọn
                 itemBtn.MouseButton1Click:Connect(function()
                     if currentMode == "Transfer" then
                         transferItem(itemId)
@@ -280,10 +304,9 @@ local function scanLootables()
     end
 end
 
--- Sự kiện tìm kiếm & Refresh
+-- Events
 searchBox.FocusLost:Connect(scanLootables)
 searchBox:GetPropertyChangedSignal("Text"):Connect(scanLootables)
 refreshBtn.MouseButton1Click:Connect(scanLootables)
 
--- Quét dữ liệu ban đầu
 scanLootables()
