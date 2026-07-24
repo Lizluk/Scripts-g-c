@@ -10,7 +10,7 @@ if PlayerGui:FindFirstChild("LootTransferGUI") then
 end
 
 local currentMode = "Transfer"
-local isTransferringAll = false -- Biến trạng thái kiểm tra có đang lấy tất cả không
+local isTransferringAll = false
 
 -- 1. Khởi tạo ScreenGui
 local screenGui = Instance.new("ScreenGui")
@@ -184,7 +184,7 @@ uiList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     scrollFrame.CanvasSize = UDim2.new(0, 0, 0, uiList.AbsoluteContentSize.Y + 10)
 end)
 
--- Controls Chuyển Mode
+-- Controls Mode
 transferModeBtn.MouseButton1Click:Connect(function()
     currentMode = "Transfer"
     transferModeBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 250)
@@ -201,7 +201,7 @@ teleportModeBtn.MouseButton1Click:Connect(function()
     transferModeBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
 end)
 
--- 7. Các hàm xử lý CFrame & Remote
+-- 7. Các hàm Core
 local function getTargetCFrame(instance)
     if not instance then return nil end
     if instance:IsA("BasePart") then return instance.CFrame end
@@ -222,9 +222,8 @@ local function transferItem(itemId)
     local remote = ReplicatedStorage:FindFirstChild("CLIENT_REMOTES") and ReplicatedStorage.CLIENT_REMOTES:FindFirstChild("TransferItem")
     if remote then
         remote:FireServer(itemId, "Main", "Storage")
-        print("Đã gửi Remote TransferItem cho ID:", itemId)
     else
-        warn("Không tìm thấy RemoteEvent: ReplicatedStorage.CLIENT_REMOTES.TransferItem")
+        warn("Không tìm thấy RemoteEvent: TransferItem")
     end
 end
 
@@ -242,13 +241,13 @@ local function teleportAndInteract(targetInstance)
         VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, true, game)
         task.wait(0.05)
         VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, false, game)
-        print("Đã Teleport tới:", targetInstance:GetFullName())
-    else
-        warn("Không tìm thấy CFrame của:", targetInstance:GetFullName())
     end
 end
 
--- 8. Quét danh sách vật phẩm
+-- Mảng lưu trữ danh sách ID đang lọc trên màn hình
+local currentVisibleIDs = {}
+
+-- 8. Quét danh sách
 local function scanLootables()
     for _, child in ipairs(scrollFrame:GetChildren()) do
         if child:IsA("TextButton") then
@@ -256,11 +255,10 @@ local function scanLootables()
         end
     end
 
+    table.clear(currentVisibleIDs)
+
     local lootablesFolder = workspace:FindFirstChild("Lootables")
-    if not lootablesFolder then
-        warn("Không tìm thấy thư mục workspace.Lootables")
-        return
-    end
+    if not lootablesFolder then return end
 
     local filterText = string.lower(searchBox.Text)
 
@@ -271,6 +269,9 @@ local function scanLootables()
             local itemType = tostring(item:GetAttribute("Type") or "Unknown")
 
             if filterText == "" or string.find(string.lower(itemName), filterText, 1, true) then
+                -- Đưa ID vào danh sách lưu trữ cho Transfer All
+                table.insert(currentVisibleIDs, itemId)
+
                 local itemBtn = Instance.new("TextButton")
                 itemBtn.Name = "ItemBtn_" .. itemName
                 itemBtn.Size = UDim2.new(1, -10, 0, 42)
@@ -282,14 +283,10 @@ local function scanLootables()
                 itemBtn.TextXAlignment = Enum.TextXAlignment.Left
                 itemBtn.Parent = scrollFrame
 
-                -- Lưu thông tin ID trực tiếp vào nút để dùng cho Transfer All
-                itemBtn:SetAttribute("TargetID", itemId)
-
                 local btnCorner = Instance.new("UICorner")
                 btnCorner.CornerRadius = UDim.new(0, 4)
                 btnCorner.Parent = itemBtn
 
-                -- Bấm thủ công từng món
                 itemBtn.MouseButton1Click:Connect(function()
                     if currentMode == "Transfer" then
                         transferItem(itemId)
@@ -302,29 +299,32 @@ local function scanLootables()
     end
 end
 
--- 9. Xử lý sự kiện bấm "Transfer All"
+-- 9. Logic Transfer All ĐÃ ĐƯỢC FIX LỖI
 transferAllBtn.MouseButton1Click:Connect(function()
     if isTransferringAll then return end
-    isTransferringAll = true
-    transferAllBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 50)
-    transferAllBtn.Text = "⏳ Đang lấy tất cả..."
+    if #currentVisibleIDs == 0 then
+        print("Danh sách trống, không có item nào để lấy!")
+        return
+    end
 
+    isTransferringAll = true
+    transferAllBtn.BackgroundColor3 = Color3.fromRGB(180, 130, 30)
+    
     task.spawn(function()
-        for _, child in ipairs(scrollFrame:GetChildren()) do
-            if child:IsA("TextButton") then
-                local targetId = child:GetAttribute("TargetID")
-                if targetId then
-                    transferItem(targetId)
-                    task.wait(0.1) -- Khoảng hoãn nhỏ để tránh gửi Remote quá nhanh bị Kick
-                end
-            end
+        local totalItems = #currentVisibleIDs
+        print("Đang tiến hành lấy tất cả:", totalItems, "món đồ...")
+
+        for index, itemId in ipairs(currentVisibleIDs) do
+            transferAllBtn.Text = string.format("⏳ Đang lấy (%d/%d)...", index, totalItems)
+            transferItem(itemId)
+            task.wait(0.05) -- Hoãn 0.05 giây giữa mỗi lần gửi để không bị nghẽn Server
         end
 
         transferAllBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 90)
         transferAllBtn.Text = "📥 Transfer All (Lấy tất cả trong danh sách)"
         isTransferringAll = false
 
-        -- Quét lại danh sách sau khi lấy xong
+        -- Cập nhật lại danh sách sau khi đã gửi xong
         task.wait(0.5)
         scanLootables()
     end)
