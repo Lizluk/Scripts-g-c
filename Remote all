@@ -1,4 +1,4 @@
--- Remote Executor GUI & Smart Multi-Target Kill System (Fixed Load & Added Safe-Compile)
+-- Remote Executor & Smart Multi-Target Kill & Script Hub System (Fixed & Added Tab 3)
 -- Tương thích với các Executor phổ biến (Delta, Hydrogen, Wave, Codex, v.v.)
 
 local UserInputService = game:GetService("UserInputService")
@@ -14,6 +14,7 @@ local PlaceId = game.PlaceId
 local SelectedPlayers = {}
 local SaveFileName = "RemoteExec_Place_" .. tostring(PlaceId) .. ".json"
 local TargetSaveFileName = "TargetExec_Place_" .. tostring(PlaceId) .. ".json"
+local ScriptHubSaveFileName = "ScriptHub_Place_" .. tostring(PlaceId) .. ".json"
 
 -- Phím tắt kích hoạt chung cho hệ thống Kill (Mặc định: KeyCode.Q)
 local KillGlobalKey = Enum.KeyCode.Q
@@ -64,7 +65,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -40, 0, 35)
 TitleLabel.Position = UDim2.new(0, 10, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "⚡ Remote Executor & Smart Multi-Kill System (Place: " .. PlaceId .. ")"
+TitleLabel.Text = "⚡ Remote Executor & Script Hub System (Place: " .. PlaceId .. ")"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 14
 TitleLabel.Font = Enum.Font.SourceSansBold
@@ -88,7 +89,7 @@ CloseBtn.MouseButton1Click:Connect(function()
 end)
 
 ----------------------------------------------------------------
--- HỆ THỐNG TABS
+-- HỆ THỐNG TABS (3 TABS)
 ----------------------------------------------------------------
 local TabFrame = Instance.new("Frame")
 TabFrame.Size = UDim2.new(1, -20, 0, 30)
@@ -97,7 +98,7 @@ TabFrame.BackgroundTransparency = 1
 TabFrame.Parent = MainFrame
 
 local Tab1Btn = Instance.new("TextButton")
-Tab1Btn.Size = UDim2.new(0, 140, 1, 0)
+Tab1Btn.Size = UDim2.new(0, 130, 1, 0)
 Tab1Btn.Position = UDim2.new(0, 0, 0, 0)
 Tab1Btn.BackgroundColor3 = Color3.fromRGB(45, 80, 140)
 Tab1Btn.Text = "⚡ Remote Exec"
@@ -108,15 +109,26 @@ Tab1Btn.Parent = TabFrame
 Instance.new("UICorner", Tab1Btn).CornerRadius = UDim.new(0, 5)
 
 local Tab2Btn = Instance.new("TextButton")
-Tab2Btn.Size = UDim2.new(0, 140, 1, 0)
-Tab2Btn.Position = UDim2.new(0, 145, 0, 0)
+Tab2Btn.Size = UDim2.new(0, 130, 1, 0)
+Tab2Btn.Position = UDim2.new(0, 135, 0, 0)
 Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-Tab2Btn.Text = "⚔️ Multi-Kill System"
+Tab2Btn.Text = "⚔️ Multi-Kill"
 Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
 Tab2Btn.Font = Enum.Font.SourceSansBold
 Tab2Btn.TextSize = 13
 Tab2Btn.Parent = TabFrame
 Instance.new("UICorner", Tab2Btn).CornerRadius = UDim.new(0, 5)
+
+local Tab3Btn = Instance.new("TextButton")
+Tab3Btn.Size = UDim2.new(0, 130, 1, 0)
+Tab3Btn.Position = UDim2.new(0, 270, 0, 0)
+Tab3Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+Tab3Btn.Text = "📜 Script Hub"
+Tab3Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+Tab3Btn.Font = Enum.Font.SourceSansBold
+Tab3Btn.TextSize = 13
+Tab3Btn.Parent = TabFrame
+Instance.new("UICorner", Tab3Btn).CornerRadius = UDim.new(0, 5)
 
 local ExecContainer = Instance.new("Frame")
 ExecContainer.Size = UDim2.new(1, 0, 1, -70)
@@ -131,22 +143,32 @@ KillContainer.BackgroundTransparency = 1
 KillContainer.Visible = false
 KillContainer.Parent = MainFrame
 
+local HubContainer = Instance.new("Frame")
+HubContainer.Size = UDim2.new(1, 0, 1, -70)
+HubContainer.Position = UDim2.new(0, 0, 0, 70)
+HubContainer.BackgroundTransparency = 1
+HubContainer.Visible = false
+HubContainer.Parent = MainFrame
+
 Tab1Btn.MouseButton1Click:Connect(function()
-    ExecContainer.Visible = true
-    KillContainer.Visible = false
-    Tab1Btn.BackgroundColor3 = Color3.fromRGB(45, 80, 140)
-    Tab1Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    ExecContainer.Visible = true; KillContainer.Visible = false; HubContainer.Visible = false
+    Tab1Btn.BackgroundColor3 = Color3.fromRGB(45, 80, 140); Tab1Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab3Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab3Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
 end)
 
 Tab2Btn.MouseButton1Click:Connect(function()
-    ExecContainer.Visible = false
-    KillContainer.Visible = true
-    Tab2Btn.BackgroundColor3 = Color3.fromRGB(140, 45, 80)
-    Tab2Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Tab1Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    Tab1Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    ExecContainer.Visible = false; KillContainer.Visible = true; HubContainer.Visible = false
+    Tab2Btn.BackgroundColor3 = Color3.fromRGB(140, 45, 80); Tab2Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Tab1Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab1Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab3Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab3Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+end)
+
+Tab3Btn.MouseButton1Click:Connect(function()
+    ExecContainer.Visible = false; KillContainer.Visible = false; HubContainer.Visible = true
+    Tab3Btn.BackgroundColor3 = Color3.fromRGB(80, 45, 140); Tab3Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Tab1Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab1Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
 end)
 
 ----------------------------------------------------------------
@@ -270,7 +292,6 @@ end
 function AddRemoteToList(name, rawCode, mode, val, savedMouseClick, savedKeyName)
     if rawCode == "" then return end
     
-    -- Cho phép biên dịch, nếu lỗi vẫn hiện lên danh sách để người dùng dễ nhìn và sửa lại
     local compiledFunc, err = loadstring(rawCode)
     if not compiledFunc then
         warn("Cảnh báo lỗi cú pháp code: ", err)
@@ -979,9 +1000,198 @@ AddTargetBtn.MouseButton1Click:Connect(function()
     TargetNameBox.Text = ""
 end)
 
--- THỰC HIỆN LOAD DỮ LIỆU ĐÃ LƯU KHI KHỞI ĐỘNG
+----------------------------------------------------------------
+-- TAB 3: SCRIPT HUB (QUẢN LÝ LOADSTRING CÁ NHÂN)
+----------------------------------------------------------------
+local HubCodeInput = Instance.new("TextBox")
+HubCodeInput.Size = UDim2.new(1, -20, 0, 75)
+HubCodeInput.Position = UDim2.new(0, 10, 0, 0)
+HubCodeInput.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+HubCodeInput.TextColor3 = Color3.fromRGB(200, 200, 255)
+HubCodeInput.PlaceholderText = "Dán đoạn loadstring vào đây (VD: loadstring(game:HttpGet(...))())"
+HubCodeInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+HubCodeInput.Text = ""
+HubCodeInput.TextSize = 13
+HubCodeInput.Font = Enum.Font.Code
+HubCodeInput.TextXAlignment = Enum.TextXAlignment.Left
+HubCodeInput.TextYAlignment = Enum.TextYAlignment.Top
+HubCodeInput.ClearTextOnFocus = false
+HubCodeInput.MultiLine = true
+HubCodeInput.Parent = HubContainer
+Instance.new("UICorner", HubCodeInput).CornerRadius = UDim.new(0, 6)
+
+local HubNameBox = Instance.new("TextBox")
+HubNameBox.Size = UDim2.new(0, 200, 0, 28)
+HubNameBox.Position = UDim2.new(0, 10, 0, 82)
+HubNameBox.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+HubNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+HubNameBox.PlaceholderText = "Tên Script (VD: Emote Anywhere)..."
+HubNameBox.Text = ""
+HubNameBox.Font = Enum.Font.SourceSans
+HubNameBox.TextSize = 14
+HubNameBox.Parent = HubContainer
+Instance.new("UICorner", HubNameBox).CornerRadius = UDim.new(0, 5)
+
+local AddHubBtn = Instance.new("TextButton")
+AddHubBtn.Size = UDim2.new(0, 444, 0, 28)
+AddHubBtn.Position = UDim2.new(0, 214, 0, 82)
+AddHubBtn.BackgroundColor3 = Color3.fromRGB(100, 50, 180)
+AddHubBtn.Text = "+ Thêm Script vào danh sách"
+AddHubBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AddHubBtn.Font = Enum.Font.SourceSansBold
+AddHubBtn.TextSize = 14
+AddHubBtn.Parent = HubContainer
+Instance.new("UICorner", AddHubBtn).CornerRadius = UDim.new(0, 5)
+
+local HubScrollFrame = Instance.new("ScrollingFrame")
+HubScrollFrame.Size = UDim2.new(1, -20, 0, 265)
+HubScrollFrame.Position = UDim2.new(0, 10, 0, 118)
+HubScrollFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+HubScrollFrame.BorderSizePixel = 0
+HubScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+HubScrollFrame.ScrollBarThickness = 6
+HubScrollFrame.Parent = HubContainer
+Instance.new("UICorner", HubScrollFrame).CornerRadius = UDim.new(0, 6)
+
+local HubUIList = Instance.new("UIListLayout")
+HubUIList.Parent = HubScrollFrame
+HubUIList.SortOrder = Enum.SortOrder.LayoutOrder
+HubUIList.Padding = UDim.new(0, 6)
+
+HubUIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    HubScrollFrame.CanvasSize = UDim2.new(0, 0, 0, HubUIList.AbsoluteContentSize.Y + 10)
+end)
+
+local ScriptHubList = {}
+
+local function SaveScriptHubToFile()
+    if not writefile then return end
+    local exportTable = {}
+    for _, item in ipairs(ScriptHubList) do
+        table.insert(exportTable, {
+            Name = item.Name,
+            Code = item.Code,
+            IsRunning = item.IsRunning
+        })
+    end
+    pcall(function()
+        writefile(ScriptHubSaveFileName, HttpService:JSONEncode(exportTable))
+    end)
+end
+
+local function AddScriptHubToList(name, rawCode, isRunning)
+    if rawCode == "" then return end
+
+    local itemData = {
+        Name = (name ~= "" and name) or "Script #" .. (#ScriptHubList + 1),
+        Code = rawCode,
+        IsRunning = (isRunning == true)
+    }
+
+    local ItemFrame = Instance.new("Frame")
+    ItemFrame.Size = UDim2.new(1, -10, 0, 45)
+    ItemFrame.BackgroundColor3 = Color3.fromRGB(30, 25, 40)
+    ItemFrame.Parent = HubScrollFrame
+    Instance.new("UICorner", ItemFrame).CornerRadius = UDim.new(0, 6)
+
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Size = UDim2.new(0, 380, 1, 0)
+    NameLabel.Position = UDim2.new(0, 10, 0, 0)
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.Text = itemData.Name
+    NameLabel.TextColor3 = Color3.fromRGB(230, 220, 255)
+    NameLabel.Font = Enum.Font.SourceSansBold
+    NameLabel.TextSize = 13
+    NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    NameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    NameLabel.Parent = ItemFrame
+
+    local RunHubBtn = Instance.new("TextButton")
+    RunHubBtn.Size = UDim2.new(0, 110, 0, 28)
+    RunHubBtn.Position = UDim2.new(1, -165, 0, 8)
+    RunHubBtn.Font = Enum.Font.SourceSansBold
+    RunHubBtn.TextSize = 12
+    RunHubBtn.Parent = ItemFrame
+    Instance.new("UICorner", RunHubBtn).CornerRadius = UDim.new(0, 4)
+
+    local function UpdateHubBtnUI()
+        if itemData.IsRunning then
+            RunHubBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 80)
+            RunHubBtn.Text = "🟢 ĐÃ CHẠY"
+        else
+            RunHubBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+            RunHubBtn.Text = "⚪ KÍCH HOẠT"
+        end
+    end
+    UpdateHubBtnUI()
+
+    RunHubBtn.MouseButton1Click:Connect(function()
+        if not itemData.IsRunning then
+            itemData.IsRunning = true
+            UpdateHubBtnUI()
+            SaveScriptHubToFile()
+            task.spawn(function()
+                local success, err = pcall(function()
+                    local f = loadstring(itemData.Code)
+                    if f then f() end
+                end)
+                if not success then
+                    warn("Lỗi khi chạy Script Hub: ", err)
+                end
+            end)
+        else
+            -- Đã kích hoạt rồi thì bấm vào báo trạng thái hoặc giữ nguyên
+            itemData.IsRunning = false
+            UpdateHubBtnUI()
+            SaveScriptHubToFile()
+        end
+    end)
+
+    local DelHubBtn = Instance.new("TextButton")
+    DelHubBtn.Size = UDim2.new(0, 45, 0, 28)
+    DelHubBtn.Position = UDim2.new(1, -50, 0, 8)
+    DelHubBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    DelHubBtn.Text = "Xóa"
+    DelHubBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DelHubBtn.Font = Enum.Font.SourceSansBold
+    DelHubBtn.TextSize = 12
+    DelHubBtn.Parent = ItemFrame
+    Instance.new("UICorner", DelHubBtn).CornerRadius = UDim.new(0, 4)
+
+    DelHubBtn.MouseButton1Click:Connect(function()
+        for idx, elem in ipairs(ScriptHubList) do
+            if elem == itemData then table.remove(ScriptHubList, idx); break end
+        end
+        ItemFrame:Destroy()
+        SaveScriptHubToFile()
+    end)
+
+    table.insert(ScriptHubList, itemData)
+end
+
+local function LoadScriptHubFromFile()
+    if not isfile or not isfile(ScriptHubSaveFileName) or not readfile then return end
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(readfile(ScriptHubSaveFileName))
+    end)
+    if success and type(result) == "table" then
+        for _, savedData in ipairs(result) do
+            AddScriptHubToList(savedData.Name, savedData.Code, savedData.IsRunning)
+        end
+    end
+end
+
+AddHubBtn.MouseButton1Click:Connect(function()
+    AddScriptHubToList(HubNameBox.Text, HubCodeInput.Text, false)
+    SaveScriptHubToFile()
+    HubCodeInput.Text = ""
+    HubNameBox.Text = ""
+end)
+
+-- THỰC HIỆN LOAD TOÀN BỘ DỮ LIỆU KHI KHỞI ĐỘNG
 LoadDataFromFile()
 LoadTargetDataFromFile()
+LoadScriptHubFromFile()
 
 ----------------------------------------------------------------
 -- LẮNG NGHE SỰ KIỆN PHÍM TẮT VÀ CHUỘT TOÀN CỤC
