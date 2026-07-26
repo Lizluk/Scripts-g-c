@@ -1,4 +1,4 @@
--- Remote Executor & Smart Multi-Target Kill & Script Hub System (Global Script Hub Added)
+-- Remote Executor & Smart Multi-Target Kill & Script Hub System (Added Settings Tab & Toggle Keybind)
 -- Tương thích với các Executor phổ biến (Delta, Hydrogen, Wave, Codex, v.v.)
 
 local UserInputService = game:GetService("UserInputService")
@@ -14,9 +14,14 @@ local PlaceId = game.PlaceId
 local SelectedPlayers = {}
 local SaveFileName = "RemoteExec_Place_" .. tostring(PlaceId) .. ".json"
 local TargetSaveFileName = "TargetExec_Place_" .. tostring(PlaceId) .. ".json"
-
--- [ĐÃ CẬP NHẬT] Đổi tên file Script Hub thành Global để dùng chung vĩnh viễn trên mọi game
 local ScriptHubSaveFileName = "Global_ScriptHub_Master.json"
+
+-- File lưu cấu hình cài đặt chung (Bao gồm phím ẩn/hiện GUI)
+local SettingsSaveFileName = "Global_Settings_Master.json"
+
+-- Phím tắt ẩn/hiện toàn bộ Menu GUI (Mặc định: RightShift)
+local ToggleGuiKey = Enum.KeyCode.RightShift
+local IsBindingToggleGuiKey = false
 
 -- Phím tắt kích hoạt chung cho hệ thống Kill (Mặc định: KeyCode.Q)
 local KillGlobalKey = Enum.KeyCode.Q
@@ -64,7 +69,7 @@ MainCorner.Parent = MainFrame
 
 -- Title Bar
 local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, -40, 0, 35)
+TitleLabel.Size = UDim2.new(1, -70, 0, 35)
 TitleLabel.Position = UDim2.new(0, 10, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Text = "⚡ Remote Executor & Script Hub System (Place: " .. PlaceId .. ")"
@@ -74,7 +79,23 @@ TitleLabel.Font = Enum.Font.SourceSansBold
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = MainFrame
 
--- Close Button
+-- Minimize / Hide Button (Thay vì tắt hẳn, giờ bấm nút [-] hoặc phím tắt sẽ ẩn menu)
+local HideBtn = Instance.new("TextButton")
+HideBtn.Size = UDim2.new(0, 25, 0, 25)
+HideBtn.Position = UDim2.new(1, -60, 0, 5)
+HideBtn.BackgroundColor3 = Color3.fromRGB(180, 140, 40)
+HideBtn.Text = "-"
+HideBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+HideBtn.Font = Enum.Font.SourceSansBold
+HideBtn.TextSize = 16
+HideBtn.Parent = MainFrame
+Instance.new("UICorner", HideBtn).CornerRadius = UDim.new(0, 5)
+
+HideBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+end)
+
+-- Close Button (Giữ lại nút X nếu muốn ẩn hoàn toàn hoặc dùng để ẩn giao diện)
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 25, 0, 25)
 CloseBtn.Position = UDim2.new(1, -30, 0, 5)
@@ -87,11 +108,11 @@ CloseBtn.Parent = MainFrame
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 5)
 
 CloseBtn.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
+    MainFrame.Visible = false
 end)
 
 ----------------------------------------------------------------
--- HỆ THỐNG TABS (3 TABS)
+-- HỆ THỐNG TABS (4 TABS: Thêm Tab 4 - Settings)
 ----------------------------------------------------------------
 local TabFrame = Instance.new("Frame")
 TabFrame.Size = UDim2.new(1, -20, 0, 30)
@@ -100,7 +121,7 @@ TabFrame.BackgroundTransparency = 1
 TabFrame.Parent = MainFrame
 
 local Tab1Btn = Instance.new("TextButton")
-Tab1Btn.Size = UDim2.new(0, 130, 1, 0)
+Tab1Btn.Size = UDim2.new(0, 160, 1, 0)
 Tab1Btn.Position = UDim2.new(0, 0, 0, 0)
 Tab1Btn.BackgroundColor3 = Color3.fromRGB(45, 80, 140)
 Tab1Btn.Text = "⚡ Remote Exec"
@@ -111,8 +132,8 @@ Tab1Btn.Parent = TabFrame
 Instance.new("UICorner", Tab1Btn).CornerRadius = UDim.new(0, 5)
 
 local Tab2Btn = Instance.new("TextButton")
-Tab2Btn.Size = UDim2.new(0, 130, 1, 0)
-Tab2Btn.Position = UDim2.new(0, 135, 0, 0)
+Tab2Btn.Size = UDim2.new(0, 160, 1, 0)
+Tab2Btn.Position = UDim2.new(0, 165, 0, 0)
 Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 Tab2Btn.Text = "⚔️ Multi-Kill"
 Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
@@ -122,8 +143,8 @@ Tab2Btn.Parent = TabFrame
 Instance.new("UICorner", Tab2Btn).CornerRadius = UDim.new(0, 5)
 
 local Tab3Btn = Instance.new("TextButton")
-Tab3Btn.Size = UDim2.new(0, 130, 1, 0)
-Tab3Btn.Position = UDim2.new(0, 270, 0, 0)
+Tab3Btn.Size = UDim2.new(0, 160, 1, 0)
+Tab3Btn.Position = UDim2.new(0, 330, 0, 0)
 Tab3Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 Tab3Btn.Text = "📜 Script Hub"
 Tab3Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
@@ -131,6 +152,17 @@ Tab3Btn.Font = Enum.Font.SourceSansBold
 Tab3Btn.TextSize = 13
 Tab3Btn.Parent = TabFrame
 Instance.new("UICorner", Tab3Btn).CornerRadius = UDim.new(0, 5)
+
+local Tab4Btn = Instance.new("TextButton")
+Tab4Btn.Size = UDim2.new(0, 160, 1, 0)
+Tab4Btn.Position = UDim2.new(0, 495, 0, 0)
+Tab4Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+Tab4Btn.Text = "⚙️ Settings"
+Tab4Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+Tab4Btn.Font = Enum.Font.SourceSansBold
+Tab4Btn.TextSize = 13
+Tab4Btn.Parent = TabFrame
+Instance.new("UICorner", Tab4Btn).CornerRadius = UDim.new(0, 5)
 
 local ExecContainer = Instance.new("Frame")
 ExecContainer.Size = UDim2.new(1, 0, 1, -70)
@@ -152,25 +184,44 @@ HubContainer.BackgroundTransparency = 1
 HubContainer.Visible = false
 HubContainer.Parent = MainFrame
 
+-- Container cho Tab Cài đặt (Settings)
+local SettingsContainer = Instance.new("Frame")
+SettingsContainer.Size = UDim2.new(1, 0, 1, -70)
+SettingsContainer.Position = UDim2.new(0, 0, 0, 70)
+SettingsContainer.BackgroundTransparency = 1
+SettingsContainer.Visible = false
+SettingsContainer.Parent = MainFrame
+
 Tab1Btn.MouseButton1Click:Connect(function()
-    ExecContainer.Visible = true; KillContainer.Visible = false; HubContainer.Visible = false
+    ExecContainer.Visible = true; KillContainer.Visible = false; HubContainer.Visible = false; SettingsContainer.Visible = false
     Tab1Btn.BackgroundColor3 = Color3.fromRGB(45, 80, 140); Tab1Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
     Tab3Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab3Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab4Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab4Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
 end)
 
 Tab2Btn.MouseButton1Click:Connect(function()
-    ExecContainer.Visible = false; KillContainer.Visible = true; HubContainer.Visible = false
+    ExecContainer.Visible = false; KillContainer.Visible = true; HubContainer.Visible = false; SettingsContainer.Visible = false
     Tab2Btn.BackgroundColor3 = Color3.fromRGB(140, 45, 80); Tab2Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     Tab1Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab1Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
     Tab3Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab3Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab4Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab4Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
 end)
 
 Tab3Btn.MouseButton1Click:Connect(function()
-    ExecContainer.Visible = false; KillContainer.Visible = false; HubContainer.Visible = true
+    ExecContainer.Visible = false; KillContainer.Visible = false; HubContainer.Visible = true; SettingsContainer.Visible = false
     Tab3Btn.BackgroundColor3 = Color3.fromRGB(80, 45, 140); Tab3Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     Tab1Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab1Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
     Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab4Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab4Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+end)
+
+Tab4Btn.MouseButton1Click:Connect(function()
+    ExecContainer.Visible = false; KillContainer.Visible = false; HubContainer.Visible = false; SettingsContainer.Visible = true
+    Tab4Btn.BackgroundColor3 = Color3.fromRGB(100, 100, 50); Tab4Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Tab1Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab1Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab3Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab3Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
 end)
 
 ----------------------------------------------------------------
@@ -1003,7 +1054,7 @@ AddTargetBtn.MouseButton1Click:Connect(function()
 end)
 
 ----------------------------------------------------------------
--- TAB 3: SCRIPT HUB (LƯU VĨNH VỄN TOÀN CỤC - DÙNG CHUNG MỌI GAME)
+-- TAB 3: SCRIPT HUB (LƯU VĨNH VỄN TOÀN CỤC)
 ----------------------------------------------------------------
 local HubCodeInput = Instance.new("TextBox")
 HubCodeInput.Size = UDim2.new(1, -20, 0, 75)
@@ -1106,7 +1157,6 @@ local function AddScriptHubToList(name, rawCode)
     NameLabel.TextTruncate = Enum.TextTruncate.AtEnd
     NameLabel.Parent = ItemFrame
 
-    -- Chỉ có nút Kích Hoạt (Chạy) và Xóa
     local RunHubBtn = Instance.new("TextButton")
     RunHubBtn.Size = UDim2.new(0, 110, 0, 28)
     RunHubBtn.Position = UDim2.new(1, -165, 0, 8)
@@ -1171,16 +1221,109 @@ AddHubBtn.MouseButton1Click:Connect(function()
     HubNameBox.Text = ""
 end)
 
--- THỰC HIỆN LOAD TOÀN BỘ DỮ LIỆU KHI KHỞI ĐỘNG
+----------------------------------------------------------------
+-- TAB 4: SETTINGS (CÀI ĐẶT PHÍM TẮT ẨN/HIỆN GUI)
+----------------------------------------------------------------
+local SettingsBoxFrame = Instance.new("Frame")
+SettingsBoxFrame.Size = UDim2.new(1, -20, 0, 80)
+SettingsBoxFrame.Position = UDim2.new(0, 10, 0, 10)
+SettingsBoxFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+SettingsBoxFrame.Parent = SettingsContainer
+Instance.new("UICorner", SettingsBoxFrame).CornerRadius = UDim.new(0, 6)
+
+local SettingLabelTitle = Instance.new("TextLabel")
+SettingLabelTitle.Size = UDim2.new(1, -20, 0, 30)
+SettingLabelTitle.Position = UDim2.new(0, 10, 0, 5)
+SettingLabelTitle.BackgroundTransparency = 1
+SettingLabelTitle.Text = "⌨️ Cài đặt Phím Tắt Ẩn / Hiện Menu GUI:"
+SettingLabelTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+SettingLabelTitle.Font = Enum.Font.SourceSansBold
+SettingLabelTitle.TextSize = 14
+SettingLabelTitle.TextXAlignment = Enum.TextXAlignment.Left
+SettingLabelTitle.Parent = SettingsBoxFrame
+
+local SettingSubDesc = Instance.new("TextLabel")
+SettingSubDesc.Size = UDim2.new(1, -20, 0, 20)
+SettingSubDesc.Position = UDim2.new(0, 10, 0, 30)
+SettingSubDesc.BackgroundTransparency = 1
+SettingSubDesc.Text = "Bấm vào nút bên dưới rồi nhấn phím bất kỳ trên bàn phím để đổi phím tắt ẩn/hiện bảng."
+SettingSubDesc.TextColor3 = Color3.fromRGB(160, 160, 160)
+SettingSubDesc.Font = Enum.Font.SourceSans
+SettingSubDesc.TextSize = 12
+SettingSubDesc.TextXAlignment = Enum.TextXAlignment.Left
+SettingSubDesc.Parent = SettingsBoxFrame
+
+local ToggleKeyBindBtn = Instance.new("TextButton")
+ToggleKeyBindBtn.Size = UDim2.new(0, 180, 0, 30)
+ToggleKeyBindBtn.Position = UDim2.new(0, 10, 0, 55)
+ToggleKeyBindBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 180)
+ToggleKeyBindBtn.Text = "Phím Ẩn/Hiện: RightShift"
+ToggleKeyBindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleKeyBindBtn.Font = Enum.Font.SourceSansBold
+ToggleKeyBindBtn.TextSize = 13
+ToggleKeyBindBtn.Parent = SettingsBoxFrame
+Instance.new("UICorner", ToggleKeyBindBtn).CornerRadius = UDim.new(0, 5)
+
+-- Hàm lưu cài đặt ra file JSON
+local function SaveSettingsToFile()
+    if not writefile then return end
+    local settingsData = {
+        ToggleGuiKeyName = ToggleGuiKey.Name
+    }
+    pcall(function()
+        writefile(SettingsSaveFileName, HttpService:JSONEncode(settingsData))
+    end)
+end
+
+-- Hàm đọc cấu hình cài đặt từ file JSON
+local function LoadSettingsFromFile()
+    if not isfile or not isfile(SettingsSaveFileName) or not readfile then return end
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(readfile(SettingsSaveFileName))
+    end)
+    if success and type(result) == "table" and result.ToggleGuiKeyName then
+        if Enum.KeyCode[result.ToggleGuiKeyName] then
+            ToggleGuiKey = Enum.KeyCode[result.ToggleGuiKeyName]
+            ToggleKeyBindBtn.Text = "Phím Ẩn/Hiện: " .. ToggleGuiKey.Name
+        end
+    end
+end
+
+ToggleKeyBindBtn.MouseButton1Click:Connect(function()
+    IsBindingToggleGuiKey = true
+    ToggleKeyBindBtn.Text = "Đang chờ nhấn phím..."
+    ToggleKeyBindBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 30)
+end)
+
+----------------------------------------------------------------
+-- LOAD TOÀN BỘ DỮ LIỆU KHI KHỞI ĐỘNG
+----------------------------------------------------------------
 LoadDataFromFile()
 LoadTargetDataFromFile()
 LoadScriptHubFromFile()
+LoadSettingsFromFile()
 
 ----------------------------------------------------------------
 -- LẮNG NGHE SỰ KIỆN PHÍM TẮT VÀ CHUỘT TOÀN CỤC
 ----------------------------------------------------------------
 UserInputService.InputBegan:Connect(function(input, gpe)
     if input.UserInputType == Enum.UserInputType.Keyboard then
+        -- Gán phím đổi Toggle GUI từ Tab Settings
+        if IsBindingToggleGuiKey then
+            ToggleGuiKey = input.KeyCode
+            ToggleKeyBindBtn.Text = "Phím Ẩn/Hiện: " .. input.KeyCode.Name
+            ToggleKeyBindBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 180)
+            IsBindingToggleGuiKey = false
+            SaveSettingsToFile()
+            return
+        end
+
+        -- Phím ẩn/hiện toàn bộ Menu GUI
+        if input.KeyCode == ToggleGuiKey and not gpe then
+            MainFrame.Visible = not MainFrame.Visible
+            return
+        end
+
         if ActiveBindingItem then
             ActiveBindingItem.Key = input.KeyCode
             ActiveBindingItem.KeyBtn.Text = "Phím: " .. input.KeyCode.Name
