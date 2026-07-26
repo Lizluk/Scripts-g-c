@@ -30,8 +30,8 @@ local maxDetectDistance = 150
 -- ================================================================
 -- CẤU HÌNH TỐC ĐỘ GỬI REMOTE DAMAGE & SKILL (CHỐNG BAN)
 -- ================================================================
-local attackCooldown = 0.2     -- Tốc độ đòn đánh thường và đòn thở (1 giây)
-local whipCooldown = 0.2     -- Tốc độ đòn đánh đuôi riêng (0.2 giây)
+local attackCooldown = 1     -- Tốc độ đòn đánh thường và đòn thở (1 giây)
+local whipCooldown = 1     -- Tốc độ đòn đánh đuôi riêng (0.2 giây)
 local passiveCooldown = 10   -- TỐC ĐỘ SKILL BỊ ĐỘNG (Gửi remote mỗi 10 giây)
 -- ================================================================
 
