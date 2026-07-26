@@ -1,4 +1,4 @@
--- Remote Executor GUI & Smart Multi-Target Kill System (Fixed Auto-Save per Place ID)
+-- Remote Executor GUI & Smart Multi-Target Kill System (Fixed JSON Loading Bug)
 -- Tương thích với các Executor phổ biến (Delta, Hydrogen, Wave, Codex, v.v.)
 
 local UserInputService = game:GetService("UserInputService")
@@ -471,7 +471,9 @@ end
 
 local function LoadDataFromFile()
     if not isfile or not isfile(SaveFileName) or not readfile then return end
-    local success, result = pcall(function() return HttpService:JSONDecode(readfile(SaveFileName)) end)
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(readfile(SaveFileName))
+    end)
     if success and type(result) == "table" then
         for _, savedData in ipairs(result) do
             AddRemoteToList(savedData.Name, savedData.Code, savedData.Mode, savedData.Value, savedData.UseMouseClick, savedData.KeyName)
@@ -485,8 +487,6 @@ AddBtn.MouseButton1Click:Connect(function()
     CodeInput.Text = ""
     NameBox.Text = ""
 end)
-
-LoadDataFromFile()
 
 ----------------------------------------------------------------
 -- TAB 2: MULTI-TARGET KILL SYSTEM
@@ -776,7 +776,7 @@ local function ExecuteKillForTargetRemote(itemData)
             if targetChar then
                 local codeToRun = itemData.Code
                 if string.find(codeToRun, itemData.SampleName .. "%.Humanoid") then
-                    codeToRun = string.gsub(codeToRun, "workspace%." .. itemData.SampleName .. "%.Humanoid", "game:GetService('Players')['" .. plr.Name  .. "'].Character.Humanoid")
+                    codeToRun = string.gsub(codeToRun, "workspace%." .. itemData.SampleName .. "%.Humanoid", "game:GetService('Players')['" .. plr.Name .. "'].Character.Humanoid")
                 else
                     codeToRun = string.gsub(codeToRun, itemData.SampleName, plr.Name)
                 end
@@ -962,7 +962,9 @@ end
 
 local function LoadTargetDataFromFile()
     if not isfile or not isfile(TargetSaveFileName) or not readfile then return end
-    local success, result = pcall(function() return HttpService:JSONDecode(readfile(TargetSaveFileName)) end)
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(readfile(TargetSaveFileName))
+    end)
     if success and type(result) == "table" then
         for _, savedData in ipairs(result) do
             AddTargetRemoteToList(savedData.Name, savedData.Code, savedData.SampleName, savedData.Mode, savedData.Value, savedData.IsActive)
@@ -977,6 +979,8 @@ AddTargetBtn.MouseButton1Click:Connect(function()
     TargetNameBox.Text = ""
 end)
 
+-- THỰC HIỆN LOAD DỮ LIỆU ĐÃ LƯU KHI KHỞI ĐỘNG
+LoadDataFromFile()
 LoadTargetDataFromFile()
 
 ----------------------------------------------------------------
