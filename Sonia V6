@@ -11,7 +11,7 @@ local damageRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Cha
 local damageRemoteBreath = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemoteBreath")
 local damageRemoteWhip = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemoteWhip")
 local stateAilmentRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("StateAilment")
-local activateAbilityRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("ActivateAbility") -- Remote dùng cho Grab
+local activateAbilityRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("ActivateAbility")
 local drinkRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DrinkRemote")
 local foodRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Food")
 local portalRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Portal")
@@ -25,7 +25,7 @@ local killAuraActive = true
 local autoDrinkActive = false 
 local autoEatActive = false 
 local passiveSkillActive = false 
-local autoGrabActive = false -- Trạng thái Auto Grab mới
+local autoGrabActive = false 
 local closestPlayerName = "" 
 local maxDetectDistance = 150 
 
@@ -35,7 +35,7 @@ local maxDetectDistance = 150
 local attackCooldown = 1     -- Tốc độ đòn đánh thường và đòn thở (1 giây)
 local whipCooldown = 0.8     -- Tốc độ đòn đánh đuôi riêng (0.8 giây)
 local passiveCooldown = 10   -- Tốc độ skill bị động (Mỗi 10 giây)
-local grabCooldown = 0.5     -- TỐC ĐỘ AUTO GRAB (Mặc định: 0.5 giây)
+local grabCooldown = 0.5     -- TỐC ĐỘ AUTO GRAB (0.5 giây)
 -- ================================================================
 
 ----------------------------------------------------------------
@@ -52,7 +52,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 550) -- Mở rộng chiều cao giao diện
+MainFrame.Size = UDim2.new(0, 220, 0, 550)
 MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -124,7 +124,6 @@ local PassiveCorner = Instance.new("UICorner")
 PassiveCorner.CornerRadius = UDim.new(0, 4)
 PassiveCorner.Parent = PassiveBtn
 
--- Nút Auto Grab mới (Phím J)
 local GrabBtn = Instance.new("TextButton")
 GrabBtn.Size = UDim2.new(1, -10, 0, 25)
 GrabBtn.Position = UDim2.new(0, 5, 0, 160)
@@ -595,9 +594,11 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- 8. VÒNG LẶP AUTO GRAB (NHẶT MỤC TIÊU - 0.5 GIÂY 1 LẦN)
+-- 8. VÒNG LẶP AUTO GRAB (ĐÃ SỬA LỖI CFRAME OFFSET)
 ----------------------------------------------------------------
 task.spawn(function()
+    local grabOffset = CFrame.new(0, -0.613390088, -0.916453004, -0.907546103, 0.314130336, 0.278715283, 0.301701277, 0.026037652, 0.953046918, 0.292123765, 0.94902271, -0.118403859)
+
     while true do
         if autoGrabActive then
             local myCharacter = LocalPlayer.Character
@@ -616,7 +617,7 @@ task.spawn(function()
                                     local ohString1 = "Grab"
                                     local ohTable2 = {
                                         [1] = targetRoot,
-                                        [2] = targetRoot.CFrame
+                                        [2] = grabOffset
                                     }
                                     activateAbilityRemote:FireServer(ohString1, ohTable2)
                                 end)
