@@ -29,13 +29,16 @@ local autoGrabActive = false
 local closestPlayerName = "" 
 local maxDetectDistance = 150 
 
+-- CFrame tương đối chuẩn của kỹ năng Grab
+local GRAB_OFFSET_CFRAME = CFrame.new(0, -0.613390088, -0.916453004, -0.907546103, 0.314130336, 0.278715283, 0.301701277, 0.026037652, 0.953046918, 0.292123765, 0.94902271, -0.118403859)
+
 -- ================================================================
 -- CẤU HÌNH TỐC ĐỘ GỬI REMOTE DAMAGE, SKILL & GRAB (CHỐNG BAN)
 -- ================================================================
 local attackCooldown = 1     -- Tốc độ đòn đánh thường và đòn thở (1 giây)
 local whipCooldown = 0.8     -- Tốc độ đòn đánh đuôi riêng (0.8 giây)
 local passiveCooldown = 10   -- Tốc độ skill bị động (Mỗi 10 giây)
-local grabCooldown = 0.5     -- TỐC ĐỘ AUTO GRAB (0.5 giây)
+local grabCooldown = 0.5     -- TỐC ĐỘ AUTO GRAB (Mặc định: 0.5 giây)
 -- ================================================================
 
 ----------------------------------------------------------------
@@ -594,11 +597,9 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- 8. VÒNG LẶP AUTO GRAB (ĐÃ SỬA LỖI CFRAME OFFSET)
+-- 8. VÒNG LẶP AUTO GRAB (ĐÃ SỬA LỖI CFRAME TƯƠNG ĐỐI)
 ----------------------------------------------------------------
 task.spawn(function()
-    local grabOffset = CFrame.new(0, -0.613390088, -0.916453004, -0.907546103, 0.314130336, 0.278715283, 0.301701277, 0.026037652, 0.953046918, 0.292123765, 0.94902271, -0.118403859)
-
     while true do
         if autoGrabActive then
             local myCharacter = LocalPlayer.Character
@@ -617,7 +618,7 @@ task.spawn(function()
                                     local ohString1 = "Grab"
                                     local ohTable2 = {
                                         [1] = targetRoot,
-                                        [2] = grabOffset
+                                        [2] = GRAB_OFFSET_CFRAME -- Dùng CFrame cố định chuẩn
                                     }
                                     activateAbilityRemote:FireServer(ohString1, ohTable2)
                                 end)
