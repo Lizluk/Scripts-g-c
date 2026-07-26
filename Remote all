@@ -1,4 +1,4 @@
--- Remote Executor & Smart Multi-Target Kill & Script Hub System (Fixed & Added Tab 3)
+-- Remote Executor & Smart Multi-Target Kill & Script Hub System (Global Script Hub Added)
 -- Tương thích với các Executor phổ biến (Delta, Hydrogen, Wave, Codex, v.v.)
 
 local UserInputService = game:GetService("UserInputService")
@@ -14,7 +14,9 @@ local PlaceId = game.PlaceId
 local SelectedPlayers = {}
 local SaveFileName = "RemoteExec_Place_" .. tostring(PlaceId) .. ".json"
 local TargetSaveFileName = "TargetExec_Place_" .. tostring(PlaceId) .. ".json"
-local ScriptHubSaveFileName = "ScriptHub_Place_" .. tostring(PlaceId) .. ".json"
+
+-- Tab 3 dùng chung file Global để lưu vĩnh viễn trên mọi game
+local ScriptHubSaveFileName = "Global_ScriptHub_Master.json"
 
 -- Phím tắt kích hoạt chung cho hệ thống Kill (Mặc định: KeyCode.Q)
 local KillGlobalKey = Enum.KeyCode.Q
@@ -1001,7 +1003,7 @@ AddTargetBtn.MouseButton1Click:Connect(function()
 end)
 
 ----------------------------------------------------------------
--- TAB 3: SCRIPT HUB (QUẢN LÝ LOADSTRING CÁ NHÂN)
+-- TAB 3: SCRIPT HUB (LƯU VĨNH VỄN TOÀN CỤC - DÙNG CHUNG MỌI GAME)
 ----------------------------------------------------------------
 local HubCodeInput = Instance.new("TextBox")
 HubCodeInput.Size = UDim2.new(1, -20, 0, 75)
@@ -1070,8 +1072,7 @@ local function SaveScriptHubToFile()
     for _, item in ipairs(ScriptHubList) do
         table.insert(exportTable, {
             Name = item.Name,
-            Code = item.Code,
-            IsRunning = item.IsRunning
+            Code = item.Code
         })
     end
     pcall(function()
@@ -1079,13 +1080,12 @@ local function SaveScriptHubToFile()
     end)
 end
 
-local function AddScriptHubToList(name, rawCode, isRunning)
+local function AddScriptHubToList(name, rawCode)
     if rawCode == "" then return end
 
     local itemData = {
         Name = (name ~= "" and name) or "Script #" .. (#ScriptHubList + 1),
-        Code = rawCode,
-        IsRunning = (isRunning == true)
+        Code = rawCode
     }
 
     local ItemFrame = Instance.new("Frame")
@@ -1106,45 +1106,28 @@ local function AddScriptHubToList(name, rawCode, isRunning)
     NameLabel.TextTruncate = Enum.TextTruncate.AtEnd
     NameLabel.Parent = ItemFrame
 
+    -- Chỉ có nút Kích Hoạt (Chạy) và Xóa
     local RunHubBtn = Instance.new("TextButton")
     RunHubBtn.Size = UDim2.new(0, 110, 0, 28)
     RunHubBtn.Position = UDim2.new(1, -165, 0, 8)
+    RunHubBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 180)
+    RunHubBtn.Text = "🚀 Kích Hoạt"
+    RunHubBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     RunHubBtn.Font = Enum.Font.SourceSansBold
     RunHubBtn.TextSize = 12
     RunHubBtn.Parent = ItemFrame
     Instance.new("UICorner", RunHubBtn).CornerRadius = UDim.new(0, 4)
 
-    local function UpdateHubBtnUI()
-        if itemData.IsRunning then
-            RunHubBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 80)
-            RunHubBtn.Text = "🟢 ĐÃ CHẠY"
-        else
-            RunHubBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-            RunHubBtn.Text = "⚪ KÍCH HOẠT"
-        end
-    end
-    UpdateHubBtnUI()
-
     RunHubBtn.MouseButton1Click:Connect(function()
-        if not itemData.IsRunning then
-            itemData.IsRunning = true
-            UpdateHubBtnUI()
-            SaveScriptHubToFile()
-            task.spawn(function()
-                local success, err = pcall(function()
-                    local f = loadstring(itemData.Code)
-                    if f then f() end
-                end)
-                if not success then
-                    warn("Lỗi khi chạy Script Hub: ", err)
-                end
+        task.spawn(function()
+            local success, err = pcall(function()
+                local f = loadstring(itemData.Code)
+                if f then f() end
             end)
-        else
-            -- Đã kích hoạt rồi thì bấm vào báo trạng thái hoặc giữ nguyên
-            itemData.IsRunning = false
-            UpdateHubBtnUI()
-            SaveScriptHubToFile()
-        end
+            if not success then
+                warn("Lỗi khi chạy Script Hub: ", err)
+            end
+        end)
     end)
 
     local DelHubBtn = Instance.new("TextButton")
@@ -1176,13 +1159,13 @@ local function LoadScriptHubFromFile()
     end)
     if success and type(result) == "table" then
         for _, savedData in ipairs(result) do
-            AddScriptHubToList(savedData.Name, savedData.Code, savedData.IsRunning)
+            AddScriptHubToList(savedData.Name, savedData.Code)
         end
     end
 end
 
 AddHubBtn.MouseButton1Click:Connect(function()
-    AddScriptHubToList(HubNameBox.Text, HubCodeInput.Text, false)
+    AddScriptHubToList(HubNameBox.Text, HubCodeInput.Text)
     SaveScriptHubToFile()
     HubCodeInput.Text = ""
     HubNameBox.Text = ""
