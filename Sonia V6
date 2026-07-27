@@ -35,10 +35,10 @@ local GRAB_OFFSET_CFRAME = CFrame.new(0, -0.613390088, -0.916453004, -0.90754610
 -- ================================================================
 -- CẤU HÌNH TỐC ĐỘ GỬI REMOTE DAMAGE, SKILL & GRAB (CHỐNG BAN)
 -- ================================================================
-local attackCooldown = 1     -- Tốc độ đòn đánh thường và đòn thở (1 giây)
-local whipCooldown = 0.8     -- Tốc độ đòn đánh đuôi riêng (0.8 giây)
+local attackCooldown = 1.4     -- Tốc độ đòn đánh thường và đòn thở (1 giây)
+local whipCooldown = 1.4     -- Tốc độ đòn đánh đuôi riêng (0.8 giây)
 local passiveCooldown = 10   -- Tốc độ skill bị động (Mỗi 10 giây)
-local grabCooldown = 0.5     -- TỐC ĐỘ AUTO GRAB (Mặc định: 0.5 giây)
+local grabCooldown = 0.8     -- TỐC ĐỘ AUTO GRAB (Mặc định: 0.5 giây)
 -- ================================================================
 
 ----------------------------------------------------------------
