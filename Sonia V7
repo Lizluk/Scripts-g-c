@@ -250,11 +250,11 @@ local function updateUtilityVisuals()
 
     if autoGrabActive then
         GrabBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 120)
-        GrabBtn.Text = "AUTO GRAB: ON [J]"
+        GrabBtn.Text = "AUTO GRAB: ON [G]"
         GrabBtn.TextColor3 = Color3.fromRGB(255, 150, 220)
     else
         GrabBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        GrabBtn.Text = "AUTO GRAB: OFF [J]"
+        GrabBtn.Text = "AUTO GRAB: OFF [G]"
         GrabBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
     end
 end
@@ -283,8 +283,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.K then autoEatActive = not autoEatActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.U then passiveSkillActive = not passiveSkillActive updateUtilityVisuals() end
-    if input.KeyCode == Enum.KeyCode.J then autoGrabActive = not autoGrabActive updateUtilityVisuals() end
-    if input.KeyCode == Enum.KeyCode.G then triggerPortal() end
+    if input.KeyCode == Enum.KeyCode.G then autoGrabActive = not autoGrabActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.O then triggerPortal() end
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
         if killAuraActive then
