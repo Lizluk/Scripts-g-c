@@ -1,0 +1,128 @@
+--// LIZLUK PEARL AUTO PICKUP GUI
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local client = Players.LocalPlayer
+local pickupRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PickupResource")
+local droppedFolder = workspace:WaitForChild("Interactions"):WaitForChild("DroppedResources")
+
+-- Kiểm tra và dọn dẹp GUI cũ nếu tồn tại
+local playerGui = client:WaitForChild("PlayerGui")
+if playerGui:FindFirstChild("Lizluk_Pearl_GUI") then
+    playerGui.Lizluk_Pearl_GUI:Destroy()
+end
+
+--======================================================================
+-- THIẾT KẾ GIAO DIỆN GUI (LIZLUK SHINY BUTTERFLY STYLE)
+--======================================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Lizluk_Pearl_GUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = playerGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 220, 0, 210)
+MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(255, 255, 255)
+UIStroke.Thickness = 1.5
+UIStroke.Parent = MainFrame
+
+-- Tiêu đề bướm đặc trưng
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.BackgroundTransparency = 1
+Title.Text = "🦋 PEARL PICKUP [H] 🦋"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainFrame
+
+local ButtonContainer = Instance.new("Frame")
+ButtonContainer.Size = UDim2.new(1, -20, 1, -50)
+ButtonContainer.Position = UDim2.new(0, 10, 0, 40)
+ButtonContainer.BackgroundTransparency = 1
+ButtonContainer.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 8)
+UIListLayout.Parent = ButtonContainer
+
+--======================================================================
+-- HÀM TẠO NÚT BẤM NHẶT ĐỒ (CÓ HIỆU ỨNG TƯƠNG TÁC)
+--======================================================================
+local function createPickupButton(pearlName, displayName, btnColor, order)
+    local button = Instance.new("TextButton")
+    button.Name = pearlName
+    button.Size = UDim2.new(1, 0, 0, 40)
+    button.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    button.Font = Enum.Font.GothamBold
+    button.Text = "🔮 " .. displayName
+    button.TextColor3 = btnColor
+    button.TextSize = 13
+    button.LayoutOrder = order
+    button.Parent = ButtonContainer
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = button
+
+    local btnStroke = Instance.new("UIStroke")
+    btnStroke.Color = btnColor
+    btnStroke.Thickness = 1
+    btnStroke.Parent = button
+
+    -- Sự kiện bấm nút nhặt đồ
+    button.MouseButton1Click:Connect(function()
+        local pearlItem = droppedFolder:FindFirstChild(pearlName)
+        
+        if pearlItem then
+            pcall(function()
+                pickupRemote:FireServer(pearlItem)
+            end)
+            
+            -- Hiệu ứng phản hồi visual khi nhặt thành công
+            TweenService:Create(button, TweenInfo.new(0.1), {BackgroundColor3 = btnColor}):Play()
+            button.TextColor3 = Color3.fromRGB(0, 0, 0)
+            task.wait(0.15)
+            TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 35)}):Play()
+            button.TextColor3 = btnColor
+        else
+            -- Phản hồi màu đỏ nếu vật phẩm không có trên Workspace
+            button.Text = "❌ " .. displayName .. " (Không có)"
+            task.wait(1)
+            button.Text = "🔮 " .. displayName
+        end
+    end)
+end
+
+--======================================================================
+-- TẠO 3 NÚT TƯƠNG ỨNG
+--======================================================================
+createPickupButton("PurplePearl", "PurplePearl", Color3.fromRGB(180, 100, 255), 1)
+createPickupButton("OrangePearl", "OrangePearl", Color3.fromRGB(255, 160, 50), 2)
+createPickupButton("PinkPearl", "PinkPearl", Color3.fromRGB(255, 120, 180), 3)
+
+-- Phím tắt phím H để Ẩn/Hiện Menu
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.H then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
+
+print("Hệ thống Pearl Pickup GUI đã sẵn sàng! Bấm 'H' để ẩn/hiện.")
