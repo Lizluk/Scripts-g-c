@@ -6,23 +6,24 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- ÉP XÓA GUI CŨ TRONG PLAYERGUI CỦA NGUỜI CHƠI
+-- ÉP XÓA GUI CŨ
 if PlayerGui:FindFirstChild("LizlukKillGUI") then
     PlayerGui.LizlukKillGUI:Destroy()
 end
 
--- Các Remote của game
-local damageRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemote")
-local stateAilmentRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("StateAilment")
-local activateAbilityRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("ActivateAbility")
-local drinkRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DrinkRemote")
-local foodRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Food")
-local portalRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Portal")
-local forageableRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CompleteForageableRemote")
+-- LẤY REMOTE AN TOÀN (KHÔNG BỊ KẸT / HỎNG SCRIPT NẾU THIẾU)
+local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+local damageRemote = Remotes and Remotes:FindFirstChild("CharactersDamageRemote")
+local stateAilmentRemote = Remotes and Remotes:FindFirstChild("StateAilment")
+local activateAbilityRemote = Remotes and Remotes:FindFirstChild("ActivateAbility")
+local drinkRemote = Remotes and Remotes:FindFirstChild("DrinkRemote")
+local foodRemote = Remotes and Remotes:FindFirstChild("Food")
+local portalRemote = Remotes and Remotes:FindFirstChild("Portal")
+local forageableRemote = Remotes and Remotes:FindFirstChild("CompleteForageableRemote")
 
--- Các đường dẫn Object trong Workspace
-local charactersFolder = workspace:WaitForChild("Characters")
-local interactionsFolder = workspace:WaitForChild("Interactions")
+-- LẤY FOLDER AN TOÀN
+local charactersFolder = workspace:FindFirstChild("Characters")
+local interactionsFolder = workspace:FindFirstChild("Interactions")
 
 local targets = {} 
 local killAuraActive = true 
@@ -34,20 +35,19 @@ local autoForageActive = false
 local closestPlayerName = "" 
 local maxDetectDistance = 150 
 
--- Thời gian bắt đầu chạy
+-- Thời gian bắt đầu
 local startTime = os.time()
 
--- CFrame tương đối chuẩn của kỹ năng Grab
+-- CFrame tương đối chuẩn của Grab
 local GRAB_OFFSET_CFRAME = CFrame.new(0, -0.613390088, -0.916453004, -0.907546103, 0.314130336, 0.278715283, 0.301701277, 0.026037652, 0.953046918, 0.292123765, 0.94902271, -0.118403859)
 
--- Cooldown tối ưu
 local attackCooldown = 1.4     
 local passiveCooldown = 10     
 local grabCooldown = 0.8       
 local forageCooldown = 0.5     
 
 ----------------------------------------------------------------
--- 1. TẠO GIAO DIỆN GUI VỚI ĐỒNG HỒ ĐẾM TRÊN CÙNG
+-- 1. TẠO GIAO DIỆN GUI (ĐẢM BẢO HIỆN 100%)
 ----------------------------------------------------------------
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -216,7 +216,7 @@ UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
 end)
 
--- ĐỒNG HỒ ĐẾM THỜI GIAN LÀM MẸO KHÔNG GÂY LAG
+-- VÒNG LẶP CẬP NHẬT ĐỒNG HỒ ĐẾM THỜI GIAN
 task.spawn(function()
     while ScreenGui.Parent do
         local elapsed = os.time() - startTime
@@ -252,12 +252,14 @@ end
 updateUtilityVisuals()
 
 local function triggerPortal()
-    pcall(function()
-        PortalBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 200)
-        portalRemote:InvokeServer("TundraPortalStart")
-        task.wait(0.2)
-        PortalBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-    end)
+    if portalRemote then
+        pcall(function()
+            PortalBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 200)
+            portalRemote:InvokeServer("TundraPortalStart")
+            task.wait(0.2)
+            PortalBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        end)
+    end
 end
 
 DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
@@ -285,7 +287,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 ----------------------------------------------------------------
--- 2. ESP SIÊU NHẸ (DÙNG HIGHLIGHT CHỐNG LAG 100%)
+-- 2. ESP HIGHLIGHT CHỐNG LAG
 ----------------------------------------------------------------
 
 local function applyHighlight(player, character)
@@ -301,20 +303,20 @@ local function applyHighlight(player, character)
     end
 
     if targets[player.Name] then
-        highlight.FillColor = Color3.fromRGB(255, 0, 0) -- Màu đỏ cho Target
+        highlight.FillColor = Color3.fromRGB(255, 0, 0)
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
         highlight.Enabled = true
     elseif player.Name == closestPlayerName then
-        highlight.FillColor = Color3.fromRGB(0, 255, 128) -- Màu Xanh cho người gần nhất
+        highlight.FillColor = Color3.fromRGB(0, 255, 128)
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
         highlight.Enabled = true
     else
-        highlight.Enabled = false -- Ẩn đi đối với người bình thường để CHỐNG LAG
+        highlight.Enabled = false
     end
 end
 
 ----------------------------------------------------------------
--- 3. QUẢN LÝ QUÉT NGƯỜI CHƠI VÀ BẢNG GUI (GIAO DIỆN TỐI ƯU)
+-- 3. QUẢN LÝ QUÉT NGƯỜI CHƠI VÀ BẢNG GUI
 ----------------------------------------------------------------
 
 local buttons = {}
@@ -352,7 +354,6 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 buildButtons()
 
--- Vòng lặp quét khoảng cách nhẹ (0.5 giây/lần)
 task.spawn(function()
     while true do
         local myCharacter = LocalPlayer.Character
@@ -378,7 +379,6 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
-        -- Cập nhật nút bấm & Highlight ESP
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer then
                 local pName = player.Name
@@ -406,14 +406,14 @@ task.spawn(function()
             end
         end
 
-        if autoDrinkActive then
+        if autoDrinkActive and drinkRemote and interactionsFolder then
             pcall(function()
                 local lake = interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
                 if lake then drinkRemote:FireServer(lake) end
             end)
         end
 
-        if autoEatActive then
+        if autoEatActive and foodRemote and interactionsFolder then
             pcall(function()
                 local ribs = interactionsFolder:FindFirstChild("Food") and interactionsFolder.Food:FindFirstChild("Ribs")
                 if ribs then foodRemote:FireServer(ribs) end
@@ -425,15 +425,15 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- 4. CÁC VÒNG LẶP REMOTE 
+-- 4. VÒNG LẶP THI CÔNG CHIÊU BẰNG REMOTE (KIỂM TRA AN TOÀN)
 ----------------------------------------------------------------
 task.spawn(function()
     while true do
-        if killAuraActive then
+        if killAuraActive and damageRemote then
             local myCharacter = LocalPlayer.Character
             local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
-            if myRoot then
+            if myRoot and charactersFolder then
                 for pName, isTargeted in pairs(targets) do
                     if isTargeted then
                         local targetCharacter = charactersFolder:FindFirstChild(pName)
@@ -451,7 +451,7 @@ end)
 
 task.spawn(function()
     while true do
-        if passiveSkillActive then
+        if passiveSkillActive and stateAilmentRemote then
             pcall(function() stateAilmentRemote:FireServer("Aggression") end)
         end
         task.wait(passiveCooldown)
@@ -460,11 +460,11 @@ end)
 
 task.spawn(function()
     while true do
-        if autoGrabActive then
+        if autoGrabActive and activateAbilityRemote then
             local myCharacter = LocalPlayer.Character
             local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
-            if myRoot then
+            if myRoot and charactersFolder then
                 for pName, isTargeted in pairs(targets) do
                     if isTargeted then
                         local targetCharacter = charactersFolder:FindFirstChild(pName)
@@ -482,7 +482,7 @@ end)
 
 task.spawn(function()
     while true do
-        if autoForageActive then
+        if autoForageActive and forageableRemote then
             pcall(function() forageableRemote:InvokeServer(18) end)
         end
         task.wait(forageCooldown)
