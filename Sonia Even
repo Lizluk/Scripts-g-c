@@ -29,6 +29,9 @@ local autoForageActive = false
 local closestPlayerName = "" 
 local maxDetectDistance = 150 
 
+-- Thời gian khởi chạy Script để tính Playtime
+local startTime = os.time()
+
 -- CFrame tương đối chuẩn của kỹ năng Grab
 local GRAB_OFFSET_CFRAME = CFrame.new(0, -0.613390088, -0.916453004, -0.907546103, 0.314130336, 0.278715283, 0.301701277, 0.026037652, 0.953046918, 0.292123765, 0.94902271, -0.118403859)
 
@@ -42,7 +45,7 @@ local forageCooldown = 0.5     -- Tốc độ Auto Forage (0.5 giây)
 -- ================================================================
 
 ----------------------------------------------------------------
--- 1. TẠO GIAO DIỆN (GUI)
+-- 1. TẠO GIAO DIỆN (GUI) & ĐỒNG HỒ ĐẾM THỜI GIAN
 ----------------------------------------------------------------
 
 if PlayerGui:FindFirstChild("LizlukKillGUI") then
@@ -55,8 +58,8 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 585)
-MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
+MainFrame.Size = UDim2.new(0, 220, 0, 615)
+MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -67,22 +70,34 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 8)
 UICorner.Parent = MainFrame
 
+-- Label hiển thị thời gian chơi (Trên cùng của Bảng)
+local PlaytimeLabel = Instance.new("TextLabel")
+PlaytimeLabel.Size = UDim2.new(1, 0, 0, 25)
+PlaytimeLabel.Position = UDim2.new(0, 0, 0, 0)
+PlaytimeLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+PlaytimeLabel.Text = "⏱️ THỜI GIAN: 00:00:00"
+PlaytimeLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+PlaytimeLabel.Font = Enum.Font.SourceSansBold
+PlaytimeLabel.TextSize = 13
+PlaytimeLabel.Parent = MainFrame
+
+local TimeCorner = Instance.new("UICorner")
+TimeCorner.CornerRadius = UDim.new(0, 8)
+TimeCorner.Parent = PlaytimeLabel
+
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 35)
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Position = UDim2.new(0, 0, 0, 25)
 Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
 Title.Text = "LIZLUK MENU [P]"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 16
+Title.TextSize = 15
 Title.Parent = MainFrame
-
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 8)
-TitleCorner.Parent = Title
 
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -10, 0, 25)
-StatusLabel.Position = UDim2.new(0, 5, 0, 40)
+StatusLabel.Position = UDim2.new(0, 5, 0, 60)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 StatusLabel.Text = "KILL AURA: RUNNING [Q]"
 StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
@@ -96,7 +111,7 @@ StatusCorner.Parent = StatusLabel
 
 local DrinkBtn = Instance.new("TextButton")
 DrinkBtn.Size = UDim2.new(1, -10, 0, 25)
-DrinkBtn.Position = UDim2.new(0, 5, 0, 70)
+DrinkBtn.Position = UDim2.new(0, 5, 0, 90)
 DrinkBtn.Font = Enum.Font.SourceSansBold
 DrinkBtn.TextSize = 13
 DrinkBtn.Parent = MainFrame
@@ -107,7 +122,7 @@ DrinkCorner.Parent = DrinkBtn
 
 local EatBtn = Instance.new("TextButton")
 EatBtn.Size = UDim2.new(1, -10, 0, 25)
-EatBtn.Position = UDim2.new(0, 5, 0, 100)
+EatBtn.Position = UDim2.new(0, 5, 0, 120)
 EatBtn.Font = Enum.Font.SourceSansBold
 EatBtn.TextSize = 13
 EatBtn.Parent = MainFrame
@@ -118,7 +133,7 @@ EatCorner.Parent = EatBtn
 
 local PassiveBtn = Instance.new("TextButton")
 PassiveBtn.Size = UDim2.new(1, -10, 0, 25)
-PassiveBtn.Position = UDim2.new(0, 5, 0, 130)
+PassiveBtn.Position = UDim2.new(0, 5, 0, 150)
 PassiveBtn.Font = Enum.Font.SourceSansBold
 PassiveBtn.TextSize = 13
 PassiveBtn.Parent = MainFrame
@@ -129,7 +144,7 @@ PassiveCorner.Parent = PassiveBtn
 
 local GrabBtn = Instance.new("TextButton")
 GrabBtn.Size = UDim2.new(1, -10, 0, 25)
-GrabBtn.Position = UDim2.new(0, 5, 0, 160)
+GrabBtn.Position = UDim2.new(0, 5, 0, 180)
 GrabBtn.Font = Enum.Font.SourceSansBold
 GrabBtn.TextSize = 13
 GrabBtn.Parent = MainFrame
@@ -140,7 +155,7 @@ GrabCorner.Parent = GrabBtn
 
 local ForageBtn = Instance.new("TextButton")
 ForageBtn.Size = UDim2.new(1, -10, 0, 25)
-ForageBtn.Position = UDim2.new(0, 5, 0, 190)
+ForageBtn.Position = UDim2.new(0, 5, 0, 210)
 ForageBtn.Font = Enum.Font.SourceSansBold
 ForageBtn.TextSize = 13
 ForageBtn.Parent = MainFrame
@@ -151,7 +166,7 @@ ForageCorner.Parent = ForageBtn
 
 local PortalBtn = Instance.new("TextButton")
 PortalBtn.Size = UDim2.new(1, -10, 0, 25)
-PortalBtn.Position = UDim2.new(0, 5, 0, 220)
+PortalBtn.Position = UDim2.new(0, 5, 0, 240)
 PortalBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 PortalBtn.Text = "TELEPORT PORTAL [G]"
 PortalBtn.TextColor3 = Color3.fromRGB(200, 100, 255)
@@ -165,7 +180,7 @@ PortalCorner.Parent = PortalBtn
 
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 255)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 275)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -214,8 +229,8 @@ DistanceBox.FocusLost:Connect(function(enterPressed)
 end)
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -305)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 295)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -320)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 315)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -229,6 +244,18 @@ UIListLayout.Padding = UDim.new(0, 5)
 
 UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end)
+
+-- Vòng lặp cập nhật thời gian chơi 
+task.spawn(function()
+    while true do
+        local elapsed = os.time() - startTime
+        local hours = math.floor(elapsed / 3600)
+        local mins = math.floor((elapsed % 3600) / 60)
+        local secs = elapsed % 60
+        PlaytimeLabel.Text = string.format("⏱️ THỜI GIAN: %02d:%02d:%02d", hours, mins, secs)
+        task.wait(1)
+    end
 end)
 
 local function updateUtilityVisuals()
@@ -324,13 +351,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 ----------------------------------------------------------------
--- 2. HỆ THỐNG ESP TÊN TRÊN ĐẦU
+-- 2. HỆ THỐNG ESP TỐI ƯU TỐC ĐỘ (CHỐNG LAG KHI ĐÔNG NGƯỜI)
 ----------------------------------------------------------------
 
 local function applyESP(player, character)
     if not character or player == LocalPlayer then return end
     
-    local head = character:WaitForChild("Head", 10) or character:FindFirstChild("Head")
+    local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 5)
     if not head then return end
 
     if head:FindFirstChild("PlayerESP") then 
@@ -339,47 +366,20 @@ local function applyESP(player, character)
 
     local bb = Instance.new("BillboardGui")
     bb.Name = "PlayerESP"
-    bb.Size = UDim2.new(0, 200, 0, 50)
+    bb.Size = UDim2.new(0, 180, 0, 40)
     bb.AlwaysOnTop = true
     bb.ExtentsOffset = Vector3.new(0, 2.5, 0)
     bb.Adornee = head
     bb.Parent = head
 
     local txt = Instance.new("TextLabel")
+    txt.Name = "ESPText"
     txt.Size = UDim2.new(1, 0, 1, 0)
     txt.BackgroundTransparency = 1
-    txt.TextStrokeTransparency = 0
+    txt.TextStrokeTransparency = 0.2
     txt.Font = Enum.Font.SourceSansBold
-    txt.TextSize = 14
+    txt.TextSize = 13
     txt.Parent = bb
-
-    local connection
-    connection = RunService.RenderStepped:Connect(function()
-        if not character:IsDescendantOf(workspace) or not head:IsDescendantOf(character) or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            connection:Disconnect()
-            if bb then bb:Destroy() end
-            return
-        end
-        
-        local myRoot = LocalPlayer.Character.HumanoidRootPart
-        local distance = math.floor((myRoot.Position - head.Position).Magnitude)
-        
-        if targets[player.Name] then
-            if killAuraActive then
-                txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
-                txt.TextColor3 = Color3.fromRGB(255, 50, 50)
-            else
-                txt.Text = string.format("[⏸️] %s\n[%d m]", player.Name, distance)
-                txt.TextColor3 = Color3.fromRGB(255, 200, 50)
-            end
-        elseif player.Name == closestPlayerName then
-            txt.Text = string.format("[⭐ CHIẾT CẬN] %s\n[%d m]", player.Name, distance)
-            txt.TextColor3 = Color3.fromRGB(0, 255, 150)
-        else
-            txt.Text = string.format("%s\n[%d m]", player.Name, distance)
-            txt.TextColor3 = Color3.fromRGB(255, 255, 255)
-        end
-    end)
 end
 
 local function setupPlayerESP(player)
@@ -399,17 +399,47 @@ for _, p in pairs(Players:GetPlayers()) do
 end
 Players.PlayerAdded:Connect(setupPlayerESP)
 
+-- Tối ưu hóa vòng lặp tính khoảng cách ESP: Dùng task.wait(0.1) thay vì RenderStepped
 task.spawn(function()
     while true do
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character then
-                local head = p.Character:FindFirstChild("Head")
-                if head and not head:FindFirstChild("PlayerESP") then
-                    applyESP(p, p.Character)
+        local myCharacter = LocalPlayer.Character
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+
+        if myRoot then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    local head = player.Character:FindFirstChild("Head")
+                    if head then
+                        local espGui = head:FindFirstChild("PlayerESP")
+                        if not espGui then
+                            applyESP(player, player.Character)
+                        else
+                            local txt = espGui:FindFirstChild("ESPText")
+                            if txt then
+                                local distance = math.floor((myRoot.Position - head.Position).Magnitude)
+                                
+                                if targets[player.Name] then
+                                    if killAuraActive then
+                                        txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
+                                        txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                                    else
+                                        txt.Text = string.format("[⏸️] %s\n[%d m]", player.Name, distance)
+                                        txt.TextColor3 = Color3.fromRGB(255, 200, 50)
+                                    end
+                                elseif player.Name == closestPlayerName then
+                                    txt.Text = string.format("[⭐ GẦN] %s\n[%d m]", player.Name, distance)
+                                    txt.TextColor3 = Color3.fromRGB(0, 255, 150)
+                                else
+                                    txt.Text = string.format("%s\n[%d m]", player.Name, distance)
+                                    txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+                                end
+                            end
+                        end
+                    end
                 end
             end
         end
-        task.wait(3)
+        task.wait(0.1) -- Cập nhật ESP 10 lần/giây, vừa đủ mượt vừa siêu nhẹ
     end
 end)
 
@@ -524,7 +554,7 @@ task.spawn(function()
             end)
         end
 
-        task.wait(0.1)
+        task.wait(0.2)
     end
 end)
 
@@ -560,7 +590,7 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- 5. VÒNG LẶP CHO SKILL BỊ ĐỘNG (10 GIÂY 1 LẦN)
+-- 5. VÒNG LẶP CHO SKILL BỊ ĐỘNG
 ----------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -611,7 +641,7 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- 7. VÒNG LẶP AUTO FORAGEABLE (INVOKE SERVER MỖI 0.5 GIÂY)
+-- 7. VÒNG LẶP AUTO FORAGEABLE
 ----------------------------------------------------------------
 task.spawn(function()
     while true do
