@@ -6,12 +6,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- ÉP XÓA HOÀN TOÀN GUI CŨ ĐỂ KHÔNG BỊ TRÙNG LẮP
+-- ÉP XÓA GUI CŨ TRONG PLAYERGUI CỦA NGUỜI CHƠI
 if PlayerGui:FindFirstChild("LizlukKillGUI") then
     PlayerGui.LizlukKillGUI:Destroy()
-end
-for _, child in pairs(CoreGui:GetChildren()) do
-    if child.Name == "LizlukKillGUI" then child:Destroy() end
 end
 
 -- Các Remote của game
@@ -423,7 +420,7 @@ task.spawn(function()
             end)
         end
 
-        task.wait(0.5) -- Quét 2 lần / 1 giây => Không gây lag
+        task.wait(0.5)
     end
 end)
 
