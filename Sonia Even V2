@@ -6,27 +6,19 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Bẫy lỗi lấy Remote an toàn (Không lo bị treo script nếu sai tên Remote)
-local function getRemote(path, name, isFunction)
-    local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
-    if remotesFolder then
-        return remotesFolder:FindFirstChild(name)
-    end
-    return nil
-end
+-- Các Remote của game
+local damageRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemote")
+local stateAilmentRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("StateAilment")
+local activateAbilityRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("ActivateAbility")
+local drinkRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DrinkRemote")
+local foodRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Food")
+local portalRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Portal")
+local forageableRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CompleteForageableRemote")
+local foodPickupRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("FoodPickup")
 
-local damageRemote = getRemote("Remotes", "CharactersDamageRemote")
-local stateAilmentRemote = getRemote("Remotes", "StateAilment")
-local activateAbilityRemote = getRemote("Remotes", "ActivateAbility")
-local drinkRemote = getRemote("Remotes", "DrinkRemote")
-local foodRemote = getRemote("Remotes", "Food")
-local portalRemote = getRemote("Remotes", "Portal")
-local forageableRemote = getRemote("Remotes", "CompleteForageableRemote")
-local foodPickupRemote = getRemote("Remotes", "FoodPickup")
-
--- Các đường dẫn Object trong Workspace (Lấy an toàn)
-local charactersFolder = workspace:FindFirstChild("Characters") or workspace:WaitForChild("Characters", 5)
-local interactionsFolder = workspace:FindFirstChild("Interactions") or workspace:WaitForChild("Interactions", 5)
+-- Các đường dẫn Object trong Workspace
+local charactersFolder = workspace:WaitForChild("Characters")
+local interactionsFolder = workspace:WaitForChild("Interactions")
 
 local targets = {} 
 local killAuraActive = true 
@@ -35,21 +27,25 @@ local autoEatActive = false
 local passiveSkillActive = false 
 local autoGrabActive = false 
 local autoForageActive = false
-local autoCarcassActive = false
+local autoPickupFoodActive = false
 local closestPlayerName = "" 
 local maxDetectDistance = 150 
 
+-- Thời gian khởi chạy Script
 local startTime = os.time()
+
+-- CFrame tương đối chuẩn của kỹ năng Grab
 local GRAB_OFFSET_CFRAME = CFrame.new(0, -0.613390088, -0.916453004, -0.907546103, 0.314130336, 0.278715283, 0.301701277, 0.026037652, 0.953046918, 0.292123765, 0.94902271, -0.118403859)
 
+-- Tốc độ gửi Remote
 local attackCooldown = 1.4     
 local passiveCooldown = 10     
 local grabCooldown = 0.8       
 local forageCooldown = 0.5     
-local carcassCooldown = 0.5
+local pickupFoodCooldown = 0.5
 
 ----------------------------------------------------------------
--- 1. TẠO GIAO DIỆN (GUI) - LUÔN CHẠY ĐẦU TIÊN
+-- 1. TẠO GIAO DIỆN (GUI) & KHUNG ĐỒNG HỒ TÁCH BIỆT
 ----------------------------------------------------------------
 
 if PlayerGui:FindFirstChild("LizlukKillGUI") then
@@ -59,13 +55,12 @@ end
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "LizlukKillGUI"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.DisplayOrder = 999 -- Đẩy GUI lên trên cùng màn hình
 ScreenGui.Parent = PlayerGui
 
+-- KHUNG MENU CHÍNH
 local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 220, 0, 610)
-MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
+MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -76,6 +71,7 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 8)
 UICorner.Parent = MainFrame
 
+-- KHUNG ĐỒNG HỒ TÁCH BIỆT
 local TimeFrame = Instance.new("Frame")
 TimeFrame.Size = UDim2.new(1, 0, 0, 30)
 TimeFrame.Position = UDim2.new(0, 0, 1, 8)
@@ -100,7 +96,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.Position = UDim2.new(0, 0, 0, 0)
 Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-Title.Text = "🦋 LIZLUK MENU [P] 🦋"
+Title.Text = "LIZLUK MENU [P]"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 15
@@ -131,12 +127,20 @@ DrinkBtn.Font = Enum.Font.SourceSansBold
 DrinkBtn.TextSize = 13
 DrinkBtn.Parent = MainFrame
 
+local DrinkCorner = Instance.new("UICorner")
+DrinkCorner.CornerRadius = UDim.new(0, 4)
+DrinkCorner.Parent = DrinkBtn
+
 local EatBtn = Instance.new("TextButton")
 EatBtn.Size = UDim2.new(1, -10, 0, 25)
 EatBtn.Position = UDim2.new(0, 5, 0, 100)
 EatBtn.Font = Enum.Font.SourceSansBold
 EatBtn.TextSize = 13
 EatBtn.Parent = MainFrame
+
+local EatCorner = Instance.new("UICorner")
+EatCorner.CornerRadius = UDim.new(0, 4)
+EatCorner.Parent = EatBtn
 
 local PassiveBtn = Instance.new("TextButton")
 PassiveBtn.Size = UDim2.new(1, -10, 0, 25)
@@ -145,12 +149,20 @@ PassiveBtn.Font = Enum.Font.SourceSansBold
 PassiveBtn.TextSize = 13
 PassiveBtn.Parent = MainFrame
 
+local PassiveCorner = Instance.new("UICorner")
+PassiveCorner.CornerRadius = UDim.new(0, 4)
+PassiveCorner.Parent = PassiveBtn
+
 local GrabBtn = Instance.new("TextButton")
 GrabBtn.Size = UDim2.new(1, -10, 0, 25)
 GrabBtn.Position = UDim2.new(0, 5, 0, 160)
 GrabBtn.Font = Enum.Font.SourceSansBold
 GrabBtn.TextSize = 13
 GrabBtn.Parent = MainFrame
+
+local GrabCorner = Instance.new("UICorner")
+GrabCorner.CornerRadius = UDim.new(0, 4)
+GrabCorner.Parent = GrabBtn
 
 local ForageBtn = Instance.new("TextButton")
 ForageBtn.Size = UDim2.new(1, -10, 0, 25)
@@ -159,12 +171,20 @@ ForageBtn.Font = Enum.Font.SourceSansBold
 ForageBtn.TextSize = 13
 ForageBtn.Parent = MainFrame
 
-local CarcassBtn = Instance.new("TextButton")
-CarcassBtn.Size = UDim2.new(1, -10, 0, 25)
-CarcassBtn.Position = UDim2.new(0, 5, 0, 220)
-CarcassBtn.Font = Enum.Font.SourceSansBold
-CarcassBtn.TextSize = 13
-CarcassBtn.Parent = MainFrame
+local ForageCorner = Instance.new("UICorner")
+ForageCorner.CornerRadius = UDim.new(0, 4)
+ForageCorner.Parent = ForageBtn
+
+local PickupFoodBtn = Instance.new("TextButton")
+PickupFoodBtn.Size = UDim2.new(1, -10, 0, 25)
+PickupFoodBtn.Position = UDim2.new(0, 5, 0, 220)
+PickupFoodBtn.Font = Enum.Font.SourceSansBold
+PickupFoodBtn.TextSize = 13
+PickupFoodBtn.Parent = MainFrame
+
+local PickupFoodCorner = Instance.new("UICorner")
+PickupFoodCorner.CornerRadius = UDim.new(0, 4)
+PickupFoodCorner.Parent = PickupFoodBtn
 
 local PortalBtn = Instance.new("TextButton")
 PortalBtn.Size = UDim2.new(1, -10, 0, 25)
@@ -176,11 +196,9 @@ PortalBtn.Font = Enum.Font.SourceSansBold
 PortalBtn.TextSize = 13
 PortalBtn.Parent = MainFrame
 
-for _, btn in pairs({DrinkBtn, EatBtn, PassiveBtn, GrabBtn, ForageBtn, CarcassBtn, PortalBtn}) do
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 4)
-    c.Parent = btn
-end
+local PortalCorner = Instance.new("UICorner")
+PortalCorner.CornerRadius = UDim.new(0, 4)
+PortalCorner.Parent = PortalBtn
 
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
@@ -214,16 +232,19 @@ DistanceBox.TextColor3 = Color3.fromRGB(0, 220, 255)
 DistanceBox.Font = Enum.Font.SourceSansBold
 DistanceBox.TextSize = 13
 DistanceBox.ClearTextOnFocus = false
+DistanceBox.PlaceholderText = "Số mét..."
 DistanceBox.Parent = DistanceInputFrame
 
 local InputCorner = Instance.new("UICorner")
 InputCorner.CornerRadius = UDim.new(0, 4)
 InputCorner.Parent = DistanceBox
 
-DistanceBox.FocusLost:Connect(function()
-    local number = tonumber(DistanceBox.Text)
+DistanceBox.FocusLost:Connect(function(enterPressed)
+    local text = DistanceBox.Text
+    local number = tonumber(text)
     if number and number >= 0 then
         maxDetectDistance = number
+        DistanceBox.Text = tostring(number)
     else
         DistanceBox.Text = tostring(maxDetectDistance)
     end
@@ -247,7 +268,7 @@ UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
 end)
 
--- Vòng lặp đếm giờ
+-- Vòng lặp đếm giờ chính xác 
 task.spawn(function()
     while true do
         local elapsed = os.time() - startTime
@@ -260,41 +281,75 @@ task.spawn(function()
 end)
 
 local function updateUtilityVisuals()
-    DrinkBtn.BackgroundColor3 = autoDrinkActive and Color3.fromRGB(30, 120, 180) or Color3.fromRGB(40, 40, 45)
-    DrinkBtn.Text = autoDrinkActive and "AUTO DRINK: ON [L]" or "AUTO DRINK: OFF [L]"
-    DrinkBtn.TextColor3 = autoDrinkActive and Color3.fromRGB(100, 255, 255) or Color3.fromRGB(150, 150, 150)
+    if autoDrinkActive then
+        DrinkBtn.BackgroundColor3 = Color3.fromRGB(30, 120, 180)
+        DrinkBtn.Text = "AUTO DRINK: ON [L]"
+        DrinkBtn.TextColor3 = Color3.fromRGB(100, 255, 255)
+    else
+        DrinkBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        DrinkBtn.Text = "AUTO DRINK: OFF [L]"
+        DrinkBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
 
-    EatBtn.BackgroundColor3 = autoEatActive and Color3.fromRGB(180, 100, 30) or Color3.fromRGB(40, 40, 45)
-    EatBtn.Text = autoEatActive and "AUTO EAT: ON [K]" or "AUTO EAT: OFF [K]"
-    EatBtn.TextColor3 = autoEatActive and Color3.fromRGB(255, 200, 100) or Color3.fromRGB(150, 150, 150)
+    if autoEatActive then
+        EatBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 30)
+        EatBtn.Text = "AUTO EAT: ON [K]"
+        EatBtn.TextColor3 = Color3.fromRGB(255, 200, 100)
+    else
+        EatBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        EatBtn.Text = "AUTO EAT: OFF [K]"
+        EatBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
 
-    PassiveBtn.BackgroundColor3 = passiveSkillActive and Color3.fromRGB(45, 140, 45) or Color3.fromRGB(40, 40, 45)
-    PassiveBtn.Text = passiveSkillActive and "PASSIVE SKILL: ON [U]" or "PASSIVE SKILL: OFF [U]"
-    PassiveBtn.TextColor3 = passiveSkillActive and Color3.fromRGB(150, 255, 150) or Color3.fromRGB(150, 150, 150)
+    if passiveSkillActive then
+        PassiveBtn.BackgroundColor3 = Color3.fromRGB(45, 140, 45)
+        PassiveBtn.Text = "PASSIVE SKILL: ON [U]"
+        PassiveBtn.TextColor3 = Color3.fromRGB(150, 255, 150)
+    else
+        PassiveBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        PassiveBtn.Text = "PASSIVE SKILL: OFF [U]"
+        PassiveBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
 
-    GrabBtn.BackgroundColor3 = autoGrabActive and Color3.fromRGB(180, 50, 120) or Color3.fromRGB(40, 40, 45)
-    GrabBtn.Text = autoGrabActive and "AUTO GRAB: ON [J]" or "AUTO GRAB: OFF [J]"
-    GrabBtn.TextColor3 = autoGrabActive and Color3.fromRGB(255, 150, 220) or Color3.fromRGB(150, 150, 150)
+    if autoGrabActive then
+        GrabBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 120)
+        GrabBtn.Text = "AUTO GRAB: ON [J]"
+        GrabBtn.TextColor3 = Color3.fromRGB(255, 150, 220)
+    else
+        GrabBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        GrabBtn.Text = "AUTO GRAB: OFF [J]"
+        GrabBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
 
-    ForageBtn.BackgroundColor3 = autoForageActive and Color3.fromRGB(200, 180, 40) or Color3.fromRGB(40, 40, 45)
-    ForageBtn.Text = autoForageActive and "AUTO FORAGE: ON [Y]" or "AUTO FORAGE: OFF [Y]"
-    ForageBtn.TextColor3 = autoForageActive and Color3.fromRGB(255, 255, 150) or Color3.fromRGB(150, 150, 150)
+    if autoForageActive then
+        ForageBtn.BackgroundColor3 = Color3.fromRGB(200, 180, 40)
+        ForageBtn.Text = "AUTO FORAGE: ON [Y]"
+        ForageBtn.TextColor3 = Color3.fromRGB(255, 255, 150)
+    else
+        ForageBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        ForageBtn.Text = "AUTO FORAGE: OFF [Y]"
+        ForageBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
 
-    CarcassBtn.BackgroundColor3 = autoCarcassActive and Color3.fromRGB(180, 70, 40) or Color3.fromRGB(40, 40, 45)
-    CarcassBtn.Text = autoCarcassActive and "AUTO CARCASS: ON [X]" or "AUTO CARCASS: OFF [X]"
-    CarcassBtn.TextColor3 = autoCarcassActive and Color3.fromRGB(255, 180, 120) or Color3.fromRGB(150, 150, 150)
+    if autoPickupFoodActive then
+        PickupFoodBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
+        PickupFoodBtn.Text = "PICKUP FOOD: ON [X]"
+        PickupFoodBtn.TextColor3 = Color3.fromRGB(255, 220, 120)
+    else
+        PickupFoodBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        PickupFoodBtn.Text = "PICKUP FOOD: OFF [X]"
+        PickupFoodBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
 end
 updateUtilityVisuals()
 
 local function triggerPortal()
-    if portalRemote then
-        pcall(function()
-            PortalBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 200)
-            portalRemote:InvokeServer("TundraPortalStart")
-            task.wait(0.2)
-            PortalBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        end)
-    end
+    pcall(function()
+        PortalBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 200)
+        portalRemote:InvokeServer("TundraPortalStart")
+        task.wait(0.2)
+        PortalBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    end)
 end
 
 DrinkBtn.MouseButton1Click:Connect(function() autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end)
@@ -302,11 +357,12 @@ EatBtn.MouseButton1Click:Connect(function() autoEatActive = not autoEatActive up
 PassiveBtn.MouseButton1Click:Connect(function() passiveSkillActive = not passiveSkillActive updateUtilityVisuals() end)
 GrabBtn.MouseButton1Click:Connect(function() autoGrabActive = not autoGrabActive updateUtilityVisuals() end)
 ForageBtn.MouseButton1Click:Connect(function() autoForageActive = not autoForageActive updateUtilityVisuals() end)
-CarcassBtn.MouseButton1Click:Connect(function() autoCarcassActive = not autoCarcassActive updateUtilityVisuals() end)
+PickupFoodBtn.MouseButton1Click:Connect(function() autoPickupFoodActive = not autoPickupFoodActive updateUtilityVisuals() end)
 PortalBtn.MouseButton1Click:Connect(triggerPortal)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if UserInputService:GetFocusedTextBox() or gameProcessed then return end
+    if UserInputService:GetFocusedTextBox() then return end
+    if gameProcessed then return end
     
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
     if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
@@ -314,25 +370,33 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.U then passiveSkillActive = not passiveSkillActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.J then autoGrabActive = not autoGrabActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.Y then autoForageActive = not autoForageActive updateUtilityVisuals() end
-    if input.KeyCode == Enum.KeyCode.X then autoCarcassActive = not autoCarcassActive updateUtilityVisuals() end
+    if input.KeyCode == Enum.KeyCode.X then autoPickupFoodActive = not autoPickupFoodActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.G then triggerPortal() end
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
-        StatusLabel.Text = killAuraActive and "KILL AURA: RUNNING [Q]" or "KILL AURA: PAUSED [Q]"
-        StatusLabel.TextColor3 = killAuraActive and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 200, 50)
+        if killAuraActive then
+            StatusLabel.Text = "KILL AURA: RUNNING [Q]"
+            StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+        else
+            StatusLabel.Text = "KILL AURA: PAUSED [Q]"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+        end
     end
 end)
 
 ----------------------------------------------------------------
--- 2. ESP & LOGIC REMOTE (CHẠY AN TOÀN TRONG TASK.SPAWN)
+-- 2. HỆ THỐNG ESP SIÊU NHẸ (CẮT GIẢM LAG ĐỐI VỚI SERVER ĐÔNG)
 ----------------------------------------------------------------
 
 local function applyESP(player, character)
     if not character or player == LocalPlayer then return end
-    local head = character:FindFirstChild("Head")
+    
+    local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 5)
     if not head then return end
 
-    if head:FindFirstChild("PlayerESP") then head.PlayerESP:Destroy() end
+    if head:FindFirstChild("PlayerESP") then 
+        head.PlayerESP:Destroy() 
+    end
 
     local bb = Instance.new("BillboardGui")
     bb.Name = "PlayerESP"
@@ -352,36 +416,51 @@ local function applyESP(player, character)
     txt.Parent = bb
 end
 
-for _, p in pairs(Players:GetPlayers()) do 
-    if p ~= LocalPlayer then
-        p.CharacterAdded:Connect(function(char) applyESP(p, char) end)
-        if p.Character then applyESP(p, p.Character) end
+local function setupPlayerESP(player)
+    if player == LocalPlayer then return end
+    
+    player.CharacterAdded:Connect(function(char)
+        applyESP(player, char)
+    end)
+    
+    if player.Character then
+        applyESP(player, player.Character)
     end
 end
 
-Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function(char) applyESP(p, char) end)
-end)
+for _, p in pairs(Players:GetPlayers()) do 
+    setupPlayerESP(p) 
+end
+Players.PlayerAdded:Connect(setupPlayerESP)
 
--- Vòng lặp ESP
 task.spawn(function()
     while true do
-        local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local myCharacter = LocalPlayer.Character
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+
         if myRoot then
             for _, player in pairs(Players:GetPlayers()) do
                 if player ~= LocalPlayer and player.Character then
                     local head = player.Character:FindFirstChild("Head")
                     if head then
                         local espGui = head:FindFirstChild("PlayerESP")
-                        if espGui then
+                        if not espGui then
+                            applyESP(player, player.Character)
+                        else
                             espGui.MaxDistance = maxDetectDistance
                             local txt = espGui:FindFirstChild("ESPText")
                             if txt then
                                 local distance = math.floor((myRoot.Position - head.Position).Magnitude)
+                                
                                 if distance <= maxDetectDistance then
                                     if targets[player.Name] then
-                                        txt.Text = killAuraActive and string.format("[🎯] %s\n[%d m]", player.Name, distance) or string.format("[⏸️] %s\n[%d m]", player.Name, distance)
-                                        txt.TextColor3 = killAuraActive and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(255, 200, 50)
+                                        if killAuraActive then
+                                            txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
+                                            txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                                        else
+                                            txt.Text = string.format("[⏸️] %s\n[%d m]", player.Name, distance)
+                                            txt.TextColor3 = Color3.fromRGB(255, 200, 50)
+                                        end
                                     elseif player.Name == closestPlayerName then
                                         txt.Text = string.format("[⭐] %s\n[%d m]", player.Name, distance)
                                         txt.TextColor3 = Color3.fromRGB(0, 255, 150)
@@ -400,13 +479,18 @@ task.spawn(function()
     end
 end)
 
--- Quản lý danh sách người chơi trên GUI
+----------------------------------------------------------------
+-- 3. VÒNG LẶP CHÍNH QUẢN LÝ GIAO DIỆN & TIỆN ÍCH
+----------------------------------------------------------------
+
 local buttons = {}
+
 local function buildButtons()
     for _, child in pairs(ScrollingFrame:GetChildren()) do
         if child:IsA("TextButton") then child:Destroy() end
     end
     buttons = {}
+
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
             local pName = player.Name
@@ -422,21 +506,30 @@ local function buildButtons()
             BtnCorner.Parent = Btn
 
             Btn.MouseButton1Click:Connect(function()
-                targets[pName] = not targets[pName] or nil
+                if targets[pName] then
+                    targets[pName] = nil
+                else
+                    targets[pName] = true
+                end
             end)
+
             buttons[pName] = {Button = Btn}
         end
     end
 end
 
 Players.PlayerAdded:Connect(buildButtons)
-Players.PlayerRemoving:Connect(function(player) targets[player.Name] = nil buildButtons() end)
+Players.PlayerRemoving:Connect(function(player)
+    targets[player.Name] = nil
+    buildButtons()
+end)
 buildButtons()
 
--- Vòng lặp cập nhật khoảng cách danh sách Player
 task.spawn(function()
     while true do
-        local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local myCharacter = LocalPlayer.Character
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        
         local minDistance = math.huge
         local tempClosest = ""
 
@@ -449,7 +542,11 @@ task.spawn(function()
                         minDistance = dist
                         tempClosest = pName
                     end
-                    btnData.Button.LayoutOrder = targets[pName] and (math.floor(dist) - 100000) or math.floor(dist)
+                    if targets[pName] then
+                        btnData.Button.LayoutOrder = math.floor(dist) - 100000
+                    else
+                        btnData.Button.LayoutOrder = math.floor(dist)
+                    end
                 else
                     btnData.Button.LayoutOrder = 999999
                 end
@@ -460,8 +557,13 @@ task.spawn(function()
         for pName, btnData in pairs(buttons) do
             local Btn = btnData.Button
             if targets[pName] then
-                Btn.BackgroundColor3 = killAuraActive and Color3.fromRGB(180, 40, 40) or Color3.fromRGB(160, 120, 30)
-                Btn.Text = killAuraActive and (pName .. " [TARGET]") or (pName .. " [PAUSED]")
+                if killAuraActive then
+                    Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                    Btn.Text = pName .. " [TARGET]"
+                else
+                    Btn.BackgroundColor3 = Color3.fromRGB(160, 120, 30)
+                    Btn.Text = pName .. " [PAUSED]"
+                end
                 Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
             elseif pName == closestPlayerName then
                 Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
@@ -474,35 +576,46 @@ task.spawn(function()
             end
         end
 
-        if autoDrinkActive and drinkRemote and interactionsFolder then
+        if autoDrinkActive then
             pcall(function()
                 local lake = interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
                 if lake then drinkRemote:FireServer(lake) end
             end)
         end
 
-        if autoEatActive and foodRemote and interactionsFolder then
+        if autoEatActive then
             pcall(function()
                 local ribs = interactionsFolder:FindFirstChild("Food") and interactionsFolder.Food:FindFirstChild("Ribs")
                 if ribs then foodRemote:FireServer(ribs) end
             end)
         end
+
         task.wait(0.3)
     end
 end)
 
--- Vòng lặp Damage
+----------------------------------------------------------------
+-- 4. VÒNG LẶP TẤN CÔNG (DAMAGE REMOTE)
+----------------------------------------------------------------
 task.spawn(function()
     while true do
-        if killAuraActive and damageRemote and charactersFolder then
-            local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if killAuraActive then
+            local myCharacter = LocalPlayer.Character
+            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+
             if myRoot then
                 for pName, isTargeted in pairs(targets) do
                     if isTargeted then
                         local targetCharacter = charactersFolder:FindFirstChild(pName)
                         local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-                        if targetRoot and (myRoot.Position - targetRoot.Position).Magnitude <= maxDetectDistance then
-                            pcall(function() damageRemote:FireServer({[1] = targetCharacter}) end)
+                        
+                        if targetRoot then
+                            local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                            if currentDist <= maxDetectDistance then
+                                pcall(function()
+                                    damageRemote:FireServer({[1] = targetCharacter})
+                                end)
+                            end
                         end
                     end
                 end
@@ -512,28 +625,48 @@ task.spawn(function()
     end
 end)
 
--- Vòng lặp Skill bị động
+----------------------------------------------------------------
+-- 5. VÒNG LẶP SKILL BỊ ĐỘNG
+----------------------------------------------------------------
 task.spawn(function()
     while true do
-        if passiveSkillActive and stateAilmentRemote then
-            pcall(function() stateAilmentRemote:FireServer("Aggression") end)
+        if passiveSkillActive then
+            pcall(function()
+                local ohString1 = "Aggression"
+                stateAilmentRemote:FireServer(ohString1)
+            end)
         end
         task.wait(passiveCooldown)
     end
 end)
 
--- Vòng lặp Grab
+----------------------------------------------------------------
+-- 6. VÒNG LẶP AUTO GRAB
+----------------------------------------------------------------
 task.spawn(function()
     while true do
-        if autoGrabActive and activateAbilityRemote and charactersFolder then
-            local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if autoGrabActive then
+            local myCharacter = LocalPlayer.Character
+            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+
             if myRoot then
                 for pName, isTargeted in pairs(targets) do
                     if isTargeted then
                         local targetCharacter = charactersFolder:FindFirstChild(pName)
                         local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-                        if targetRoot and (myRoot.Position - targetRoot.Position).Magnitude <= maxDetectDistance then
-                            pcall(function() activateAbilityRemote:FireServer("Grab", {[1] = targetRoot, [2] = GRAB_OFFSET_CFRAME}) end)
+
+                        if targetRoot then
+                            local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                            if currentDist <= maxDetectDistance then
+                                pcall(function()
+                                    local ohString1 = "Grab"
+                                    local ohTable2 = {
+                                        [1] = targetRoot,
+                                        [2] = GRAB_OFFSET_CFRAME
+                                    }
+                                    activateAbilityRemote:FireServer(ohString1, ohTable2)
+                                end)
+                            end
                         end
                     end
                 end
@@ -543,33 +676,38 @@ task.spawn(function()
     end
 end)
 
--- Vòng lặp Forage
+----------------------------------------------------------------
+-- 7. VÒNG LẶP AUTO FORAGEABLE
+----------------------------------------------------------------
 task.spawn(function()
     while true do
-        if autoForageActive and forageableRemote then
-            pcall(function() forageableRemote:InvokeServer(18) end)
+        if autoForageActive then
+            pcall(function()
+                local ohNumber1 = 18
+                forageableRemote:InvokeServer(ohNumber1)
+            end)
         end
         task.wait(forageCooldown)
     end
 end)
 
--- Vòng lặp Auto Carcass (Nhặt thịt)
+----------------------------------------------------------------
+-- 8. VÒNG LẶP AUTO PICKUP FOOD (NHẶT XÁC THỨC ĂN - PHÍM X)
+----------------------------------------------------------------
 task.spawn(function()
     while true do
-        if autoCarcassActive and foodPickupRemote and interactionsFolder then
+        if autoPickupFoodActive then
             pcall(function()
                 local foodFolder = interactionsFolder:FindFirstChild("Food")
                 if foodFolder then
-                    local carnivore = foodFolder:FindFirstChild("Carnivore Carcass")
-                    if carnivore then foodPickupRemote:InvokeServer(carnivore) end
-                    
-                    local omnivore = foodFolder:FindFirstChild("Omnivore Carcass")
-                    if omnivore then foodPickupRemote:InvokeServer(omnivore) end
+                    for _, item in pairs(foodFolder:GetChildren()) do
+                        if item.Name == "Carnivore Carcass" or item.Name == "Omnivore Carcass" then
+                            foodPickupRemote:InvokeServer(item)
+                        end
+                    end
                 end
             end)
         end
-        task.wait(carcassCooldown)
+        task.wait(pickupFoodCooldown)
     end
 end)
-
-print("🦋 Lizluk GUI đã bật thành công! Bấm 'P' để Ẩn/Hiện Menu. 🦋")
