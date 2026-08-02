@@ -371,7 +371,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.J then autoGrabActive = not autoGrabActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.Y then autoForageActive = not autoForageActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.X then autoCarcassActive = not autoCarcassActive updateUtilityVisuals() end
-    if input.KeyCode == Enum.KeyCode.O then triggerPortal() end
+    if input.KeyCode == Enum.KeyCode.G then triggerPortal() end
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
         if killAuraActive then
