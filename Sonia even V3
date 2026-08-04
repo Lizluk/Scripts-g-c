@@ -30,6 +30,7 @@ local autoForageActive = false
 local autoPickupFoodActive = false
 local closestPlayerName = "" 
 local maxDetectDistance = 150 
+local searchFilterText = ""
 
 -- Thời gian khởi chạy Script
 local startTime = os.time()
@@ -38,7 +39,7 @@ local startTime = os.time()
 local GRAB_OFFSET_CFRAME = CFrame.new(0, -0.613390088, -0.916453004, -0.907546103, 0.314130336, 0.278715283, 0.301701277, 0.026037652, 0.953046918, 0.292123765, 0.94902271, -0.118403859)
 
 -- Tốc độ gửi Remote & Cooldown
-local attackCooldown = 0.8     
+local attackCooldown = 0.8    
 local lastAttackTime = 0
 local passiveCooldown = 10     
 local grabCooldown = 0.8       
@@ -60,7 +61,7 @@ ScreenGui.Parent = PlayerGui
 
 -- KHUNG MENU CHÍNH
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 610)
+MainFrame.Size = UDim2.new(0, 220, 0, 680)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -251,9 +252,43 @@ DistanceBox.FocusLost:Connect(function(enterPressed)
     end
 end)
 
+-- Ô TÌM KIẾM TÊN (SEARCH BOX)
+local SearchBox = Instance.new("TextBox")
+SearchBox.Size = UDim2.new(1, -10, 0, 25)
+SearchBox.Position = UDim2.new(0, 5, 0, 325)
+SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+SearchBox.BorderSizePixel = 0
+SearchBox.Text = ""
+SearchBox.PlaceholderText = "🔍 Tìm tên người chơi..."
+SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+SearchBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+SearchBox.Font = Enum.Font.SourceSansBold
+SearchBox.TextSize = 13
+SearchBox.ClearTextOnFocus = false
+SearchBox.Parent = MainFrame
+
+local SearchCorner = Instance.new("UICorner")
+SearchCorner.CornerRadius = UDim.new(0, 4)
+SearchCorner.Parent = SearchBox
+
+-- NÚT CHỌN / BỎ CHỌN TẤT CẢ (SELECT ALL BUTTON)
+local SelectAllBtn = Instance.new("TextButton")
+SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 355)
+SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
+SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
+SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SelectAllBtn.Font = Enum.Font.SourceSansBold
+SelectAllBtn.TextSize = 13
+SelectAllBtn.Parent = MainFrame
+
+local SelectAllCorner = Instance.new("UICorner")
+SelectAllCorner.CornerRadius = UDim.new(0, 4)
+SelectAllCorner.Parent = SelectAllBtn
+
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -330)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 325)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -390)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 385)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -267,6 +302,11 @@ UIListLayout.Padding = UDim.new(0, 5)
 
 UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end)
+
+-- Sự kiện thay đổi nội dung tìm kiếm
+SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    searchFilterText = string.lower(SearchBox.Text)
 end)
 
 -- Vòng lặp đếm giờ chính xác 
@@ -344,6 +384,38 @@ local function updateUtilityVisuals()
 end
 updateUtilityVisuals()
 
+-- Logic Toggle chọn tất cả / Bỏ chọn tất cả
+local function toggleSelectAll()
+    local allPlayers = Players:GetPlayers()
+    local otherPlayersCount = 0
+    local selectedCount = 0
+
+    for _, p in pairs(allPlayers) do
+        if p ~= LocalPlayer then
+            otherPlayersCount = otherPlayersCount + 1
+            if targets[p.Name] then
+                selectedCount = selectedCount + 1
+            end
+        end
+    end
+
+    if selectedCount == otherPlayersCount and otherPlayersCount > 0 then
+        targets = {}
+        SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
+        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
+    else
+        for _, p in pairs(allPlayers) do
+            if p ~= LocalPlayer then
+                targets[p.Name] = true
+            end
+        end
+        SelectAllBtn.Text = "☒ DESELECT ALL PLAYERS [T]"
+        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+    end
+end
+
+SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
+
 local function triggerPortal()
     pcall(function()
         PortalBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 200)
@@ -357,7 +429,6 @@ end
 local function performKillAuraAttack()
     if not killAuraActive then return end
     
-    -- Kiểm tra Cooldown đòn đánh
     if tick() - lastAttackTime < attackCooldown then return end
     
     local myCharacter = LocalPlayer.Character
@@ -395,19 +466,19 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if UserInputService:GetFocusedTextBox() then return end
     if gameProcessed then return end
     
-    -- Lắng nghe chuột trái để đánh Kill Aura
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         performKillAuraAttack()
     end
 
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
+    if input.KeyCode == Enum.KeyCode.T then toggleSelectAll() end
     if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.K then autoEatActive = not autoEatActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.U then passiveSkillActive = not passiveSkillActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.J then autoGrabActive = not autoGrabActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.Y then autoForageActive = not autoForageActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.X then autoPickupFoodActive = not autoPickupFoodActive updateUtilityVisuals() end
-    if input.KeyCode == Enum.KeyCode.G then triggerPortal() end
+    if input.KeyCode == Enum.KeyCode.O then triggerPortal() end
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
         if killAuraActive then
@@ -590,8 +661,34 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
+        -- Cập nhật trạng thái nút Select All dựa trên số lượng được chọn
+        local totalOtherPlayers = 0
+        local totalSelected = 0
+        for pName, _ in pairs(buttons) do
+            totalOtherPlayers = totalOtherPlayers + 1
+            if targets[pName] then
+                totalSelected = totalSelected + 1
+            end
+        end
+
+        if totalSelected == totalOtherPlayers and totalOtherPlayers > 0 then
+            SelectAllBtn.Text = "☒ DESELECT ALL PLAYERS [T]"
+            SelectAllBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+        else
+            SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
+            SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
+        end
+
         for pName, btnData in pairs(buttons) do
             local Btn = btnData.Button
+            
+            -- Lọc hiển thị theo ô tìm kiếm SearchBox
+            if searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true) then
+                Btn.Visible = true
+            else
+                Btn.Visible = false
+            end
+
             if targets[pName] then
                 if killAuraActive then
                     Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
