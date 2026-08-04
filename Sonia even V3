@@ -38,7 +38,7 @@ local startTime = os.time()
 local GRAB_OFFSET_CFRAME = CFrame.new(0, -0.613390088, -0.916453004, -0.907546103, 0.314130336, 0.278715283, 0.301701277, 0.026037652, 0.953046918, 0.292123765, 0.94902271, -0.118403859)
 
 -- Tốc độ gửi Remote & Cooldown
-local attackCooldown = 1.4     
+local attackCooldown = 0.8     
 local lastAttackTime = 0
 local passiveCooldown = 10     
 local grabCooldown = 0.8       
