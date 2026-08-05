@@ -41,7 +41,7 @@ local attackCooldown = 0.8
 local lastAttackTime = 0
 local passiveCooldown = 15     
 local grabCooldown = 0.8       
-local forageCooldown = 0.5     
+local forageCooldown = 1     
 
 ----------------------------------------------------------------
 -- 1. TẠO GIAO DIỆN (GUI) & KHUNG ĐỒNG HỒ TÁCH BIỆT
