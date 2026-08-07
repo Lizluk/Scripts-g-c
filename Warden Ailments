@@ -1,4 +1,4 @@
---// LIZLUK COMPREHENSIVE ATTRIBUTES PANEL (FIXED & OPTIMIZED)
+--// LIZLUK COMPREHENSIVE ATTRIBUTES PANEL (FIXED & OPTIMIZED - AILMENTS VERSION)
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -10,12 +10,12 @@ local isLocking = false
 -- DANH SÁCH THUỘC TÍNH ĐỂ SINH Ô NHẬP TRÊN GUI
 --======================================================================
 local attributesConfig = {
-    ["MoraleBoost"] = "10",
-    ["DamageMedium"] = "10",
-    ["StaminaMedium"] = "10",
-    ["Ghost-Distract"] = "10",
-    ["Ghost-RegenStamina"] = "10",
-    ["Ghost-Stun"] = "10",
+    ["MoraleBoost"] = "10",
+    ["DamageMedium"] = "10",
+    ["StaminaMedium"] = "10",
+    ["Ghost-Distract"] = "10",
+    ["Ghost-RegenStamina"] = "10",
+    ["Ghost-Stun"] = "10",
 }
 
 local uiBoxes = {}
@@ -25,7 +25,7 @@ local uiBoxes = {}
 --======================================================================
 local playerGui = client:WaitForChild("PlayerGui")
 if playerGui:FindFirstChild("Lizluk_Attributes_GUI") then
-    playerGui.Lizluk_Attributes_GUI:Destroy()
+    playerGui.Lizluk_Attributes_GUI:Destroy()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -55,7 +55,7 @@ UIStroke.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 45)
 Title.BackgroundTransparency = 1
-Title.Text = "🦋 LIZLUK TOTAL CONTROLLER 🦋"
+Title.Text = "🦋 LIZLUK AILMENTS CONTROLLER 🦋"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 14
 Title.Font = Enum.Font.GothamBold
@@ -78,49 +78,49 @@ UIListLayout.Parent = ScrollingFrame
 
 -- Hàm tạo hàng nhập liệu (Tối ưu hóa UI elements)
 local function generateUIEntry(name, defaultValue)
-    local container = Instance.new("Frame")
-    container.Name = name
-    container.Size = UDim2.new(1, -6, 0, 32)
-    container.BackgroundTransparency = 1
-    container.Parent = ScrollingFrame
+    local container = Instance.new("Frame")
+    container.Name = name
+    container.Size = UDim2.new(1, -6, 0, 32)
+    container.BackgroundTransparency = 1
+    container.Parent = ScrollingFrame
 
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 140, 1, 0)
-    label.Position = UDim2.new(0, 5, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = "📍 " .. name
-    label.TextColor3 = Color3.fromRGB(210, 210, 210)
-    label.TextSize = 13
-    label.Font = Enum.Font.GothamMedium
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = container
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 140, 1, 0)
+    label.Position = UDim2.new(0, 5, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "📍 " .. name
+    label.TextColor3 = Color3.fromRGB(210, 210, 210)
+    label.TextSize = 13
+    label.Font = Enum.Font.GothamMedium
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
 
-    local box = Instance.new("TextBox")
-    box.Size = UDim2.new(0, 110, 0, 28)
-    box.Position = UDim2.new(1, -115, 0, 2)
-    box.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    box.BorderSizePixel = 0
-    box.Text = defaultValue
-    box.TextColor3 = Color3.fromRGB(255, 255, 255)
-    box.TextSize = 13
-    box.Font = Enum.Font.Gotham
-    box.Parent = container
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0, 110, 0, 28)
+    box.Position = UDim2.new(1, -115, 0, 2)
+    box.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    box.BorderSizePixel = 0
+    box.Text = defaultValue
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.TextSize = 13
+    box.Font = Enum.Font.Gotham
+    box.Parent = container
 
-    local boxCorner = Instance.new("UICorner")
-    boxCorner.CornerRadius = UDim.new(0, 5)
-    boxCorner.Parent = box
+    local boxCorner = Instance.new("UICorner")
+    boxCorner.CornerRadius = UDim.new(0, 5)
+    boxCorner.Parent = box
 
-    uiBoxes[name] = box
+    uiBoxes[name] = box
 end
 
 -- Sinh toàn bộ danh sách ô nhập liệu
 local itemCount = 0
 for attrName, defaultVal in pairs(attributesConfig) do
-    generateUIEntry(attrName, defaultVal)
-    itemCount = itemCount + 1
+    generateUIEntry(attrName, defaultVal)
+    itemCount = itemCount + 1
 end
 
--- Tự động tính toán độ dài Canvas 1 lần duy nhất thay vì lắng nghe Event liên tục
+-- Tự động tính toán độ dài Canvas
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, itemCount * 38)
 
 -- Nút Bật / Tắt hệ thống khóa
@@ -139,72 +139,65 @@ BtnCorner.CornerRadius = UDim.new(0, 8)
 BtnCorner.Parent = ToggleBtn
 
 --======================================================================
--- LOGIC KHÓA CHỈ SỐ SIÊU MƯỢT (OPTIMIZED LOOP)
+-- LOGIC KHÓA CHỈ SỐ SIÊU MƯỢT (AILMENTS FOLDER TARGET)
 --======================================================================
 ToggleBtn.MouseButton1Click:Connect(function()
-    isLocking = not isLocking
-    
-    if isLocking then
-        for attrName, box in pairs(uiBoxes) do
-            local rawText = box.Text
-            attributesConfig[attrName] = tonumber(rawText) or rawText
-        end
-        
-        ToggleBtn.Text = "ĐANG KHÓA TOÀN BỘ (ON) 🔒"
-        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-            TextColor3 = Color3.fromRGB(0, 0, 0)
-        }):Play()
-    else
-        ToggleBtn.Text = "CHƯA KHÓA (OFF)"
-        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(40, 40, 40),
-            TextColor3 = Color3.fromRGB(200, 200, 200)
-        }):Play()
-    end
+    isLocking = not isLocking
+    
+    if isLocking then
+        for attrName, box in pairs(uiBoxes) do
+            local rawText = box.Text
+            attributesConfig[attrName] = tonumber(rawText) or rawText
+        end
+        
+        ToggleBtn.Text = "ĐANG KHÓA TOÀN BỘ (ON) 🔒"
+        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            TextColor3 = Color3.fromRGB(0, 0, 0)
+        }):Play()
+    else
+        ToggleBtn.Text = "CHƯA KHÓA (OFF)"
+        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+            TextColor3 = Color3.fromRGB(200, 200, 200)
+        }):Play()
+    end
 end)
 
--- Vòng lặp khóa chỉ số chạy 10 lần/giây (Tiết kiệm 90% CPU)
+-- Vòng lặp khóa chỉ số chạy 10 lần/giây
 task.spawn(function()
-    local cachedDataFolder = nil
+    local cachedAilmentsFolder = nil
 
-    while true do
-        if isLocking then
-            -- Tối ưu hóa việc Cache folder Data để tránh quét Workspace liên tục
-            if not cachedDataFolder or not cachedDataFolder:IsDescendantOf(workspace) then
-                local charactersFolder = workspace:FindFirstChild("Characters")
-                local myCharacter = charactersFolder and charactersFolder:FindFirstChild(client.Name)
-                cachedDataFolder = myCharacter and myCharacter:FindFirstChild("Ailments")
-            end
-            
-            if cachedDataFolder then
-                -- Ép giá trị thuộc tính GUI
-                for attributeName, attributeValue in pairs(attributesConfig) do
-                    if cachedDataFolder:GetAttribute(attributeName) ~= nil then
-                        cachedDataFolder:SetAttribute(attributeName, attributeValue)
-                    end
-                end
-                
-                -- Ép giá trị Boolean
-                for boolName, boolValue in pairs(booleanConfig) do
-                    if cachedDataFolder:GetAttribute(boolName) ~= nil then
-                        cachedDataFolder:SetAttribute(boolName, boolValue)
-                    end
-                end
-            end
-        else
-            cachedDataFolder = nil -- Reset cache khi tắt khóa
-        end
-        task.wait(0.1) -- Giới hạn 10 FPS cho việc ghi dữ liệu (Không lag máy)
-    end
+    while true do
+        if isLocking then
+            -- Thay đổi đường dẫn tìm kiếm folder Ailments trong Character
+            if not cachedAilmentsFolder or not cachedAilmentsFolder:IsDescendantOf(workspace) then
+                local charactersFolder = workspace:FindFirstChild("Characters")
+                local myCharacter = charactersFolder and charactersFolder:FindFirstChild(client.Name)
+                cachedAilmentsFolder = myCharacter and myCharacter:FindFirstChild("Ailments")
+            end
+            
+            if cachedAilmentsFolder then
+                -- Ép giá trị thuộc tính GUI vào folder Ailments
+                for attributeName, attributeValue in pairs(attributesConfig) do
+                    if cachedAilmentsFolder:GetAttribute(attributeName) ~= nil then
+                        cachedAilmentsFolder:SetAttribute(attributeName, attributeValue)
+                    end
+                end
+            end
+        else
+            cachedAilmentsFolder = nil -- Reset cache khi tắt khóa
+        end
+        task.wait(0.1) -- Giới hạn 10 FPS cho việc ghi dữ liệu
+    end
 end)
 
 -- Phím tắt J để Toggle Menu
 UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.J then
-        MainFrame.Visible = not MainFrame.Visible
-    end
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.J then
+        MainFrame.Visible = not MainFrame.Visible
+    end
 end)
 
-print("Hệ thống Lizluk Attributes (Đã Fix Lag) sẵn sàng! Nhấn 'J' để ẩn/hiện.")
+print("Hệ thống Lizluk Ailments đã sẵn sàng! Nhấn 'J' để ẩn/hiện.")
