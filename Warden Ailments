@@ -15,9 +15,6 @@ local attributesConfig = {
     ["DamageMedium"] = "4",
     ["StaminaMedium"] = "3",
     ["SkillCheckMedium"] = "20",
-    ["Ghost-Distract"] = "6",
-    ["Ghost-RegenStamina"] = "8",
-    ["Ghost-Stun"] = "13",                
 }
 
 local uiBoxes = {}
