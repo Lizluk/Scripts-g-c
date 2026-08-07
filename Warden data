@@ -14,14 +14,6 @@ local attributesConfig = {
     ["ss"] = "0",
 }
 
-local booleanConfig = {
-    ["Fly"] = true,
-    ["Grab"] = true,
-    ["if"] = true,
-    ["New"] = true,
-    ["Volcanic"] = true
-}
-
 local uiBoxes = {}
 
 --======================================================================
