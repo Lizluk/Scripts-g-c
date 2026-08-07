@@ -11,6 +11,7 @@ local isLocking = false
 --======================================================================
 local attributesConfig = {
     ["MoraleBoost"] = "10",
+    ["SkillCheckStrong"] = "10",
     ["DamageMedium"] = "4",
     ["StaminaMedium"] = "3",
     ["SkillCheckMedium"] = "20",
