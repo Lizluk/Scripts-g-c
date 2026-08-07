@@ -13,9 +13,9 @@ local attributesConfig = {
     ["MoraleBoost"] = "10",
     ["DamageMedium"] = "4",
     ["StaminaMedium"] = "3",
+    ["SkillCheckMedium"] = "20",
     ["Ghost-Distract"] = "6",
     ["Ghost-RegenStamina"] = "8",
-    ["SkillCheckMedium"] = "20",
     ["Ghost-Stun"] = "13",                
 }
 
