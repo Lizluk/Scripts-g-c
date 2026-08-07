@@ -10,8 +10,12 @@ local isLocking = false
 -- DANH SÁCH THUỘC TÍNH MẶC ĐỊNH TRÊN GUI
 --======================================================================
 local attributesConfig = {
-    ["MoraleBoost"] = "500",
-    ["DamageMedium"] = "50",
+    ["MoraleBoost"] = "10",
+    ["DamageMedium"] = "4",
+    ["StaminaMedium"] = "3",
+    ["Ghost-Distract"] = "6",
+    ["Ghost-RegenStamina"] = "8",
+    ["Ghost-Stun"] = "13",                
 }
 
 local uiBoxes = {}
