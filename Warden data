@@ -12,6 +12,7 @@ local isLocking = false
 local attributesConfig = {
     ["st"] = "500",
     ["ss"] = "50",
+    ["sh"] = "1",
 }
 
 local uiBoxes = {}
