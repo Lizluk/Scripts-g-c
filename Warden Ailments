@@ -15,6 +15,7 @@ local attributesConfig = {
     ["StaminaMedium"] = "3",
     ["Ghost-Distract"] = "6",
     ["Ghost-RegenStamina"] = "8",
+    ["SkillCheckMedium"] = "20",
     ["Ghost-Stun"] = "13",                
 }
 
