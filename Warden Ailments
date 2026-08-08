@@ -15,6 +15,7 @@ local attributesConfig = {
     ["DamageMedium"] = "4",
     ["StaminaMedium"] = "3",
     ["SkillCheckMedium"] = "16",
+    ["PuzzleCompleted"] = "16",
 }
 
 local uiBoxes = {}
