@@ -37,18 +37,13 @@ ContentContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
 ContentContainer.Position = UDim2.new(0, 10, 0, 50)
 ContentContainer.Size = UDim2.new(0, 430, 0, 290)
 
-local BlockerTab = Instance.new("ScrollingFrame")
+local BlockerTab = Instance.new("Frame")
 BlockerTab.Name = "BlockerTab"
 BlockerTab.Parent = ContentContainer
-BlockerTab.Active = true
-BlockerTab.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
 BlockerTab.BackgroundTransparency = 1
-BlockerTab.BorderSizePixel = 0
 BlockerTab.Size = UDim2.new(1, 0, 1, 0)
-BlockerTab.CanvasSize = UDim2.new(0, 0, 2, 0)
-BlockerTab.ScrollBarThickness = 5
 
--- Thanh công cụ trên cùng (Ignore, Bỏ Chặn/Unignore, Clear)
+-- Thanh công cụ trên cùng
 local TopBar = Instance.new("Frame")
 TopBar.Parent = BlockerTab
 TopBar.BackgroundTransparency = 1
@@ -74,11 +69,9 @@ local function createToolButton(name, text, color)
     return btn
 end
 
-local IgnoreBtn = createToolButton("IgnoreBtn", "⏸ Ignore", Color3.fromRGB(45, 55, 72))
-local UnblockBtn = createToolButton("UnblockBtn", "▶ Bỏ Chặn", Color3.fromRGB(45, 55, 72))
 local ClearBtn = createToolButton("ClearBtn", "≡ Clear", Color3.fromRGB(45, 55, 72))
 
--- Danh sách các lệnh thu thập / bị chặn
+-- Danh sách log
 local LogListContainer = Instance.new("ScrollingFrame")
 LogListContainer.Parent = BlockerTab
 LogListContainer.Active = true
@@ -95,11 +88,10 @@ ListLayoutLogs.SortOrder = Enum.SortOrder.LayoutOrder
 ListLayoutLogs.Padding = UDim.new(0, 5)
 
 -- ==========================================
--- LOGIC HOOK & QUẢN LÝ DANH SÁCH LỆNH
+-- LOGIC HOOK & QUẢN LÝ TRẠNG THÁI
 -- ==========================================
 
-local IgnoredRemotes = {} -- Danh sách các đường dẫn/tên remote bị chặn (Ignore)
-local CapturedLogs = {}   -- Danh sách lưu trữ các log hiển thị trên UI
+local CapturedLogs = {}   -- Danh sách lưu các lệnh đã bắt được
 
 local function GetFullPath(obj)
     local fullName = obj.Name
@@ -117,31 +109,43 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local args = {...}
     
     if method == "FireServer" or method == "InvokeServer" then
-        local remotePath = GetFullPath(self)
-        
-        -- Kiểm tra xem remote này có nằm trong danh sách Ignore hay không
-        if IgnoredRemotes[remotePath] or IgnoredRemotes[self.Name] then
-            return nil -- Chặn lệnh không cho gửi đi
+        -- Kiểm tra trong danh sách CapturedLogs xem lệnh này có đang bị đánh dấu chặn (IsIgnored = true) không
+        for _, log in ipairs(CapturedLogs) do
+            if log.Object == self and log.IsIgnored then
+                return nil -- Chặn đứng lệnh ngay lập tức!
+            end
         end
         
-        -- Ghi lại lịch sử lệnh gọi (Remote Spy)
-        table.insert(CapturedLogs, {
-            Object = self,
-            Path = remotePath,
-            Method = method,
-            Args = args
-        })
+        -- Nếu chưa có trong danh sách hiển thị thì thêm mới vào
+        local remotePath = GetFullPath(self)
+        local found = false
+        for _, log in ipairs(CapturedLogs) do
+            if log.Object == self and log.Method == method then
+                log.Count = log.Count + 1
+                found = true
+                break
+            end
+        end
         
-        -- Giới hạn số lượng log hiển thị tránh tràn bộ nhớ
-        if #CapturedLogs > 50 then
-            table.remove(CapturedLogs, 1)
+        if not found then
+            table.insert(CapturedLogs, {
+                Object = self,
+                Path = remotePath,
+                Method = method,
+                Count = 1,
+                IsIgnored = false
+            })
+            
+            if #CapturedLogs > 40 then
+                table.remove(CapturedLogs, 1)
+            end
         end
     end
     
     return oldNamecall(self, ...)
 end)
 
--- Cập nhật giao diện danh sách log phong cách Remote Spy
+-- Vẽ lại giao diện danh sách
 local function RefreshLogUI()
     for _, child in ipairs(LogListContainer:GetChildren()) do
         if child:IsA("Frame") then
@@ -150,43 +154,59 @@ local function RefreshLogUI()
     end
     
     local totalHeight = 0
-    for i, logData in ipairs(CapturedLogs) do
+    for _, logData in ipairs(CapturedLogs) do
         local LogItem = Instance.new("Frame")
         LogItem.Parent = LogListContainer
         LogItem.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
         LogItem.BorderSizePixel = 0
         LogItem.Size = UDim2.new(1, 0, 0, 32)
         
-        -- Thanh màu đỏ bên cạnh giống giao diện mẫu
-        local RedBar = Instance.new("Frame")
-        RedBar.Parent = LogItem
-        RedBar.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-        RedBar.BorderSizePixel = 0
-        RedBar.Size = UDim2.new(0, 4, 1, 0)
+        -- Thanh màu: Đỏ nếu đang chặn (Ignore), Xanh nếu hoạt động bình thường
+        local StatusIndicator = Instance.new("Frame")
+        StatusIndicator.Parent = LogItem
+        StatusIndicator.BackgroundColor3 = logData.IsIgnored and Color3.fromRGB(220, 50, 50) or Color3.fromRGB(50, 200, 100)
+        StatusIndicator.BorderSizePixel = 0
+        StatusIndicator.Size = UDim2.new(0, 4, 1, 0)
         
-        -- Số đếm lượt gọi
+        -- Số đếm (Count)
         local CountLabel = Instance.new("TextLabel")
         CountLabel.Parent = LogItem
         CountLabel.BackgroundTransparency = 1
-        CountLabel.Position = UDim2.new(0, 10, 0, 0)
-        CountLabel.Size = UDim2.new(0, 30, 1, 0)
+        CountLabel.Position = UDim2.new(0, 8, 0, 0)
+        CountLabel.Size = UDim2.new(0, 25, 1, 0)
         CountLabel.Font = Enum.Font.GothamBold
-        CountLabel.Text = "1"
-        CountLabel.TextColor3 = Color3.fromRGB(220, 100, 100)
-        CountLabel.TextSize = 12
+        CountLabel.Text = tostring(logData.Count)
+        CountLabel.TextColor3 = logData.IsIgnored and Color3.fromRGB(220, 100, 100) or Color3.fromRGB(100, 220, 100)
+        CountLabel.TextSize = 11
         
-        -- Đường dẫn lệnh
+        -- Tên lệnh / Đường dẫn
         local PathLabel = Instance.new("TextLabel")
         PathLabel.Parent = LogItem
         PathLabel.BackgroundTransparency = 1
-        PathLabel.Position = UDim2.new(0, 45, 0, 0)
-        PathLabel.Size = UDim2.new(0, 355, 1, 0)
+        PathLabel.Position = UDim2.new(0, 35, 0, 0)
+        PathLabel.Size = UDim2.new(0, 280, 1, 0)
         PathLabel.Font = Enum.Font.Code
         PathLabel.Text = logData.Path .. ":" .. logData.Method .. "()"
         PathLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-        PathLabel.TextSize = 11
+        PathLabel.TextSize = 10
         PathLabel.TextXAlignment = Enum.TextXAlignment.Left
         PathLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        
+        -- Nút bấm riêng cho từng dòng (Ignore / Bỏ Chặn)
+        local ToggleBlockBtn = Instance.new("TextButton")
+        ToggleBlockBtn.Parent = LogItem
+        ToggleBlockBtn.BackgroundColor3 = logData.IsIgnored and Color3.fromRGB(0, 170, 100) or Color3.fromRGB(180, 50, 50)
+        ToggleBlockBtn.Position = UDim2.new(0, 325, 0, 5)
+        ToggleBlockBtn.Size = UDim2.new(0, 75, 0, 22)
+        ToggleBlockBtn.Font = Enum.Font.GothamBold
+        ToggleBlockBtn.Text = logData.IsIgnored and "Bỏ Chặn" or "Ignore"
+        ToggleBlockBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        ToggleBlockBtn.TextSize = 10
+        
+        ToggleBlockBtn.MouseButton1Click:Connect(function()
+            logData.IsIgnored = not logData.IsIgnored
+            RefreshLogUI()
+        end)
         
         totalHeight = totalHeight + 37
     end
@@ -194,28 +214,13 @@ local function RefreshLogUI()
     LogListContainer.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
 end
 
--- Nút chuyển sang chế độ Ignore (Chặn)
-IgnoreBtn.MouseButton1Click:Connect(function()
-    for _, logData in ipairs(CapturedLogs) do
-        IgnoredRemotes[logData.Path] = true
-        IgnoredRemotes[logData.Object.Name] = true
-    end
-    print("Đã đưa toàn bộ Remote đang hiển thị vào danh sách chặn (Ignore)!")
-end)
-
--- Nút Bỏ Chặn (Xóa khỏi danh sách Ignore)
-UnblockBtn.MouseButton1Click:Connect(function()
-    IgnoredRemotes = {}
-    print("Đã bỏ chặn tất cả các Remote thành công!")
-end)
-
--- Nút Clear (Xóa sạch log hiển thị)
+-- Nút Clear (Xóa toàn bộ log)
 ClearBtn.MouseButton1Click:Connect(function()
     CapturedLogs = {}
     RefreshLogUI()
 end)
 
--- Vòng lặp cập nhật UI liên tục theo thời gian thực
+-- Vòng lặp cập nhật giao diện thời gian thực
 task.spawn(function()
     while true do
         RefreshLogUI()
@@ -223,4 +228,4 @@ task.spawn(function()
     end
 end)
 
-print("LizLuk Ghost GUI Remote Spy & Blocker đã sẵn sàng!")
+print("LizLuk Ghost GUI đã cập nhật tính năng chặn từng dòng thành công!")
