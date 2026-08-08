@@ -10,10 +10,10 @@ local isLocking = false
 -- DANH SÁCH THUỘC TÍNH ĐỂ SINH Ô NHẬP TRÊN GUI
 --======================================================================
 local attributesConfig = {
+    ["sh"] = "10",
     ["st"] = "500",
     ["sr"] = "500",
     ["ss"] = "50",
-    ["sh"] = "1",
 }
 
 local uiBoxes = {}
