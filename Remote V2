@@ -1,8 +1,7 @@
 -- ==========================================
--- LIZLUK GHOST GUI - TÍCH HỢP COMMAND BLOCKER
+-- LIZLUK GHOST GUI - REMOTE SPY & BLOCKER
 -- ==========================================
 
--- Kiểm tra và dọn dẹp GUI cũ nếu có
 if game.CoreGui:FindFirstChild("LizLukGhostGUI") then
     game.CoreGui.LizLukGhostGUI:Destroy()
 end
@@ -12,36 +11,32 @@ ScreenGui.Name = "LizLukGhostGUI"
 ScreenGui.Parent = game.CoreGui
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Main Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
-MainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
-MainFrame.Size = UDim2.new(0, 400, 0, 300)
+MainFrame.Position = UDim2.new(0.5, -225, 0.5, -175)
+MainFrame.Size = UDim2.new(0, 450, 0, 350)
 MainFrame.Active = true
 MainFrame.Draggable = true
 
--- Tiêu đề & Icon Bướm
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Parent = MainFrame
 TitleLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 TitleLabel.Size = UDim2.new(1, 0, 0, 40)
 TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.Text = " 🦋 LizLuk Ghost GUI"
+TitleLabel.Text = " 🦋 LizLuk Ghost GUI - Remote Spy/Blocker"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextSize = 16
+TitleLabel.TextSize = 14
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 
--- Container chứa các Tab nội dung
 local ContentContainer = Instance.new("Frame")
 ContentContainer.Parent = MainFrame
 ContentContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
 ContentContainer.Position = UDim2.new(0, 10, 0, 50)
-ContentContainer.Size = UDim2.new(0, 380, 0, 240)
+ContentContainer.Size = UDim2.new(0, 430, 0, 290)
 
--- Tab Blocker (Trang chặn lệnh)
 local BlockerTab = Instance.new("ScrollingFrame")
 BlockerTab.Name = "BlockerTab"
 BlockerTab.Parent = ContentContainer
@@ -53,156 +48,179 @@ BlockerTab.Size = UDim2.new(1, 0, 1, 0)
 BlockerTab.CanvasSize = UDim2.new(0, 0, 2, 0)
 BlockerTab.ScrollBarThickness = 5
 
--- Ô nhập lệnh cần chặn (TextBox)
-local CommandInput = Instance.new("TextBox")
-CommandInput.Parent = BlockerTab
-CommandInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-CommandInput.Position = UDim2.new(0, 10, 0, 10)
-CommandInput.Size = UDim2.new(0, 260, 0, 35)
-CommandInput.Font = Enum.Font.Code
-CommandInput.PlaceholderText = "Nhập tên Remote / Lệnh (VD: RequestPearlSpawn)"
-CommandInput.Text = ""
-CommandInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-CommandInput.TextSize = 12
+-- Thanh công cụ trên cùng (Ignore, Bỏ Chặn/Unignore, Clear)
+local TopBar = Instance.new("Frame")
+TopBar.Parent = BlockerTab
+TopBar.BackgroundTransparency = 1
+TopBar.Position = UDim2.new(0, 10, 0, 10)
+TopBar.Size = UDim2.new(0, 410, 0, 35)
 
--- Nút Thêm lệnh
-local AddButton = Instance.new("TextButton")
-AddButton.Parent = BlockerTab
-AddButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-AddButton.Position = UDim2.new(0, 280, 0, 10)
-AddButton.Size = UDim2.new(0, 90, 0, 35)
-AddButton.Font = Enum.Font.GothamBold
-AddButton.Text = "Thêm Chặn"
-AddButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-AddButton.TextSize = 12
+local UIListTop = Instance.new("UIListLayout")
+UIListTop.Parent = TopBar
+UIListTop.FillDirection = Enum.FillDirection.Horizontal
+UIListTop.SortOrder = Enum.SortOrder.LayoutOrder
+UIListTop.Padding = UDim.new(0, 8)
 
--- Trạng thái Bật/Tắt bộ chặn (Toggle Button)
-local ToggleBlockerBtn = Instance.new("TextButton")
-ToggleBlockerBtn.Parent = BlockerTab
-ToggleBlockerBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-ToggleBlockerBtn.Position = UDim2.new(0, 10, 0, 55)
-ToggleBlockerBtn.Size = UDim2.new(0, 360, 0, 30)
-ToggleBlockerBtn.Font = Enum.Font.GothamBold
-ToggleBlockerBtn.Text = "Trạng thái Chặn: BẬT"
-ToggleBlockerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleBlockerBtn.TextSize = 12
+local function createToolButton(name, text, color)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = TopBar
+    btn.BackgroundColor3 = color
+    btn.Size = UDim2.new(0, 85, 0, 30)
+    btn.Font = Enum.Font.GothamBold
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 11
+    return btn
+end
 
--- Danh sách hiển thị các lệnh đang bị chặn (Container bên trong)
-local ListContainer = Instance.new("UIListLayout")
-ListContainer.Parent = BlockerTab
-ListContainer.SortOrder = Enum.SortOrder.LayoutOrder
-ListContainer.Padding = UDim.new(0, 5)
+local IgnoreBtn = createToolButton("IgnoreBtn", "⏸ Ignore", Color3.fromRGB(45, 55, 72))
+local UnblockBtn = createToolButton("UnblockBtn", "▶ Bỏ Chặn", Color3.fromRGB(45, 55, 72))
+local ClearBtn = createToolButton("ClearBtn", "≡ Clear", Color3.fromRGB(45, 55, 72))
 
--- Padding giả lập để đẩy danh sách các item xuống dưới các nút điều khiển phía trên
-local Spacer = Instance.new("Frame")
-Spacer.Parent = BlockerTab
-Spacer.BackgroundTransparency = 1
-Spacer.Size = UDim2.new(1, 0, 0, 95)
+-- Danh sách các lệnh thu thập / bị chặn
+local LogListContainer = Instance.new("ScrollingFrame")
+LogListContainer.Parent = BlockerTab
+LogListContainer.Active = true
+LogListContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+LogListContainer.BorderSizePixel = 0
+LogListContainer.Position = UDim2.new(0, 10, 0, 55)
+LogListContainer.Size = UDim2.new(0, 410, 0, 225)
+LogListContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+LogListContainer.ScrollBarThickness = 4
+
+local ListLayoutLogs = Instance.new("UIListLayout")
+ListLayoutLogs.Parent = LogListContainer
+ListLayoutLogs.SortOrder = Enum.SortOrder.LayoutOrder
+ListLayoutLogs.Padding = UDim.new(0, 5)
 
 -- ==========================================
--- LOGIC XỬ LÝ CHẶN LỆNH (HOOKING)
+-- LOGIC HOOK & QUẢN LÝ DANH SÁCH LỆNH
 -- ==========================================
 
-local BlockedCommands = {} 
-local BlockerEnabled = true
+local IgnoredRemotes = {} -- Danh sách các đường dẫn/tên remote bị chặn (Ignore)
+local CapturedLogs = {}   -- Danh sách lưu trữ các log hiển thị trên UI
 
--- Hook metamethod để can thiệp vào Remote gọi từ Client lên Server
+local function GetFullPath(obj)
+    local fullName = obj.Name
+    local current = obj.Parent
+    while current and current ~= game and current ~= workspace do
+        fullName = current.Name .. "." .. fullName
+        current = current.Parent
+    end
+    return 'game:GetService("' .. (obj.Parent and obj.Parent.Name or "ReplicatedStorage") ..")." .. fullName
+end
+
 local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod()
+    local args = {...}
     
-    if BlockerEnabled and (method == "FireServer" or method == "InvokeServer") then
-        local remoteName = self.Name
-        local fullPath = tostring(self)
+    if method == "FireServer" or method == "InvokeServer" then
+        local remotePath = GetFullPath(self)
         
-        -- Kiểm tra nếu lệnh gọi khớp với bất kỳ chuỗi nào nằm trong danh sách đen
-        for _, blockedPath in ipairs(BlockedCommands) do
-            if remoteName == blockedPath or fullPath:find(blockedPath) then
-                -- Chặn đứng lệnh (không cho gửi đi)
-                return nil 
-            end
+        -- Kiểm tra xem remote này có nằm trong danh sách Ignore hay không
+        if IgnoredRemotes[remotePath] or IgnoredRemotes[self.Name] then
+            return nil -- Chặn lệnh không cho gửi đi
+        end
+        
+        -- Ghi lại lịch sử lệnh gọi (Remote Spy)
+        table.insert(CapturedLogs, {
+            Object = self,
+            Path = remotePath,
+            Method = method,
+            Args = args
+        })
+        
+        -- Giới hạn số lượng log hiển thị tránh tràn bộ nhớ
+        if #CapturedLogs > 50 then
+            table.remove(CapturedLogs, 1)
         end
     end
     
     return oldNamecall(self, ...)
 end)
 
--- Xử lý bật/tắt toàn bộ bộ chặn
-ToggleBlockerBtn.MouseButton1Click:Connect(function()
-    BlockerEnabled = not BlockerEnabled
-    if BlockerEnabled then
-        ToggleBlockerBtn.Text = "Trạng thái Chặn: BẬT"
-        ToggleBlockerBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-    else
-        ToggleBlockerBtn.Text = "Trạng thái Chặn: TẮT"
-        ToggleBlockerBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    end
-end)
-
--- Hàm tạo giao diện hiển thị từng lệnh bị chặn trong danh sách
-local function RenderBlockedList()
-    -- Xóa các UI item cũ (trừ các điều khiển gốc)
-    for _, child in ipairs(BlockerTab:GetChildren()) do
-        if child:IsA("Frame") and child ~= Spacer then
+-- Cập nhật giao diện danh sách log phong cách Remote Spy
+local function RefreshLogUI()
+    for _, child in ipairs(LogListContainer:GetChildren()) do
+        if child:IsA("Frame") then
             child:Destroy()
         end
     end
     
-    -- Tạo lại danh sách dòng lệnh
-    for i, cmd in ipairs(BlockedCommands) do
-        local ItemFrame = Instance.new("Frame")
-        ItemFrame.Parent = BlockerTab
-        ItemFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-        ItemFrame.Size = UDim2.new(0, 360, 0, 30)
+    local totalHeight = 0
+    for i, logData in ipairs(CapturedLogs) do
+        local LogItem = Instance.new("Frame")
+        LogItem.Parent = LogListContainer
+        LogItem.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+        LogItem.BorderSizePixel = 0
+        LogItem.Size = UDim2.new(1, 0, 0, 32)
         
-        local CmdLabel = Instance.new("TextLabel")
-        CmdLabel.Parent = ItemFrame
-        CmdLabel.BackgroundTransparency = 1
-        CmdLabel.Position = UDim2.new(0, 5, 0, 0)
-        CmdLabel.Size = UDim2.new(0, 270, 1, 0)
-        CmdLabel.Font = Enum.Font.Code
-        CmdLabel.Text = cmd
-        CmdLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-        CmdLabel.TextSize = 11
-        CmdLabel.TextXAlignment = Enum.TextXAlignment.Left
+        -- Thanh màu đỏ bên cạnh giống giao diện mẫu
+        local RedBar = Instance.new("Frame")
+        RedBar.Parent = LogItem
+        RedBar.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+        RedBar.BorderSizePixel = 0
+        RedBar.Size = UDim2.new(0, 4, 1, 0)
         
-        local UnblockBtn = Instance.new("TextButton")
-        UnblockBtn.Parent = ItemFrame
-        UnblockBtn.BackgroundColor3 = Color3.fromRGB(200, 70, 70)
-        UnblockBtn.Position = UDim2.new(0, 280, 0, 3)
-        UnblockBtn.Size = UDim2.new(0, 75, 0, 24)
-        UnblockBtn.Font = Enum.Font.GothamBold
-        UnblockBtn.Text = "Bỏ Chặn"
-        UnblockBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        UnblockBtn.TextSize = 10
+        -- Số đếm lượt gọi
+        local CountLabel = Instance.new("TextLabel")
+        CountLabel.Parent = LogItem
+        CountLabel.BackgroundTransparency = 1
+        CountLabel.Position = UDim2.new(0, 10, 0, 0)
+        CountLabel.Size = UDim2.new(0, 30, 1, 0)
+        CountLabel.Font = Enum.Font.GothamBold
+        CountLabel.Text = "1"
+        CountLabel.TextColor3 = Color3.fromRGB(220, 100, 100)
+        CountLabel.TextSize = 12
         
-        -- Sự kiện bấm nút Bỏ chặn
-        UnblockBtn.MouseButton1Click:Connect(function()
-            table.remove(BlockedCommands, i)
-            RenderBlockedList()
-        end)
+        -- Đường dẫn lệnh
+        local PathLabel = Instance.new("TextLabel")
+        PathLabel.Parent = LogItem
+        PathLabel.BackgroundTransparency = 1
+        PathLabel.Position = UDim2.new(0, 45, 0, 0)
+        PathLabel.Size = UDim2.new(0, 355, 1, 0)
+        PathLabel.Font = Enum.Font.Code
+        PathLabel.Text = logData.Path .. ":" .. logData.Method .. "()"
+        PathLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        PathLabel.TextSize = 11
+        PathLabel.TextXAlignment = Enum.TextXAlignment.Left
+        PathLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        
+        totalHeight = totalHeight + 37
     end
+    
+    LogListContainer.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
 end
 
--- Sự kiện bấm nút Thêm Chặn
-AddButton.MouseButton1Click:Connect(function()
-    local text = CommandInput.Text
-    -- Loại bỏ khoảng trắng thừa
-    text = text:gsub("^%s*(.-)%s*$", "%1")
-    
-    if text ~= "" then
-        -- Kiểm tra trùng lặp
-        local exists = false
-        for _, v in ipairs(BlockedCommands) do
-            if v == text then exists = true break end
-        end
-        
-        if not exists then
-            table.insert(BlockedCommands, text)
-            CommandInput.Text = ""
-            RenderBlockedList()
-        end
+-- Nút chuyển sang chế độ Ignore (Chặn)
+IgnoreBtn.MouseButton1Click:Connect(function()
+    for _, logData in ipairs(CapturedLogs) do
+        IgnoredRemotes[logData.Path] = true
+        IgnoredRemotes[logData.Object.Name] = true
+    end
+    print("Đã đưa toàn bộ Remote đang hiển thị vào danh sách chặn (Ignore)!")
+end)
+
+-- Nút Bỏ Chặn (Xóa khỏi danh sách Ignore)
+UnblockBtn.MouseButton1Click:Connect(function()
+    IgnoredRemotes = {}
+    print("Đã bỏ chặn tất cả các Remote thành công!")
+end)
+
+-- Nút Clear (Xóa sạch log hiển thị)
+ClearBtn.MouseButton1Click:Connect(function()
+    CapturedLogs = {}
+    RefreshLogUI()
+end)
+
+-- Vòng lặp cập nhật UI liên tục theo thời gian thực
+task.spawn(function()
+    while true do
+        RefreshLogUI()
+        task.wait(0.5)
     end
 end)
 
-print("LizLuk Ghost GUI + Command Blocker đã được tải thành công!")
+print("LizLuk Ghost GUI Remote Spy & Blocker đã sẵn sàng!")
