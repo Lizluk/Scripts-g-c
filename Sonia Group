@@ -30,23 +30,9 @@ local closestPlayerName = ""
 local maxDetectDistance = 50 
 local searchFilterText = ""
 
--- BIẾN HỆ THỐNG GROUP SYNC (DÙNG MỘT VALUE TRONG REPLICATEDSTORAGE LÀM CẦU NỐI)
+-- BIẾN HỆ THỐNG GROUP SYNC DÙNG CHARACTER ATTRIBUTES (SẼ ĐỒNG BỘ MỌI CLIENT)
 local groupLeaderName = ""
 local isGroupLeader = false
-local groupFolder = ReplicatedStorage:FindFirstChild("LizlukGroupFolder")
-
-if not groupFolder then
-    groupFolder = Instance.new("Folder")
-    groupFolder.Name = "LizlukGroupFolder"
-    -- Sử dụng parent an toàn để các client dùng chung script giao tiếp
-    pcall(function() groupFolder.Parent = ReplicatedStorage end)
-end
-
--- Đăng ký thông tin Client vào Group Data
-local myGroupData = groupFolder:FindFirstChild(LocalPlayer.Name) or Instance.new("StringValue")
-myGroupData.Name = LocalPlayer.Name
-myGroupData.Value = "Member"
-myGroupData.Parent = groupFolder
 
 -- Thời gian khởi chạy Script
 local startTime = os.time()
@@ -350,56 +336,31 @@ GroupListLayout.Parent = GroupScroll
 GroupListLayout.Padding = UDim.new(0, 5)
 
 ----------------------------------------------------------------
--- HỆ THỐNG ĐỒNG BỘ GROUP VÀ TÍN HIỆU
+-- HỆ THỐNG ĐỒNG BỘ MẠNG QUA PLAYER ATTRIBUTES (KHÔNG NỔI LỖI CLIENT)
 ----------------------------------------------------------------
+
+-- Đăng ký Script Active lên Player Object (Tất cả Client đều đọc được Attribute của nhau)
+LocalPlayer:SetAttribute("LizlukScriptActive", true)
+LocalPlayer:SetAttribute("LizlukLeader", "")
+LocalPlayer:SetAttribute("LizlukCommand", "")
 
 local syncBindable = Instance.new("BindableEvent")
 
 local function sendSyncCommand(actionType, extraData)
     if not isGroupLeader then return end
-    for _, v in pairs(groupFolder:GetChildren()) do
-        if v:IsA("StringValue") and v.Name ~= LocalPlayer.Name then
-            pcall(function()
-                v.Value = actionType .. ";" .. tostring(extraData or "")
-            end)
-        end
-    end
+    local cmdString = actionType .. ";" .. tostring(extraData or "") .. ";" .. tostring(tick())
+    LocalPlayer:SetAttribute("LizlukCommand", cmdString)
 end
 
--- Lắng nghe tín hiệu đồng bộ dành cho các thành viên
-myGroupData.Changed:Connect(function(val)
-    if isGroupLeader then return end
-    
-    local parts = string.split(val, ";")
-    local cmd = parts[1]
-    local arg = parts[2]
-
-    if cmd == "TOGGLE_KA" then
-        killAuraActive = (arg == "true")
-    elseif cmd == "TOGGLE_DRINK" then
-        autoDrinkActive = (arg == "true")
-    elseif cmd == "TOGGLE_EAT" then
-        autoEatActive = (arg == "true")
-    elseif cmd == "TOGGLE_PASSIVE" then
-        passiveSkillActive = (arg == "true")
-    elseif cmd == "TOGGLE_GRAB" then
-        autoGrabActive = (arg == "true")
-    elseif cmd == "TOGGLE_FORAGE" then
-        autoForageActive = (arg == "true")
-    elseif cmd == "ATTACK" then
-        syncBindable:Fire("ATTACK")
-    end
-    updateUtilityVisuals()
-end)
-
+-- Lắng nghe xem ai trong Server đang dùng Script
 local function refreshGroupList()
     for _, child in pairs(GroupScroll:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
 
-    for _, v in pairs(groupFolder:GetChildren()) do
-        if v:IsA("StringValue") then
-            local pName = v.Name
+    for _, p in pairs(Players:GetPlayers()) do
+        if p:GetAttribute("LizlukScriptActive") then
+            local pName = p.Name
             local itemFrame = Instance.new("Frame")
             itemFrame.Size = UDim2.new(1, 0, 0, 30)
             itemFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
@@ -436,6 +397,7 @@ local function refreshGroupList()
                 if pName == LocalPlayer.Name then
                     groupLeaderName = LocalPlayer.Name
                     isGroupLeader = true
+                    LocalPlayer:SetAttribute("LizlukLeader", LocalPlayer.Name)
                     refreshGroupList()
                 end
             end)
@@ -443,9 +405,41 @@ local function refreshGroupList()
     end
 end
 
-groupFolder.ChildAdded:Connect(refreshGroupList)
-groupFolder.ChildRemoved:Connect(refreshGroupList)
-refreshGroupList()
+-- Vòng lặp quét những ai dùng Script và kiểm tra lệnh từ Leader
+task.spawn(function()
+    while true do
+        refreshGroupList()
+        
+        -- Nếu mình không phải Leader, tìm xem ai đang là Leader để nhận lệnh
+        if not isGroupLeader then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p:GetAttribute("LizlukLeader") == p.Name then
+                    groupLeaderName = p.Name
+                    local lastCmd = p:GetAttribute("LizlukCommand")
+                    if lastCmd and lastCmd ~= "" then
+                        local parts = string.split(lastCmd, ";")
+                        local cmd = parts[1]
+                        local arg = parts[2]
+                        local cmdTime = tonumber(parts[3]) or 0
+                        
+                        -- Chỉ thực thi lệnh nếu mới phát ra
+                        if tick() - cmdTime < 1.5 then
+                            if cmd == "TOGGLE_KA" then killAuraActive = (arg == "true")
+                            elseif cmd == "TOGGLE_DRINK" then autoDrinkActive = (arg == "true")
+                            elseif cmd == "TOGGLE_EAT" then autoEatActive = (arg == "true")
+                            elseif cmd == "TOGGLE_PASSIVE" then passiveSkillActive = (arg == "true")
+                            elseif cmd == "TOGGLE_GRAB" then autoGrabActive = (arg == "true")
+                            elseif cmd == "TOGGLE_FORAGE" then autoForageActive = (arg == "true")
+                            elseif cmd == "ATTACK" then syncBindable:Fire("ATTACK") end
+                            updateUtilityVisuals()
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(0.5)
+    end
+end)
 
 ----------------------------------------------------------------
 -- CẬP NHẬT GIAO DIỆN & TỔNG HỢP NÚT BẤM
