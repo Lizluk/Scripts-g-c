@@ -95,7 +95,7 @@ StatusLabel.TextSize = 13
 StatusLabel.Parent = MainFrame
 Instance.new("UICorner", StatusLabel).CornerRadius = UDim.new(0, 4)
 
--- HÀM TẠO NÚT TÍNH NĂNG FAST
+-- HÀM TẠO NÚT TÍNH NĂNG
 local function createFeatureBtn(text, pos, color)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -10, 0, 25)
@@ -110,11 +110,11 @@ local function createFeatureBtn(text, pos, color)
     return btn
 end
 
-local DrinkBtn = createFeatureBtn("AUTO DRINK: OFF", UDim2.new(0, 5, 0, 70))
-local EatBtn = createFeatureBtn("AUTO EAT: OFF", UDim2.new(0, 5, 0, 100))
-local PassiveBtn = createFeatureBtn("PASSIVE SKILL: OFF", UDim2.new(0, 5, 0, 130))
-local GrabBtn = createFeatureBtn("AUTO GRAB: OFF", UDim2.new(0, 5, 0, 160))
-local ForageBtn = createFeatureBtn("AUTO FORAGE: OFF", UDim2.new(0, 5, 0, 190))
+local DrinkBtn = createFeatureBtn("AUTO DRINK: OFF [Z]", UDim2.new(0, 5, 0, 70))
+local EatBtn = createFeatureBtn("AUTO EAT: OFF [X]", UDim2.new(0, 5, 0, 100))
+local PassiveBtn = createFeatureBtn("PASSIVE SKILL: OFF [C]", UDim2.new(0, 5, 0, 130))
+local GrabBtn = createFeatureBtn("AUTO GRAB: OFF [V]", UDim2.new(0, 5, 0, 160))
+local ForageBtn = createFeatureBtn("AUTO FORAGE: OFF [B]", UDim2.new(0, 5, 0, 190))
 local PortalBtn = createFeatureBtn("TELEPORT PORTAL [O]", UDim2.new(0, 5, 0, 220), Color3.fromRGB(60, 40, 70))
 
 -- DISTANCE INPUT
@@ -386,35 +386,41 @@ buildButtons()
 ----------------------------------------------------------------
 -- 5. BẮT PHÍM & TÍNH NĂNG
 ----------------------------------------------------------------
-DrinkBtn.MouseButton1Click:Connect(function()
+local function toggleDrink()
     autoDrinkActive = not autoDrinkActive
-    DrinkBtn.Text = autoDrinkActive and "AUTO DRINK: ON" or "AUTO DRINK: OFF"
+    DrinkBtn.Text = autoDrinkActive and "AUTO DRINK: ON [Z]" or "AUTO DRINK: OFF [Z]"
     DrinkBtn.TextColor3 = autoDrinkActive and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 255, 255)
-end)
+end
 
-EatBtn.MouseButton1Click:Connect(function()
+local function toggleEat()
     autoEatActive = not autoEatActive
-    EatBtn.Text = autoEatActive and "AUTO EAT: ON" or "AUTO EAT: OFF"
+    EatBtn.Text = autoEatActive and "AUTO EAT: ON [X]" or "AUTO EAT: OFF [X]"
     EatBtn.TextColor3 = autoEatActive and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 255, 255)
-end)
+end
 
-PassiveBtn.MouseButton1Click:Connect(function()
+local function togglePassive()
     passiveSkillActive = not passiveSkillActive
-    PassiveBtn.Text = passiveSkillActive and "PASSIVE SKILL: ON" or "PASSIVE SKILL: OFF"
+    PassiveBtn.Text = passiveSkillActive and "PASSIVE SKILL: ON [C]" or "PASSIVE SKILL: OFF [C]"
     PassiveBtn.TextColor3 = passiveSkillActive and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 255, 255)
-end)
+end
 
-GrabBtn.MouseButton1Click:Connect(function()
+local function toggleGrab()
     autoGrabActive = not autoGrabActive
-    GrabBtn.Text = autoGrabActive and "AUTO GRAB: ON" or "AUTO GRAB: OFF"
+    GrabBtn.Text = autoGrabActive and "AUTO GRAB: ON [V]" or "AUTO GRAB: OFF [V]"
     GrabBtn.TextColor3 = autoGrabActive and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 255, 255)
-end)
+end
 
-ForageBtn.MouseButton1Click:Connect(function()
+local function toggleForage()
     autoForageActive = not autoForageActive
-    ForageBtn.Text = autoForageActive and "AUTO FORAGE: ON" or "AUTO FORAGE: OFF"
+    ForageBtn.Text = autoForageActive and "AUTO FORAGE: ON [B]" or "AUTO FORAGE: OFF [B]"
     ForageBtn.TextColor3 = autoForageActive and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 255, 255)
-end)
+end
+
+DrinkBtn.MouseButton1Click:Connect(toggleDrink)
+EatBtn.MouseButton1Click:Connect(toggleEat)
+PassiveBtn.MouseButton1Click:Connect(togglePassive)
+GrabBtn.MouseButton1Click:Connect(toggleGrab)
+ForageBtn.MouseButton1Click:Connect(toggleForage)
 
 PortalBtn.MouseButton1Click:Connect(function()
     if portalRemote then pcall(function() portalRemote:FireServer() end) end
@@ -427,6 +433,12 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
     if input.KeyCode == Enum.KeyCode.O and portalRemote then pcall(function() portalRemote:FireServer() end) end
     
+    if input.KeyCode == Enum.KeyCode.Z then toggleDrink() end
+    if input.KeyCode == Enum.KeyCode.X then toggleEat() end
+    if input.KeyCode == Enum.KeyCode.C then togglePassive() end
+    if input.KeyCode == Enum.KeyCode.V then toggleGrab() end
+    if input.KeyCode == Enum.KeyCode.B then toggleForage() end
+
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
         StatusLabel.Text = killAuraActive and "KILL AURA: READY [Q]" or "KILL AURA: PAUSED [Q]"
