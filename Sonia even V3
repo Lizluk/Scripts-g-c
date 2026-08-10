@@ -27,7 +27,7 @@ local passiveSkillActive = false
 local autoGrabActive = false 
 local autoForageActive = false
 local closestPlayerName = "" 
-local maxDetectDistance = 150 
+local maxDetectDistance = 50 
 local searchFilterText = ""
 
 -- Thời gian khởi chạy Script
@@ -452,7 +452,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.U then passiveSkillActive = not passiveSkillActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.J then autoGrabActive = not autoGrabActive updateUtilityVisuals() end
     if input.KeyCode == Enum.KeyCode.Y then autoForageActive = not autoForageActive updateUtilityVisuals() end
-    if input.KeyCode == Enum.KeyCode.G then triggerPortal() end
+    if input.KeyCode == Enum.KeyCode.O then triggerPortal() end
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
         if killAuraActive then
