@@ -5,38 +5,36 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Remotes & Folders
-local damageRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemote")
-local stateAilmentRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("StateAilment")
-local activateAbilityRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("ActivateAbility")
-local drinkRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DrinkRemote")
-local foodRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Food")
-local portalRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Portal")
-local forageableRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CompleteForageableRemote")
+-- Safe Remote Getters (Không làm treo script nếu thiếu Remote)
+local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
+local damageRemote = remotesFolder and remotesFolder:FindFirstChild("CharactersDamageRemote")
+local stateAilmentRemote = remotesFolder and remotesFolder:FindFirstChild("StateAilment")
+local activateAbilityRemote = remotesFolder and remotesFolder:FindFirstChild("ActivateAbility")
+local drinkRemote = remotesFolder and remotesFolder:FindFirstChild("DrinkRemote")
+local foodRemote = remotesFolder and remotesFolder:FindFirstChild("Food")
+local portalRemote = remotesFolder and remotesFolder:FindFirstChild("Portal")
+local forageableRemote = remotesFolder and remotesFolder:FindFirstChild("CompleteForageableRemote")
 
-local charactersFolder = workspace:WaitForChild("Characters")
-local interactionsFolder = workspace:WaitForChild("Interactions")
+local charactersFolder = workspace:FindFirstChild("Characters") or workspace
 
--- Biến trạng thái
+-- Status variables
 local killAuraActive = true 
 local autoDrinkActive = false 
 local autoEatActive = false 
 local passiveSkillActive = false 
 local autoGrabActive = false 
 local autoForageActive = false
-local closestPlayerName = "" 
 local maxDetectDistance = 50 
 local searchFilterText = ""
 
--- Danh sách quản lý Target & Group Keybind
-local targetList = {} -- Chứa các player nằm ngoài bảng KillAura
 local groupList = {}  -- [pName] = {Enabled = bool, Key = Enum.KeyCode, Frame = Instance, LastAttack = number}
+local buttons = {}    -- Stores list of main UI player buttons
 
 local startTime = os.time()
-local attackCooldown = 1.4 -- Tốc độ Kill Aura cố định 1.4s theo yêu cầu
+local attackCooldown = 1.4 -- Tốc độ Kill Aura chuẩn 1.4s
 
 ----------------------------------------------------------------
--- 1. TẠO GUI CHÍNH & GUI GROUP (F1)
+-- 1. TAO GUI CHINH & GROUP PANEL [F1]
 ----------------------------------------------------------------
 if PlayerGui:FindFirstChild("LizlukKillGUI") then
     PlayerGui.LizlukKillGUI:Destroy()
@@ -47,31 +45,25 @@ ScreenGui.Name = "LizlukKillGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
--- MAIN MENU
+-- MAIN FRAME
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 650)
+MainFrame.Size = UDim2.new(0, 220, 0, 580)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 8)
-UICorner.Parent = MainFrame
-
--- CLOCK
+-- TIME FRAME
 local TimeFrame = Instance.new("Frame")
 TimeFrame.Size = UDim2.new(1, 0, 0, 30)
 TimeFrame.Position = UDim2.new(0, 0, 1, 8)
 TimeFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 TimeFrame.BorderSizePixel = 0
 TimeFrame.Parent = MainFrame
-
-local TimeCorner = Instance.new("UICorner")
-TimeCorner.CornerRadius = UDim.new(0, 6)
-TimeCorner.Parent = TimeFrame
+Instance.new("UICorner", TimeFrame).CornerRadius = UDim.new(0, 6)
 
 local PlaytimeLabel = Instance.new("TextLabel")
 PlaytimeLabel.Size = UDim2.new(1, 0, 1, 0)
@@ -90,10 +82,7 @@ Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 15
 Title.Parent = MainFrame
-
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 8)
-TitleCorner.Parent = Title
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
 
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -10, 0, 25)
@@ -104,67 +93,12 @@ StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
 StatusLabel.Font = Enum.Font.SourceSansBold
 StatusLabel.TextSize = 13
 StatusLabel.Parent = MainFrame
-
-local StatusCorner = Instance.new("UICorner")
-StatusCorner.CornerRadius = UDim.new(0, 4)
-StatusCorner.Parent = StatusLabel
-
--- BUTTONS
-local DrinkBtn = Instance.new("TextButton")
-DrinkBtn.Size = UDim2.new(1, -10, 0, 25)
-DrinkBtn.Position = UDim2.new(0, 5, 0, 70)
-DrinkBtn.Font = Enum.Font.SourceSansBold
-DrinkBtn.TextSize = 13
-DrinkBtn.Parent = MainFrame
-Instance.new("UICorner", DrinkBtn).CornerRadius = UDim.new(0, 4)
-
-local EatBtn = Instance.new("TextButton")
-EatBtn.Size = UDim2.new(1, -10, 0, 25)
-EatBtn.Position = UDim2.new(0, 5, 0, 100)
-EatBtn.Font = Enum.Font.SourceSansBold
-EatBtn.TextSize = 13
-EatBtn.Parent = MainFrame
-Instance.new("UICorner", EatBtn).CornerRadius = UDim.new(0, 4)
-
-local PassiveBtn = Instance.new("TextButton")
-PassiveBtn.Size = UDim2.new(1, -10, 0, 25)
-PassiveBtn.Position = UDim2.new(0, 5, 0, 130)
-PassiveBtn.Font = Enum.Font.SourceSansBold
-PassiveBtn.TextSize = 13
-PassiveBtn.Parent = MainFrame
-Instance.new("UICorner", PassiveBtn).CornerRadius = UDim.new(0, 4)
-
-local GrabBtn = Instance.new("TextButton")
-GrabBtn.Size = UDim2.new(1, -10, 0, 25)
-GrabBtn.Position = UDim2.new(0, 5, 0, 160)
-GrabBtn.Font = Enum.Font.SourceSansBold
-GrabBtn.TextSize = 13
-GrabBtn.Parent = MainFrame
-Instance.new("UICorner", GrabBtn).CornerRadius = UDim.new(0, 4)
-
-local ForageBtn = Instance.new("TextButton")
-ForageBtn.Size = UDim2.new(1, -10, 0, 25)
-ForageBtn.Position = UDim2.new(0, 5, 0, 190)
-ForageBtn.Font = Enum.Font.SourceSansBold
-ForageBtn.TextSize = 13
-ForageBtn.Parent = MainFrame
-Instance.new("UICorner", ForageBtn).CornerRadius = UDim.new(0, 4)
-
-local PortalBtn = Instance.new("TextButton")
-PortalBtn.Size = UDim2.new(1, -10, 0, 25)
-PortalBtn.Position = UDim2.new(0, 5, 0, 220)
-PortalBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-PortalBtn.Text = "TELEPORT PORTAL [O]"
-PortalBtn.TextColor3 = Color3.fromRGB(200, 100, 255)
-PortalBtn.Font = Enum.Font.SourceSansBold
-PortalBtn.TextSize = 13
-PortalBtn.Parent = MainFrame
-Instance.new("UICorner", PortalBtn).CornerRadius = UDim.new(0, 4)
+Instance.new("UICorner", StatusLabel).CornerRadius = UDim.new(0, 4)
 
 -- DISTANCE INPUT
 local DistanceInputFrame = Instance.new("Frame")
-DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 255)
+DistanceInputFrame.Size = UDim2.new(1, -10, 0, 30)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 75)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.Parent = MainFrame
 Instance.new("UICorner", DistanceInputFrame).CornerRadius = UDim.new(0, 4)
@@ -173,7 +107,7 @@ local DistanceLabel = Instance.new("TextLabel")
 DistanceLabel.Size = UDim2.new(0, 130, 1, 0)
 DistanceLabel.Position = UDim2.new(0, 5, 0, 0)
 DistanceLabel.BackgroundTransparency = 1
-DistanceLabel.Text = "Hạn mức khoảng cách:"
+DistanceLabel.Text = "Khoảng cách:"
 DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 DistanceLabel.Font = Enum.Font.SourceSansBold
 DistanceLabel.TextSize = 12
@@ -181,8 +115,8 @@ DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
 DistanceLabel.Parent = DistanceInputFrame
 
 local DistanceBox = Instance.new("TextBox")
-DistanceBox.Size = UDim2.new(0, 65, 0, 23)
-DistanceBox.Position = UDim2.new(1, -70, 0.5, -11)
+DistanceBox.Size = UDim2.new(0, 60, 0, 22)
+DistanceBox.Position = UDim2.new(1, -65, 0.5, -11)
 DistanceBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
 DistanceBox.Text = tostring(maxDetectDistance)
 DistanceBox.TextColor3 = Color3.fromRGB(0, 220, 255)
@@ -204,7 +138,7 @@ end)
 -- SEARCH BOX
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 295)
+SearchBox.Position = UDim2.new(0, 5, 0, 110)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.PlaceholderText = "🔍 Tìm tên người chơi..."
 SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -214,20 +148,9 @@ SearchBox.ClearTextOnFocus = false
 SearchBox.Parent = MainFrame
 Instance.new("UICorner", SearchBox).CornerRadius = UDim.new(0, 4)
 
-local SelectAllBtn = Instance.new("TextButton")
-SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 325)
-SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
-SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
-SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-SelectAllBtn.Font = Enum.Font.SourceSansBold
-SelectAllBtn.TextSize = 13
-SelectAllBtn.Parent = MainFrame
-Instance.new("UICorner", SelectAllBtn).CornerRadius = UDim.new(0, 4)
-
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -360)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 355)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -145)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 140)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.ScrollBarThickness = 4
 ScrollingFrame.Parent = MainFrame
@@ -236,9 +159,7 @@ local UIListLayout = Instance.new("UIListLayout")
 UIListLayout.Parent = ScrollingFrame
 UIListLayout.Padding = UDim.new(0, 5)
 
-----------------------------------------------------------------
--- GIAO DIỆN GROUP MEMBERS [F1] CẬP NHẬT MỚI
-----------------------------------------------------------------
+-- GROUP FRAME [F1]
 local GroupFrame = Instance.new("Frame")
 GroupFrame.Size = UDim2.new(0, 260, 0, 350)
 GroupFrame.Position = UDim2.new(0.05, 230, 0.2, 0)
@@ -271,12 +192,23 @@ GroupListLayout.Parent = GroupScroll
 GroupListLayout.Padding = UDim.new(0, 5)
 
 ----------------------------------------------------------------
--- LOGIC QUẢN LÝ CHUYỂN TÊN VÀ KEYBIND GROUP
+-- 2. LOGIC ĐỒNG HỒ & QUẢN LÝ TÊN
 ----------------------------------------------------------------
+task.spawn(function()
+    while true do
+        local elapsed = os.time() - startTime
+        local hours = math.floor(elapsed / 3600)
+        local mins = math.floor((elapsed % 3600) / 60)
+        local secs = elapsed % 60
+        PlaytimeLabel.Text = string.format("⏱️ TIME: %02d:%02d:%02d", hours, mins, secs)
+        task.wait(1)
+    end
+end)
+
 local function updateMainListVisibility()
     for pName, btnData in pairs(buttons) do
         if groupList[pName] then
-            btnData.Button.Visible = false -- Ẩn khỏi bảng danh sách trái khi đã vào Group
+            btnData.Button.Visible = false
         else
             if searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true) then
                 btnData.Button.Visible = true
@@ -293,7 +225,6 @@ local function removeFromGroup(pName)
             groupList[pName].Frame:Destroy()
         end
         groupList[pName] = nil
-        targetList[pName] = nil
         updateMainListVisibility()
     end
 end
@@ -307,7 +238,6 @@ local function addToGroup(pName)
     itemFrame.Parent = GroupScroll
     Instance.new("UICorner", itemFrame).CornerRadius = UDim.new(0, 4)
 
-    -- Nút Checkbox
     local toggleBtn = Instance.new("TextButton")
     toggleBtn.Size = UDim2.new(0, 25, 0, 25)
     toggleBtn.Position = UDim2.new(0, 5, 0.5, -12)
@@ -318,7 +248,6 @@ local function addToGroup(pName)
     toggleBtn.Parent = itemFrame
     Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 4)
 
-    -- Tên người chơi
     local nameLbl = Instance.new("TextLabel")
     nameLbl.Size = UDim2.new(0, 110, 1, 0)
     nameLbl.Position = UDim2.new(0, 35, 0, 0)
@@ -330,7 +259,6 @@ local function addToGroup(pName)
     nameLbl.TextXAlignment = Enum.TextXAlignment.Left
     nameLbl.Parent = itemFrame
 
-    -- Nút gán Keybind
     local keyBtn = Instance.new("TextButton")
     keyBtn.Size = UDim2.new(0, 50, 0, 25)
     keyBtn.Position = UDim2.new(1, -80, 0.5, -12)
@@ -342,7 +270,6 @@ local function addToGroup(pName)
     keyBtn.Parent = itemFrame
     Instance.new("UICorner", keyBtn).CornerRadius = UDim.new(0, 4)
 
-    -- Nút Xóa
     local removeBtn = Instance.new("TextButton")
     removeBtn.Size = UDim2.new(0, 22, 0, 25)
     removeBtn.Position = UDim2.new(1, -27, 0.5, -12)
@@ -371,16 +298,13 @@ local function addToGroup(pName)
         end
     end)
 
-    local waitingForKey = false
     keyBtn.MouseButton1Click:Connect(function()
-        waitingForKey = true
         keyBtn.Text = "..."
         local conn
         conn = UserInputService.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 groupList[pName].Key = input.KeyCode
                 keyBtn.Text = input.KeyCode.Name
-                waitingForKey = false
                 conn:Disconnect()
             end
         end)
@@ -394,7 +318,7 @@ local function addToGroup(pName)
 end
 
 ----------------------------------------------------------------
--- HAM HIT KILL AURA TỐC ĐỘ 1.4s
+-- 3. HÀM ĐÁNH AURA (TỐC ĐỘ 1.4s)
 ----------------------------------------------------------------
 local function executeGroupAttack(pName)
     local data = groupList[pName]
@@ -411,9 +335,11 @@ local function executeGroupAttack(pName)
         if targetRoot then
             local dist = (myRoot.Position - targetRoot.Position).Magnitude
             if dist <= maxDetectDistance then
-                pcall(function()
-                    damageRemote:FireServer({[1] = targetCharacter})
-                end)
+                if damageRemote then
+                    pcall(function()
+                        damageRemote:FireServer({[1] = targetCharacter})
+                    end)
+                end
                 data.LastAttack = tick()
             end
         end
@@ -421,10 +347,8 @@ local function executeGroupAttack(pName)
 end
 
 ----------------------------------------------------------------
--- CẬP NHẬT NÚT BẤM & VÒNG LẶP
+-- 4. BUILD VÀ RENDER TÊN NGƯỜI CHƠI
 ----------------------------------------------------------------
-buttons = {}
-
 local function buildButtons()
     for _, child in pairs(ScrollingFrame:GetChildren()) do
         if child:IsA("TextButton") then child:Destroy() end
@@ -436,6 +360,9 @@ local function buildButtons()
             local pName = player.Name
             local Btn = Instance.new("TextButton")
             Btn.Size = UDim2.new(1, 0, 0, 30)
+            Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+            Btn.Text = pName
+            Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
             Btn.Font = Enum.Font.SourceSansBold
             Btn.TextSize = 14
             Btn.BorderSizePixel = 0
@@ -443,7 +370,7 @@ local function buildButtons()
             Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
 
             Btn.MouseButton1Click:Connect(function()
-                addToGroup(pName) -- Thêm vào F1 Group ngay khi bấm
+                addToGroup(pName)
             end)
 
             buttons[pName] = {Button = Btn}
@@ -459,14 +386,34 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 buildButtons()
 
--- Bắt phím kích hoạt theo Keybind từng acc trong Group
+----------------------------------------------------------------
+-- 5. BẮT PHÍM & VÒNG LẶP CHÍNH
+----------------------------------------------------------------
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if UserInputService:GetFocusedTextBox() then return end
     if gameProcessed then return end
 
     if input.KeyCode == Enum.KeyCode.F1 then GroupFrame.Visible = not GroupFrame.Visible end
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
+    if input.KeyCode == Enum.KeyCode.Q then
+        killAuraActive = not killAuraActive
+        if killAuraActive then
+            StatusLabel.Text = "KILL AURA: READY [Q]"
+            StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+        else
+            StatusLabel.Text = "KILL AURA: PAUSED [Q]"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+        end
+    end
 
+    -- Click chuột trái cũng chém các mục tiêu trong Group nếu đang bật
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        for pName, data in pairs(groupList) do
+            executeGroupAttack(pName)
+        end
+    end
+
+    -- Đánh theo phím cài riêng
     for pName, data in pairs(groupList) do
         if data.Key == input.KeyCode then
             executeGroupAttack(pName)
@@ -474,7 +421,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Loop tự động chạy theo thời gian 1.4s nếu bật
+-- Vòng lặp Auto Kill Aura tự động theo mốc 1.4s
 task.spawn(function()
     while true do
         if killAuraActive then
@@ -484,7 +431,7 @@ task.spawn(function()
                 end
             end
         end
-        task.wait(0.1)
+        task.wait(0.2)
     end
 end)
 
