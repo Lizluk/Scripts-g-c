@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -23,7 +24,7 @@ local targets = {}
 local groupTargets = {} -- Danh sách người chơi thuộc Group (F1)
 
 local killAuraActive = true 
-local groupAuraActive = true -- Bật/Tắt Kill Aura Group (Tốc độ 1.4s)
+local groupAuraActive = true -- Bật/Tắt Kill Aura Group
 local autoDrinkActive = false 
 local autoEatActive = false 
 local passiveSkillActive = false 
@@ -41,11 +42,21 @@ local GRAB_OFFSET_CFRAME = CFrame.new(0, -0.613390088, -0.916453004, -0.90754610
 
 -- Tốc độ gửi Remote & Cooldown
 local attackCooldown = 0.8     
-local groupAttackCooldown = 1.4 -- Tốc độ Kill Aura riêng cho Group
+local groupAttackCooldown = 0.3 -- Tốc độ tự động nhấp chuột & đánh bên F1 (0.3s)
 local lastAttackTime = 0
 local passiveCooldown = 15     
 local grabCooldown = 0.8       
 local forageCooldown = 1     
+
+-- Hàm giả lập nhấp chuột trái thực tế (Tự động vung tay/chém)
+local function autoClickLeftMouse()
+    pcall(function()
+        local vp = workspace.CurrentCamera.ViewportSize
+        VirtualInputManager:SendMouseButtonEvent(vp.X / 2, vp.Y / 2, 0, true, game, 0)
+        task.wait(0.01)
+        VirtualInputManager:SendMouseButtonEvent(vp.X / 2, vp.Y / 2, 0, false, game, 0)
+    end)
+end
 
 ----------------------------------------------------------------
 -- 1. TẠO GIAO DIỆN (GUI) MENU CHÍNH & GROUP MENU
@@ -318,7 +329,7 @@ GroupCorner.Parent = GroupFrame
 local GroupTitle = Instance.new("TextLabel")
 GroupTitle.Size = UDim2.new(1, 0, 0, 35)
 GroupTitle.BackgroundColor3 = Color3.fromRGB(35, 50, 75)
-GroupTitle.Text = "GROUP TARGETS [F1]"
+GroupTitle.Text = "AUTO GROUP [F1]"
 GroupTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 GroupTitle.Font = Enum.Font.SourceSansBold
 GroupTitle.TextSize = 14
@@ -328,7 +339,7 @@ local GroupTitleCorner = Instance.new("UICorner")
 GroupTitleCorner.CornerRadius = UDim.new(0, 8)
 GroupTitleCorner.Parent = GroupTitle
 
--- NÚT BẬT / TẮT GROUP AURA (N)
+-- NÚT BẬT / TẮT AUTO GROUP (N)
 local GroupToggleBtn = Instance.new("TextButton")
 GroupToggleBtn.Size = UDim2.new(1, -10, 0, 25)
 GroupToggleBtn.Position = UDim2.new(0, 5, 0, 40)
@@ -344,11 +355,11 @@ GroupToggleCorner.Parent = GroupToggleBtn
 local function updateGroupToggleVisuals()
     if groupAuraActive then
         GroupToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 100, 80)
-        GroupToggleBtn.Text = "GROUP AURA (1.4s): ON [N]"
+        GroupToggleBtn.Text = "AUTO CLICK GROUP: ON [N]"
         GroupToggleBtn.TextColor3 = Color3.fromRGB(0, 255, 180)
     else
         GroupToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 40, 45)
-        GroupToggleBtn.Text = "GROUP AURA (1.4s): OFF [N]"
+        GroupToggleBtn.Text = "AUTO CLICK GROUP: OFF [N]"
         GroupToggleBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
     end
 end
@@ -487,15 +498,14 @@ local function triggerPortal()
     end)
 end
 
--- Hàm thực thi Kill Aura chính (Nhấp chuột trái)
+-- Hàm Kill Aura chính khi NHẤP CHUỘT TRÁI THỦ CÔNG (Dành cho Q Aura)
 local function performKillAuraAttack()
-    if not killAuraActive then return end
-    if tick() - lastAttackTime < attackCooldown then return end
-    
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
-    if myRoot then
+    if not myRoot then return end
+
+    if killAuraActive and (tick() - lastAttackTime >= attackCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not groupTargets[pName] then
                 local targetCharacter = charactersFolder:FindFirstChild(pName)
@@ -615,7 +625,7 @@ task.spawn(function()
                                 if distance <= maxDetectDistance then
                                     if groupTargets[player.Name] then
                                         if groupAuraActive then
-                                            txt.Text = string.format("[🛡️ GROUP]\n%s [%dm]", player.Name, distance)
+                                            txt.Text = string.format("[🛡️ AUTO GROUP]\n%s [%dm]", player.Name, distance)
                                             txt.TextColor3 = Color3.fromRGB(0, 220, 255)
                                         else
                                             txt.Text = string.format("[⏸️ GROUP]\n%s [%dm]", player.Name, distance)
@@ -804,7 +814,6 @@ task.spawn(function()
             local Btn = btnData.Button
             local Container = btnData.Container
             
-            -- Nếu đã vào Group thì ẩn khỏi danh sách chính
             if groupTargets[pName] then
                 Container.Visible = false
                 if groupButtons[pName] then groupButtons[pName].Container.Visible = true end
@@ -856,7 +865,7 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- 4. VÒNG LẶP KILL AURA GROUP RIÊNG (TỐC ĐỘ 1.4s)
+-- 4. VÒNG LẶP AUTO GROUP (TỰ ĐỘNG CHÓM/ĐÁNH & TỰ ĐỘNG NHẤP CHUỘT TRÁI)
 ----------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -865,6 +874,7 @@ task.spawn(function()
             local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
             if myRoot then
+                local hasTargetInRange = false
                 for pName, _ in pairs(groupTargets) do
                     local targetCharacter = charactersFolder:FindFirstChild(pName)
                     local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
@@ -872,15 +882,21 @@ task.spawn(function()
                     if targetRoot then
                         local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
                         if currentDist <= maxDetectDistance then
+                            hasTargetInRange = true
                             pcall(function()
                                 damageRemote:FireServer({[1] = targetCharacter})
                             end)
                         end
                     end
                 end
+
+                -- Nếu có đối thủ Group trong phạm vi, tự động giả lập click chuột trái mà không cần bấm thủ công
+                if hasTargetInRange then
+                    autoClickLeftMouse()
+                end
             end
         end
-        task.wait(groupAttackCooldown) -- 1.4 giây mỗi đợt tấn công
+        task.wait(groupAttackCooldown)
     end
 end)
 
