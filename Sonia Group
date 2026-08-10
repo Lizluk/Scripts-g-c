@@ -23,7 +23,7 @@ local targets = {}
 local groupTargets = {} -- Danh sách người chơi thuộc Group (F1)
 
 local killAuraActive = true 
-local groupAuraActive = true -- Kill Aura riêng cho Group (Tốc độ 1.4s)
+local groupAuraActive = true -- Bật/Tắt Kill Aura Group (Tốc độ 1.4s)
 local autoDrinkActive = false 
 local autoEatActive = false 
 local passiveSkillActive = false 
@@ -328,19 +328,36 @@ local GroupTitleCorner = Instance.new("UICorner")
 GroupTitleCorner.CornerRadius = UDim.new(0, 8)
 GroupTitleCorner.Parent = GroupTitle
 
-local GroupStatusLabel = Instance.new("TextLabel")
-GroupStatusLabel.Size = UDim2.new(1, -10, 0, 25)
-GroupStatusLabel.Position = UDim2.new(0, 5, 0, 40)
-GroupStatusLabel.BackgroundColor3 = Color3.fromRGB(30, 40, 55)
-GroupStatusLabel.Text = "AUTO KILL (1.4s): ACTIVE"
-GroupStatusLabel.TextColor3 = Color3.fromRGB(0, 255, 180)
-GroupStatusLabel.Font = Enum.Font.SourceSansBold
-GroupStatusLabel.TextSize = 12
-GroupStatusLabel.Parent = GroupFrame
+-- NÚT BẬT / TẮT GROUP AURA (N)
+local GroupToggleBtn = Instance.new("TextButton")
+GroupToggleBtn.Size = UDim2.new(1, -10, 0, 25)
+GroupToggleBtn.Position = UDim2.new(0, 5, 0, 40)
+GroupToggleBtn.Font = Enum.Font.SourceSansBold
+GroupToggleBtn.TextSize = 12
+GroupToggleBtn.BorderSizePixel = 0
+GroupToggleBtn.Parent = GroupFrame
 
-local GroupStatusCorner = Instance.new("UICorner")
-GroupStatusCorner.CornerRadius = UDim.new(0, 4)
-GroupStatusCorner.Parent = GroupStatusLabel
+local GroupToggleCorner = Instance.new("UICorner")
+GroupToggleCorner.CornerRadius = UDim.new(0, 4)
+GroupToggleCorner.Parent = GroupToggleBtn
+
+local function updateGroupToggleVisuals()
+    if groupAuraActive then
+        GroupToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 100, 80)
+        GroupToggleBtn.Text = "GROUP AURA (1.4s): ON [N]"
+        GroupToggleBtn.TextColor3 = Color3.fromRGB(0, 255, 180)
+    else
+        GroupToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 40, 45)
+        GroupToggleBtn.Text = "GROUP AURA (1.4s): OFF [N]"
+        GroupToggleBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
+    end
+end
+updateGroupToggleVisuals()
+
+GroupToggleBtn.MouseButton1Click:Connect(function()
+    groupAuraActive = not groupAuraActive
+    updateGroupToggleVisuals()
+end)
 
 local GroupScroll = Instance.new("ScrollingFrame")
 GroupScroll.Size = UDim2.new(1, -10, 1, -75)
@@ -514,6 +531,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 
     if input.KeyCode == Enum.KeyCode.F1 then GroupFrame.Visible = not GroupFrame.Visible end
+    if input.KeyCode == Enum.KeyCode.N then groupAuraActive = not groupAuraActive updateGroupToggleVisuals() end
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
     if input.KeyCode == Enum.KeyCode.T then toggleSelectAll() end
     if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
@@ -596,8 +614,13 @@ task.spawn(function()
                                 
                                 if distance <= maxDetectDistance then
                                     if groupTargets[player.Name] then
-                                        txt.Text = string.format("[🛡️ GROUP]\n%s [%dm]", player.Name, distance)
-                                        txt.TextColor3 = Color3.fromRGB(0, 220, 255)
+                                        if groupAuraActive then
+                                            txt.Text = string.format("[🛡️ GROUP]\n%s [%dm]", player.Name, distance)
+                                            txt.TextColor3 = Color3.fromRGB(0, 220, 255)
+                                        else
+                                            txt.Text = string.format("[⏸️ GROUP]\n%s [%dm]", player.Name, distance)
+                                            txt.TextColor3 = Color3.fromRGB(255, 120, 120)
+                                        end
                                     elseif targets[player.Name] then
                                         if killAuraActive then
                                             txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
