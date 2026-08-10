@@ -1,12 +1,11 @@
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Các Remote của game
+-- Remotes & Folders
 local damageRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemote")
 local stateAilmentRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("StateAilment")
 local activateAbilityRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("ActivateAbility")
@@ -15,11 +14,10 @@ local foodRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Food"
 local portalRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Portal")
 local forageableRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CompleteForageableRemote")
 
--- Các đường dẫn Object trong Workspace
 local charactersFolder = workspace:WaitForChild("Characters")
 local interactionsFolder = workspace:WaitForChild("Interactions")
 
-local targets = {} 
+-- Biến trạng thái
 local killAuraActive = true 
 local autoDrinkActive = false 
 local autoEatActive = false 
@@ -30,27 +28,16 @@ local closestPlayerName = ""
 local maxDetectDistance = 50 
 local searchFilterText = ""
 
--- BIẾN HỆ THỐNG GROUP SYNC DÙNG CHARACTER ATTRIBUTES (SẼ ĐỒNG BỘ MỌI CLIENT)
-local groupLeaderName = ""
-local isGroupLeader = false
+-- Danh sách quản lý Target & Group Keybind
+local targetList = {} -- Chứa các player nằm ngoài bảng KillAura
+local groupList = {}  -- [pName] = {Enabled = bool, Key = Enum.KeyCode, Frame = Instance, LastAttack = number}
 
--- Thời gian khởi chạy Script
 local startTime = os.time()
-
--- CFrame tương đối chuẩn của kỹ năng Grab
-local GRAB_OFFSET_CFRAME = CFrame.new(0, -0.613390088, -0.916453004, -0.907546103, 0.314130336, 0.278715283, 0.301701277, 0.026037652, 0.953046918, 0.292123765, 0.94902271, -0.118403859)
-
--- Tốc độ gửi Remote & Cooldown
-local attackCooldown = 0.8     
-local lastAttackTime = 0
-local passiveCooldown = 15     
-local grabCooldown = 0.8       
-local forageCooldown = 1     
+local attackCooldown = 1.4 -- Tốc độ Kill Aura cố định 1.4s theo yêu cầu
 
 ----------------------------------------------------------------
--- 1. TẠO GIAO DIỆN (GUI) & KHUNG ĐỒNG HỒ & KHUNG GROUP (F1)
+-- 1. TẠO GUI CHÍNH & GUI GROUP (F1)
 ----------------------------------------------------------------
-
 if PlayerGui:FindFirstChild("LizlukKillGUI") then
     PlayerGui.LizlukKillGUI:Destroy()
 end
@@ -60,7 +47,7 @@ ScreenGui.Name = "LizlukKillGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
--- KHUNG MENU CHÍNH
+-- MAIN MENU
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 220, 0, 650)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
@@ -74,7 +61,7 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 8)
 UICorner.Parent = MainFrame
 
--- KHUNG ĐỒNG HỒ TÁCH BIỆT
+-- CLOCK
 local TimeFrame = Instance.new("Frame")
 TimeFrame.Size = UDim2.new(1, 0, 0, 30)
 TimeFrame.Position = UDim2.new(0, 0, 1, 8)
@@ -97,7 +84,6 @@ PlaytimeLabel.Parent = TimeFrame
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
-Title.Position = UDim2.new(0, 0, 0, 0)
 Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
 Title.Text = "LIZLUK MENU [P]"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -123,16 +109,14 @@ local StatusCorner = Instance.new("UICorner")
 StatusCorner.CornerRadius = UDim.new(0, 4)
 StatusCorner.Parent = StatusLabel
 
+-- BUTTONS
 local DrinkBtn = Instance.new("TextButton")
 DrinkBtn.Size = UDim2.new(1, -10, 0, 25)
 DrinkBtn.Position = UDim2.new(0, 5, 0, 70)
 DrinkBtn.Font = Enum.Font.SourceSansBold
 DrinkBtn.TextSize = 13
 DrinkBtn.Parent = MainFrame
-
-local DrinkCorner = Instance.new("UICorner")
-DrinkCorner.CornerRadius = UDim.new(0, 4)
-DrinkCorner.Parent = DrinkBtn
+Instance.new("UICorner", DrinkBtn).CornerRadius = UDim.new(0, 4)
 
 local EatBtn = Instance.new("TextButton")
 EatBtn.Size = UDim2.new(1, -10, 0, 25)
@@ -140,10 +124,7 @@ EatBtn.Position = UDim2.new(0, 5, 0, 100)
 EatBtn.Font = Enum.Font.SourceSansBold
 EatBtn.TextSize = 13
 EatBtn.Parent = MainFrame
-
-local EatCorner = Instance.new("UICorner")
-EatCorner.CornerRadius = UDim.new(0, 4)
-EatCorner.Parent = EatBtn
+Instance.new("UICorner", EatBtn).CornerRadius = UDim.new(0, 4)
 
 local PassiveBtn = Instance.new("TextButton")
 PassiveBtn.Size = UDim2.new(1, -10, 0, 25)
@@ -151,10 +132,7 @@ PassiveBtn.Position = UDim2.new(0, 5, 0, 130)
 PassiveBtn.Font = Enum.Font.SourceSansBold
 PassiveBtn.TextSize = 13
 PassiveBtn.Parent = MainFrame
-
-local PassiveCorner = Instance.new("UICorner")
-PassiveCorner.CornerRadius = UDim.new(0, 4)
-PassiveCorner.Parent = PassiveBtn
+Instance.new("UICorner", PassiveBtn).CornerRadius = UDim.new(0, 4)
 
 local GrabBtn = Instance.new("TextButton")
 GrabBtn.Size = UDim2.new(1, -10, 0, 25)
@@ -162,10 +140,7 @@ GrabBtn.Position = UDim2.new(0, 5, 0, 160)
 GrabBtn.Font = Enum.Font.SourceSansBold
 GrabBtn.TextSize = 13
 GrabBtn.Parent = MainFrame
-
-local GrabCorner = Instance.new("UICorner")
-GrabCorner.CornerRadius = UDim.new(0, 4)
-GrabCorner.Parent = GrabBtn
+Instance.new("UICorner", GrabBtn).CornerRadius = UDim.new(0, 4)
 
 local ForageBtn = Instance.new("TextButton")
 ForageBtn.Size = UDim2.new(1, -10, 0, 25)
@@ -173,10 +148,7 @@ ForageBtn.Position = UDim2.new(0, 5, 0, 190)
 ForageBtn.Font = Enum.Font.SourceSansBold
 ForageBtn.TextSize = 13
 ForageBtn.Parent = MainFrame
-
-local ForageCorner = Instance.new("UICorner")
-ForageCorner.CornerRadius = UDim.new(0, 4)
-ForageCorner.Parent = ForageBtn
+Instance.new("UICorner", ForageBtn).CornerRadius = UDim.new(0, 4)
 
 local PortalBtn = Instance.new("TextButton")
 PortalBtn.Size = UDim2.new(1, -10, 0, 25)
@@ -187,21 +159,15 @@ PortalBtn.TextColor3 = Color3.fromRGB(200, 100, 255)
 PortalBtn.Font = Enum.Font.SourceSansBold
 PortalBtn.TextSize = 13
 PortalBtn.Parent = MainFrame
+Instance.new("UICorner", PortalBtn).CornerRadius = UDim.new(0, 4)
 
-local PortalCorner = Instance.new("UICorner")
-PortalCorner.CornerRadius = UDim.new(0, 4)
-PortalCorner.Parent = PortalBtn
-
+-- DISTANCE INPUT
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
 DistanceInputFrame.Position = UDim2.new(0, 5, 0, 255)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
-
-local InputFrameCorner = Instance.new("UICorner")
-InputFrameCorner.CornerRadius = UDim.new(0, 4)
-InputFrameCorner.Parent = DistanceInputFrame
+Instance.new("UICorner", DistanceInputFrame).CornerRadius = UDim.new(0, 4)
 
 local DistanceLabel = Instance.new("TextLabel")
 DistanceLabel.Size = UDim2.new(0, 130, 1, 0)
@@ -218,49 +184,36 @@ local DistanceBox = Instance.new("TextBox")
 DistanceBox.Size = UDim2.new(0, 65, 0, 23)
 DistanceBox.Position = UDim2.new(1, -70, 0.5, -11)
 DistanceBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-DistanceBox.BorderSizePixel = 0
 DistanceBox.Text = tostring(maxDetectDistance)
 DistanceBox.TextColor3 = Color3.fromRGB(0, 220, 255)
 DistanceBox.Font = Enum.Font.SourceSansBold
 DistanceBox.TextSize = 13
 DistanceBox.ClearTextOnFocus = false
-DistanceBox.PlaceholderText = "Số mét..."
 DistanceBox.Parent = DistanceInputFrame
-
-local InputCorner = Instance.new("UICorner")
-InputCorner.CornerRadius = UDim.new(0, 4)
-InputCorner.Parent = DistanceBox
+Instance.new("UICorner", DistanceBox).CornerRadius = UDim.new(0, 4)
 
 DistanceBox.FocusLost:Connect(function()
     local number = tonumber(DistanceBox.Text)
     if number and number >= 0 then
         maxDetectDistance = number
-        DistanceBox.Text = tostring(number)
     else
         DistanceBox.Text = tostring(maxDetectDistance)
     end
 end)
 
--- Ô TÌM KIẾM TÊN
+-- SEARCH BOX
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
 SearchBox.Position = UDim2.new(0, 5, 0, 295)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-SearchBox.BorderSizePixel = 0
-SearchBox.Text = ""
 SearchBox.PlaceholderText = "🔍 Tìm tên người chơi..."
 SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-SearchBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
 SearchBox.Font = Enum.Font.SourceSansBold
 SearchBox.TextSize = 13
 SearchBox.ClearTextOnFocus = false
 SearchBox.Parent = MainFrame
+Instance.new("UICorner", SearchBox).CornerRadius = UDim.new(0, 4)
 
-local SearchCorner = Instance.new("UICorner")
-SearchCorner.CornerRadius = UDim.new(0, 4)
-SearchCorner.Parent = SearchBox
-
--- NÚT CHỌN / BỎ CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
 SelectAllBtn.Position = UDim2.new(0, 5, 0, 325)
@@ -270,64 +223,46 @@ SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 SelectAllBtn.Font = Enum.Font.SourceSansBold
 SelectAllBtn.TextSize = 13
 SelectAllBtn.Parent = MainFrame
-
-local SelectAllCorner = Instance.new("UICorner")
-SelectAllCorner.CornerRadius = UDim.new(0, 4)
-SelectAllCorner.Parent = SelectAllBtn
+Instance.new("UICorner", SelectAllBtn).CornerRadius = UDim.new(0, 4)
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
 ScrollingFrame.Size = UDim2.new(1, -10, 1, -360)
 ScrollingFrame.Position = UDim2.new(0, 5, 0, 355)
 ScrollingFrame.BackgroundTransparency = 1
-ScrollingFrame.BorderSizePixel = 0
-ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 ScrollingFrame.ScrollBarThickness = 4
 ScrollingFrame.Parent = MainFrame
 
 local UIListLayout = Instance.new("UIListLayout")
 UIListLayout.Parent = ScrollingFrame
-UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Padding = UDim.new(0, 5)
 
-UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
-end)
-
 ----------------------------------------------------------------
--- GIAO DIỆN KHUNG GROUP PANEL (BẤM F1 ĐỂ BẬT/TẮT)
+-- GIAO DIỆN GROUP MEMBERS [F1] CẬP NHẬT MỚI
 ----------------------------------------------------------------
 local GroupFrame = Instance.new("Frame")
-GroupFrame.Size = UDim2.new(0, 200, 0, 300)
+GroupFrame.Size = UDim2.new(0, 260, 0, 350)
 GroupFrame.Position = UDim2.new(0.05, 230, 0.2, 0)
 GroupFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-GroupFrame.BorderSizePixel = 0
 GroupFrame.Active = true
 GroupFrame.Draggable = true
 GroupFrame.Visible = true
 GroupFrame.Parent = ScreenGui
-
-local GroupUICorner = Instance.new("UICorner")
-GroupUICorner.CornerRadius = UDim.new(0, 8)
-GroupUICorner.Parent = GroupFrame
+Instance.new("UICorner", GroupFrame).CornerRadius = UDim.new(0, 8)
 
 local GroupTitle = Instance.new("TextLabel")
 GroupTitle.Size = UDim2.new(1, 0, 0, 35)
 GroupTitle.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-GroupTitle.Text = "👥 GROUP SYNC [F1]"
-GroupTitle.TextColor3 = Color3.fromRGB(0, 255, 200)
+GroupTitle.Text = "GROUP MEMBERS [F1]"
+GroupTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 GroupTitle.Font = Enum.Font.SourceSansBold
 GroupTitle.TextSize = 14
 GroupTitle.Parent = GroupFrame
-
-local GroupTitleCorner = Instance.new("UICorner")
-GroupTitleCorner.CornerRadius = UDim.new(0, 8)
-GroupTitleCorner.Parent = GroupTitle
+Instance.new("UICorner", GroupTitle).CornerRadius = UDim.new(0, 8)
 
 local GroupScroll = Instance.new("ScrollingFrame")
 GroupScroll.Size = UDim2.new(1, -10, 1, -45)
 GroupScroll.Position = UDim2.new(0, 5, 0, 40)
 GroupScroll.BackgroundTransparency = 1
-GroupScroll.BorderSizePixel = 0
 GroupScroll.ScrollBarThickness = 4
 GroupScroll.Parent = GroupFrame
 
@@ -336,433 +271,159 @@ GroupListLayout.Parent = GroupScroll
 GroupListLayout.Padding = UDim.new(0, 5)
 
 ----------------------------------------------------------------
--- HỆ THỐNG ĐỒNG BỘ MẠNG QUA PLAYER ATTRIBUTES (KHÔNG NỔI LỖI CLIENT)
+-- LOGIC QUẢN LÝ CHUYỂN TÊN VÀ KEYBIND GROUP
 ----------------------------------------------------------------
-
--- Đăng ký Script Active lên Player Object (Tất cả Client đều đọc được Attribute của nhau)
-LocalPlayer:SetAttribute("LizlukScriptActive", true)
-LocalPlayer:SetAttribute("LizlukLeader", "")
-LocalPlayer:SetAttribute("LizlukCommand", "")
-
-local syncBindable = Instance.new("BindableEvent")
-
-local function sendSyncCommand(actionType, extraData)
-    if not isGroupLeader then return end
-    local cmdString = actionType .. ";" .. tostring(extraData or "") .. ";" .. tostring(tick())
-    LocalPlayer:SetAttribute("LizlukCommand", cmdString)
-end
-
--- Lắng nghe xem ai trong Server đang dùng Script
-local function refreshGroupList()
-    for _, child in pairs(GroupScroll:GetChildren()) do
-        if child:IsA("Frame") then child:Destroy() end
-    end
-
-    for _, p in pairs(Players:GetPlayers()) do
-        if p:GetAttribute("LizlukScriptActive") then
-            local pName = p.Name
-            local itemFrame = Instance.new("Frame")
-            itemFrame.Size = UDim2.new(1, 0, 0, 30)
-            itemFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-            itemFrame.Parent = GroupScroll
-
-            local itemCorner = Instance.new("UICorner")
-            itemCorner.CornerRadius = UDim.new(0, 4)
-            itemCorner.Parent = itemFrame
-
-            local nameLbl = Instance.new("TextLabel")
-            nameLbl.Size = UDim2.new(1, -35, 1, 0)
-            nameLbl.Position = UDim2.new(0, 5, 0, 0)
-            nameLbl.BackgroundTransparency = 1
-            nameLbl.Text = pName .. (pName == groupLeaderName and " [LEADER]" or "")
-            nameLbl.TextColor3 = (pName == groupLeaderName) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(200, 200, 200)
-            nameLbl.Font = Enum.Font.SourceSansBold
-            nameLbl.TextSize = 13
-            nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-            nameLbl.Parent = itemFrame
-
-            local starBtn = Instance.new("TextButton")
-            starBtn.Size = UDim2.new(0, 25, 0, 25)
-            starBtn.Position = UDim2.new(1, -28, 0.5, -12)
-            starBtn.BackgroundColor3 = (pName == groupLeaderName) and Color3.fromRGB(255, 200, 0) or Color3.fromRGB(60, 60, 65)
-            starBtn.Text = "⭐"
-            starBtn.TextSize = 12
-            starBtn.Parent = itemFrame
-
-            local starCorner = Instance.new("UICorner")
-            starCorner.CornerRadius = UDim.new(0, 4)
-            starCorner.Parent = starBtn
-
-            starBtn.MouseButton1Click:Connect(function()
-                if pName == LocalPlayer.Name then
-                    groupLeaderName = LocalPlayer.Name
-                    isGroupLeader = true
-                    LocalPlayer:SetAttribute("LizlukLeader", LocalPlayer.Name)
-                    refreshGroupList()
-                end
-            end)
-        end
-    end
-end
-
--- Vòng lặp quét những ai dùng Script và kiểm tra lệnh từ Leader
-task.spawn(function()
-    while true do
-        refreshGroupList()
-        
-        -- Nếu mình không phải Leader, tìm xem ai đang là Leader để nhận lệnh
-        if not isGroupLeader then
-            for _, p in pairs(Players:GetPlayers()) do
-                if p:GetAttribute("LizlukLeader") == p.Name then
-                    groupLeaderName = p.Name
-                    local lastCmd = p:GetAttribute("LizlukCommand")
-                    if lastCmd and lastCmd ~= "" then
-                        local parts = string.split(lastCmd, ";")
-                        local cmd = parts[1]
-                        local arg = parts[2]
-                        local cmdTime = tonumber(parts[3]) or 0
-                        
-                        -- Chỉ thực thi lệnh nếu mới phát ra
-                        if tick() - cmdTime < 1.5 then
-                            if cmd == "TOGGLE_KA" then killAuraActive = (arg == "true")
-                            elseif cmd == "TOGGLE_DRINK" then autoDrinkActive = (arg == "true")
-                            elseif cmd == "TOGGLE_EAT" then autoEatActive = (arg == "true")
-                            elseif cmd == "TOGGLE_PASSIVE" then passiveSkillActive = (arg == "true")
-                            elseif cmd == "TOGGLE_GRAB" then autoGrabActive = (arg == "true")
-                            elseif cmd == "TOGGLE_FORAGE" then autoForageActive = (arg == "true")
-                            elseif cmd == "ATTACK" then syncBindable:Fire("ATTACK") end
-                            updateUtilityVisuals()
-                        end
-                    end
-                end
-            end
-        end
-        task.wait(0.5)
-    end
-end)
-
-----------------------------------------------------------------
--- CẬP NHẬT GIAO DIỆN & TỔNG HỢP NÚT BẤM
-----------------------------------------------------------------
-
-SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
-    searchFilterText = string.lower(SearchBox.Text)
-end)
-
-task.spawn(function()
-    while true do
-        local elapsed = os.time() - startTime
-        local hours = math.floor(elapsed / 3600)
-        local mins = math.floor((elapsed % 3600) / 60)
-        local secs = elapsed % 60
-        PlaytimeLabel.Text = string.format("⏱️ THỜI GIAN: %02d:%02d:%02d", hours, mins, secs)
-        task.wait(1)
-    end
-end)
-
-function updateUtilityVisuals()
-    if autoDrinkActive then
-        DrinkBtn.BackgroundColor3 = Color3.fromRGB(30, 120, 180)
-        DrinkBtn.Text = "AUTO DRINK: ON [L]"
-        DrinkBtn.TextColor3 = Color3.fromRGB(100, 255, 255)
-    else
-        DrinkBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        DrinkBtn.Text = "AUTO DRINK: OFF [L]"
-        DrinkBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-    end
-
-    if autoEatActive then
-        EatBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 30)
-        EatBtn.Text = "AUTO EAT: ON [K]"
-        EatBtn.TextColor3 = Color3.fromRGB(255, 200, 100)
-    else
-        EatBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        EatBtn.Text = "AUTO EAT: OFF [K]"
-        EatBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-    end
-
-    if passiveSkillActive then
-        PassiveBtn.BackgroundColor3 = Color3.fromRGB(45, 140, 45)
-        PassiveBtn.Text = "PASSIVE SKILL: ON [U]"
-        PassiveBtn.TextColor3 = Color3.fromRGB(150, 255, 150)
-    else
-        PassiveBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        PassiveBtn.Text = "PASSIVE SKILL: OFF [U]"
-        PassiveBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-    end
-
-    if autoGrabActive then
-        GrabBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 120)
-        GrabBtn.Text = "AUTO GRAB: ON [J]"
-        GrabBtn.TextColor3 = Color3.fromRGB(255, 150, 220)
-    else
-        GrabBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        GrabBtn.Text = "AUTO GRAB: OFF [J]"
-        GrabBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-    end
-
-    if autoForageActive then
-        ForageBtn.BackgroundColor3 = Color3.fromRGB(200, 180, 40)
-        ForageBtn.Text = "AUTO FORAGE: ON [Y]"
-        ForageBtn.TextColor3 = Color3.fromRGB(255, 255, 150)
-    else
-        ForageBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        ForageBtn.Text = "AUTO FORAGE: OFF [Y]"
-        ForageBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-    end
-end
-updateUtilityVisuals()
-
-local function toggleSelectAll()
-    local allPlayers = Players:GetPlayers()
-    local otherPlayersCount = 0
-    local selectedCount = 0
-
-    for _, p in pairs(allPlayers) do
-        if p ~= LocalPlayer then
-            otherPlayersCount = otherPlayersCount + 1
-            if targets[p.Name] then
-                selectedCount = selectedCount + 1
+local function updateMainListVisibility()
+    for pName, btnData in pairs(buttons) do
+        if groupList[pName] then
+            btnData.Button.Visible = false -- Ẩn khỏi bảng danh sách trái khi đã vào Group
+        else
+            if searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true) then
+                btnData.Button.Visible = true
+            else
+                btnData.Button.Visible = false
             end
         end
     end
+end
 
-    if selectedCount == otherPlayersCount and otherPlayersCount > 0 then
-        targets = {}
-        SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
-        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
-    else
-        for _, p in pairs(allPlayers) do
-            if p ~= LocalPlayer then
-                targets[p.Name] = true
-            end
+local function removeFromGroup(pName)
+    if groupList[pName] then
+        if groupList[pName].Frame then
+            groupList[pName].Frame:Destroy()
         end
-        SelectAllBtn.Text = "☒ DESELECT ALL PLAYERS [T]"
-        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+        groupList[pName] = nil
+        targetList[pName] = nil
+        updateMainListVisibility()
     end
 end
 
-SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
+local function addToGroup(pName)
+    if groupList[pName] then return end
 
-local function triggerPortal()
-    pcall(function()
-        PortalBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 200)
-        portalRemote:InvokeServer("TundraPortalStart")
-        task.wait(0.2)
-        PortalBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    local itemFrame = Instance.new("Frame")
+    itemFrame.Size = UDim2.new(1, 0, 0, 35)
+    itemFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    itemFrame.Parent = GroupScroll
+    Instance.new("UICorner", itemFrame).CornerRadius = UDim.new(0, 4)
+
+    -- Nút Checkbox
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 25, 0, 25)
+    toggleBtn.Position = UDim2.new(0, 5, 0.5, -12)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+    toggleBtn.Text = "✓"
+    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.Font = Enum.Font.SourceSansBold
+    toggleBtn.Parent = itemFrame
+    Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 4)
+
+    -- Tên người chơi
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Size = UDim2.new(0, 110, 1, 0)
+    nameLbl.Position = UDim2.new(0, 35, 0, 0)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Text = pName
+    nameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLbl.Font = Enum.Font.SourceSansBold
+    nameLbl.TextSize = 13
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.Parent = itemFrame
+
+    -- Nút gán Keybind
+    local keyBtn = Instance.new("TextButton")
+    keyBtn.Size = UDim2.new(0, 50, 0, 25)
+    keyBtn.Position = UDim2.new(1, -80, 0.5, -12)
+    keyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    keyBtn.Text = "Q"
+    keyBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
+    keyBtn.Font = Enum.Font.SourceSansBold
+    keyBtn.TextSize = 12
+    keyBtn.Parent = itemFrame
+    Instance.new("UICorner", keyBtn).CornerRadius = UDim.new(0, 4)
+
+    -- Nút Xóa
+    local removeBtn = Instance.new("TextButton")
+    removeBtn.Size = UDim2.new(0, 22, 0, 25)
+    removeBtn.Position = UDim2.new(1, -27, 0.5, -12)
+    removeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    removeBtn.Text = "X"
+    removeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    removeBtn.Font = Enum.Font.SourceSansBold
+    removeBtn.Parent = itemFrame
+    Instance.new("UICorner", removeBtn).CornerRadius = UDim.new(0, 4)
+
+    groupList[pName] = {
+        Enabled = true,
+        Key = Enum.KeyCode.Q,
+        Frame = itemFrame,
+        LastAttack = 0
+    }
+
+    toggleBtn.MouseButton1Click:Connect(function()
+        groupList[pName].Enabled = not groupList[pName].Enabled
+        if groupList[pName].Enabled then
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+            toggleBtn.Text = "✓"
+        else
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+            toggleBtn.Text = ""
+        end
     end)
+
+    local waitingForKey = false
+    keyBtn.MouseButton1Click:Connect(function()
+        waitingForKey = true
+        keyBtn.Text = "..."
+        local conn
+        conn = UserInputService.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                groupList[pName].Key = input.KeyCode
+                keyBtn.Text = input.KeyCode.Name
+                waitingForKey = false
+                conn:Disconnect()
+            end
+        end)
+    end)
+
+    removeBtn.MouseButton1Click:Connect(function()
+        removeFromGroup(pName)
+    end)
+
+    updateMainListVisibility()
 end
 
--- Hàm thực thi đòn đánh Kill Aura
-local function performKillAuraAttack()
-    if not killAuraActive then return end
-    if tick() - lastAttackTime < attackCooldown then return end
-    
+----------------------------------------------------------------
+-- HAM HIT KILL AURA TỐC ĐỘ 1.4s
+----------------------------------------------------------------
+local function executeGroupAttack(pName)
+    local data = groupList[pName]
+    if not data or not data.Enabled then return end
+    if tick() - data.LastAttack < attackCooldown then return end
+
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
     if myRoot then
-        for pName, isTargeted in pairs(targets) do
-            if isTargeted then
-                local targetCharacter = charactersFolder:FindFirstChild(pName)
-                local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-                
-                if targetRoot then
-                    local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
-                    if currentDist <= maxDetectDistance then
-                        pcall(function()
-                            damageRemote:FireServer({[1] = targetCharacter})
-                        end)
-                        lastAttackTime = tick()
-                    end
-                end
+        local targetCharacter = charactersFolder:FindFirstChild(pName)
+        local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+
+        if targetRoot then
+            local dist = (myRoot.Position - targetRoot.Position).Magnitude
+            if dist <= maxDetectDistance then
+                pcall(function()
+                    damageRemote:FireServer({[1] = targetCharacter})
+                end)
+                data.LastAttack = tick()
             end
         end
     end
 end
 
-syncBindable.Event:Connect(function(cmd)
-    if cmd == "ATTACK" then
-        performKillAuraAttack()
-    end
-end)
-
--- Sự kiện nhấn nút và Đồng bộ từ Leader
-DrinkBtn.MouseButton1Click:Connect(function() 
-    autoDrinkActive = not autoDrinkActive 
-    updateUtilityVisuals() 
-    sendSyncCommand("TOGGLE_DRINK", autoDrinkActive)
-end)
-
-EatBtn.MouseButton1Click:Connect(function() 
-    autoEatActive = not autoEatActive 
-    updateUtilityVisuals() 
-    sendSyncCommand("TOGGLE_EAT", autoEatActive)
-end)
-
-PassiveBtn.MouseButton1Click:Connect(function() 
-    passiveSkillActive = not passiveSkillActive 
-    updateUtilityVisuals() 
-    sendSyncCommand("TOGGLE_PASSIVE", passiveSkillActive)
-end)
-
-GrabBtn.MouseButton1Click:Connect(function() 
-    autoGrabActive = not autoGrabActive 
-    updateUtilityVisuals() 
-    sendSyncCommand("TOGGLE_GRAB", autoGrabActive)
-end)
-
-ForageBtn.MouseButton1Click:Connect(function() 
-    autoForageActive = not autoForageActive 
-    updateUtilityVisuals() 
-    sendSyncCommand("TOGGLE_FORAGE", autoForageActive)
-end)
-
-PortalBtn.MouseButton1Click:Connect(triggerPortal)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if UserInputService:GetFocusedTextBox() then return end
-    if gameProcessed then return end
-    
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        performKillAuraAttack()
-        sendSyncCommand("ATTACK", "")
-    end
-
-    if input.KeyCode == Enum.KeyCode.F1 then GroupFrame.Visible = not GroupFrame.Visible end
-    if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
-    if input.KeyCode == Enum.KeyCode.T then toggleSelectAll() end
-    
-    if input.KeyCode == Enum.KeyCode.L then 
-        autoDrinkActive = not autoDrinkActive 
-        updateUtilityVisuals() 
-        sendSyncCommand("TOGGLE_DRINK", autoDrinkActive)
-    end
-    if input.KeyCode == Enum.KeyCode.K then 
-        autoEatActive = not autoEatActive 
-        updateUtilityVisuals() 
-        sendSyncCommand("TOGGLE_EAT", autoEatActive)
-    end
-    if input.KeyCode == Enum.KeyCode.U then 
-        passiveSkillActive = not passiveSkillActive 
-        updateUtilityVisuals() 
-        sendSyncCommand("TOGGLE_PASSIVE", passiveSkillActive)
-    end
-    if input.KeyCode == Enum.KeyCode.J then 
-        autoGrabActive = not autoGrabActive 
-        updateUtilityVisuals() 
-        sendSyncCommand("TOGGLE_GRAB", autoGrabActive)
-    end
-    if input.KeyCode == Enum.KeyCode.Y then 
-        autoForageActive = not autoForageActive 
-        updateUtilityVisuals() 
-        sendSyncCommand("TOGGLE_FORAGE", autoForageActive)
-    end
-    if input.KeyCode == Enum.KeyCode.O then triggerPortal() end
-    if input.KeyCode == Enum.KeyCode.Q then
-        killAuraActive = not killAuraActive
-        if killAuraActive then
-            StatusLabel.Text = "KILL AURA: READY [Q]"
-            StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
-        else
-            StatusLabel.Text = "KILL AURA: PAUSED [Q]"
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
-        end
-        sendSyncCommand("TOGGLE_KA", killAuraActive)
-    end
-end)
-
 ----------------------------------------------------------------
--- 2. HỆ THỐNG ESP SIÊU NHẸ
+-- CẬP NHẬT NÚT BẤM & VÒNG LẶP
 ----------------------------------------------------------------
-
-local function applyESP(player, character)
-    if not character or player == LocalPlayer then return end
-    
-    local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 5)
-    if not head then return end
-
-    if head:FindFirstChild("PlayerESP") then 
-        head.PlayerESP:Destroy() 
-    end
-
-    local bb = Instance.new("BillboardGui")
-    bb.Name = "PlayerESP"
-    bb.Size = UDim2.new(0, 150, 0, 30)
-    bb.AlwaysOnTop = true
-    bb.ExtentsOffset = Vector3.new(0, 2.5, 0)
-    bb.Adornee = head
-    bb.MaxDistance = maxDetectDistance
-    bb.Parent = head
-
-    local txt = Instance.new("TextLabel")
-    txt.Name = "ESPText"
-    txt.Size = UDim2.new(1, 0, 1, 0)
-    txt.BackgroundTransparency = 1
-    txt.Font = Enum.Font.SourceSansBold
-    txt.TextSize = 13
-    txt.Parent = bb
-end
-
-local function setupPlayerESP(player)
-    if player == LocalPlayer then return end
-    player.CharacterAdded:Connect(function(char) applyESP(player, char) end)
-    if player.Character then applyESP(player, player.Character) end
-end
-
-for _, p in pairs(Players:GetPlayers()) do setupPlayerESP(p) end
-Players.PlayerAdded:Connect(setupPlayerESP)
-
-task.spawn(function()
-    while true do
-        local myCharacter = LocalPlayer.Character
-        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-
-        if myRoot then
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character then
-                    local head = player.Character:FindFirstChild("Head")
-                    if head then
-                        local espGui = head:FindFirstChild("PlayerESP")
-                        if not espGui then
-                            applyESP(player, player.Character)
-                        else
-                            espGui.MaxDistance = maxDetectDistance
-                            local txt = espGui:FindFirstChild("ESPText")
-                            if txt then
-                                local distance = math.floor((myRoot.Position - head.Position).Magnitude)
-                                if distance <= maxDetectDistance then
-                                    if targets[player.Name] then
-                                        if killAuraActive then
-                                            txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
-                                            txt.TextColor3 = Color3.fromRGB(255, 50, 50)
-                                        else
-                                            txt.Text = string.format("[⏸️] %s\n[%d m]", player.Name, distance)
-                                            txt.TextColor3 = Color3.fromRGB(255, 200, 50)
-                                        end
-                                    elseif player.Name == closestPlayerName then
-                                        txt.Text = string.format("[⭐] %s\n[%d m]", player.Name, distance)
-                                        txt.TextColor3 = Color3.fromRGB(0, 255, 150)
-                                    else
-                                        txt.Text = string.format("%s\n[%d m]", player.Name, distance)
-                                        txt.TextColor3 = Color3.fromRGB(255, 255, 255)
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        task.wait(0.25)
-    end
-end)
-
-----------------------------------------------------------------
--- 3. VÒNG LẶP CHÍNH QUẢN LÝ GIAO DIỆN & TIỆN ÍCH
-----------------------------------------------------------------
-
-local buttons = {}
+buttons = {}
 
 local function buildButtons()
     for _, child in pairs(ScrollingFrame:GetChildren()) do
@@ -779,164 +440,55 @@ local function buildButtons()
             Btn.TextSize = 14
             Btn.BorderSizePixel = 0
             Btn.Parent = ScrollingFrame
-
-            local BtnCorner = Instance.new("UICorner")
-            BtnCorner.CornerRadius = UDim.new(0, 4)
-            BtnCorner.Parent = Btn
+            Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
 
             Btn.MouseButton1Click:Connect(function()
-                if targets[pName] then
-                    targets[pName] = nil
-                else
-                    targets[pName] = true
-                end
+                addToGroup(pName) -- Thêm vào F1 Group ngay khi bấm
             end)
 
             buttons[pName] = {Button = Btn}
         end
     end
+    updateMainListVisibility()
 end
 
 Players.PlayerAdded:Connect(buildButtons)
 Players.PlayerRemoving:Connect(function(player)
-    targets[player.Name] = nil
+    removeFromGroup(player.Name)
     buildButtons()
 end)
 buildButtons()
 
-task.spawn(function()
-    while true do
-        local myCharacter = LocalPlayer.Character
-        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-        
-        local minDistance = math.huge
-        local tempClosest = ""
+-- Bắt phím kích hoạt theo Keybind từng acc trong Group
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if UserInputService:GetFocusedTextBox() then return end
+    if gameProcessed then return end
 
-        if myRoot then
-            for pName, btnData in pairs(buttons) do
-                local p = Players:FindFirstChild(pName)
-                if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    local dist = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
-                    if dist <= maxDetectDistance and dist < minDistance then
-                        minDistance = dist
-                        tempClosest = pName
-                    end
-                    if targets[pName] then
-                        btnData.Button.LayoutOrder = math.floor(dist) - 100000
-                    else
-                        btnData.Button.LayoutOrder = math.floor(dist)
-                    end
-                else
-                    btnData.Button.LayoutOrder = 999999
-                end
-            end
+    if input.KeyCode == Enum.KeyCode.F1 then GroupFrame.Visible = not GroupFrame.Visible end
+    if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
+
+    for pName, data in pairs(groupList) do
+        if data.Key == input.KeyCode then
+            executeGroupAttack(pName)
         end
-        closestPlayerName = tempClosest
-
-        for pName, btnData in pairs(buttons) do
-            local Btn = btnData.Button
-            if searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true) then
-                Btn.Visible = true
-            else
-                Btn.Visible = false
-            end
-
-            if targets[pName] then
-                if killAuraActive then
-                    Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-                    Btn.Text = pName .. " [TARGET]"
-                else
-                    Btn.BackgroundColor3 = Color3.fromRGB(160, 120, 30)
-                    Btn.Text = pName .. " [PAUSED]"
-                end
-                Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            elseif pName == closestPlayerName then
-                Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
-                Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
-                Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
-            else
-                Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-                Btn.Text = pName
-                Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-            end
-        end
-
-        if autoDrinkActive then
-            pcall(function()
-                local lake = interactionsFolder:FindFirstChild("Lakes") and interactionsFolder.Lakes:FindFirstChild("Lake")
-                if lake then drinkRemote:FireServer(lake) end
-            end)
-        end
-
-        if autoEatActive then
-            pcall(function()
-                local ribs = interactionsFolder:FindFirstChild("Food") and interactionsFolder.Food:FindFirstChild("Ribs")
-                if ribs then foodRemote:FireServer(ribs) end
-            end)
-        end
-
-        task.wait(0.3)
     end
 end)
 
-----------------------------------------------------------------
--- 4. VÒNG LẶP SKILL BỊ ĐỘNG
-----------------------------------------------------------------
+-- Loop tự động chạy theo thời gian 1.4s nếu bật
 task.spawn(function()
     while true do
-        if passiveSkillActive then
-            pcall(function()
-                stateAilmentRemote:FireServer("Aggression")
-            end)
-        end
-        task.wait(passiveCooldown)
-    end
-end)
-
-----------------------------------------------------------------
--- 5. VÒNG LẶP AUTO GRAB
-----------------------------------------------------------------
-task.spawn(function()
-    while true do
-        if autoGrabActive then
-            local myCharacter = LocalPlayer.Character
-            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-
-            if myRoot then
-                for pName, isTargeted in pairs(targets) do
-                    if isTargeted then
-                        local targetCharacter = charactersFolder:FindFirstChild(pName)
-                        local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-
-                        if targetRoot then
-                            local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
-                            if currentDist <= maxDetectDistance then
-                                pcall(function()
-                                    activateAbilityRemote:FireServer("Grab", {
-                                        [1] = targetRoot,
-                                        [2] = GRAB_OFFSET_CFRAME
-                                    })
-                                end)
-                            end
-                        end
-                    end
+        if killAuraActive then
+            for pName, data in pairs(groupList) do
+                if data.Enabled then
+                    executeGroupAttack(pName)
                 end
             end
         end
-        task.wait(grabCooldown)
+        task.wait(0.1)
     end
 end)
 
-----------------------------------------------------------------
--- 6. VÒNG LẶP AUTO FORAGEABLE
-----------------------------------------------------------------
-task.spawn(function()
-    while true do
-        if autoForageActive then
-            pcall(function()
-                forageableRemote:InvokeServer(18)
-            end)
-        end
-        task.wait(forageCooldown)
-    end
+SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    searchFilterText = string.lower(SearchBox.Text)
+    updateMainListVisibility()
 end)
