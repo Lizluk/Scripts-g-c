@@ -20,7 +20,10 @@ local charactersFolder = workspace:WaitForChild("Characters")
 local interactionsFolder = workspace:WaitForChild("Interactions")
 
 local targets = {} 
+local groupTargets = {} -- Danh sách người chơi thuộc Group (F1)
+
 local killAuraActive = true 
+local groupAuraActive = true -- Kill Aura riêng cho Group (Tốc độ 1.4s)
 local autoDrinkActive = false 
 local autoEatActive = false 
 local passiveSkillActive = false 
@@ -38,18 +41,18 @@ local GRAB_OFFSET_CFRAME = CFrame.new(0, -0.613390088, -0.916453004, -0.90754610
 
 -- Tốc độ gửi Remote & Cooldown
 local attackCooldown = 0.8     
+local groupAttackCooldown = 1.4 -- Tốc độ Kill Aura riêng cho Group
 local lastAttackTime = 0
 local passiveCooldown = 15     
 local grabCooldown = 0.8       
 local forageCooldown = 1     
 
 ----------------------------------------------------------------
--- 1. TẠO GIAO DIỆN (GUI) & KHUNG ĐỒNG HỒ TÁCH BIỆT
+-- 1. TẠO GIAO DIỆN (GUI) MENU CHÍNH & GROUP MENU
 ----------------------------------------------------------------
 
-if PlayerGui:FindFirstChild("LizlukKillGUI") then
-    PlayerGui.LizlukKillGUI:Destroy()
-end
+if PlayerGui:FindFirstChild("LizlukKillGUI") then PlayerGui.LizlukKillGUI:Destroy() end
+if PlayerGui:FindFirstChild("LizlukGroupGUI") then PlayerGui.LizlukGroupGUI:Destroy() end
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "LizlukKillGUI"
@@ -58,7 +61,7 @@ ScreenGui.Parent = PlayerGui
 
 -- KHUNG MENU CHÍNH
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 650)
+MainFrame.Size = UDim2.new(0, 240, 0, 650)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -178,7 +181,7 @@ local PortalBtn = Instance.new("TextButton")
 PortalBtn.Size = UDim2.new(1, -10, 0, 25)
 PortalBtn.Position = UDim2.new(0, 5, 0, 220)
 PortalBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-PortalBtn.Text = "TELEPORT PORTAL [G]"
+PortalBtn.Text = "TELEPORT PORTAL [O]"
 PortalBtn.TextColor3 = Color3.fromRGB(200, 100, 255)
 PortalBtn.Font = Enum.Font.SourceSansBold
 PortalBtn.TextSize = 13
@@ -238,7 +241,7 @@ DistanceBox.FocusLost:Connect(function(enterPressed)
     end
 end)
 
--- Ô TÌM KIẾM TÊN (SEARCH BOX)
+-- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
 SearchBox.Position = UDim2.new(0, 5, 0, 295)
@@ -257,7 +260,7 @@ local SearchCorner = Instance.new("UICorner")
 SearchCorner.CornerRadius = UDim.new(0, 4)
 SearchCorner.Parent = SearchBox
 
--- NÚT CHỌN / BỎ CHỌN TẤT CẢ (SELECT ALL BUTTON)
+-- NÚT CHỌN / BỎ CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
 SelectAllBtn.Position = UDim2.new(0, 5, 0, 325)
@@ -290,12 +293,79 @@ UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
 end)
 
--- Sự kiện thay đổi nội dung tìm kiếm
+----------------------------------------------------------------
+-- GIAO DIỆN BẢNG GROUP (F1)
+----------------------------------------------------------------
+local GroupGui = Instance.new("ScreenGui")
+GroupGui.Name = "LizlukGroupGUI"
+GroupGui.ResetOnSpawn = false
+GroupGui.Parent = PlayerGui
+
+local GroupFrame = Instance.new("Frame")
+GroupFrame.Size = UDim2.new(0, 220, 0, 350)
+GroupFrame.Position = UDim2.new(0.25, 0, 0.2, 0)
+GroupFrame.BackgroundColor3 = Color3.fromRGB(25, 30, 40)
+GroupFrame.BorderSizePixel = 0
+GroupFrame.Active = true
+GroupFrame.Draggable = true
+GroupFrame.Visible = false
+GroupFrame.Parent = GroupGui
+
+local GroupCorner = Instance.new("UICorner")
+GroupCorner.CornerRadius = UDim.new(0, 8)
+GroupCorner.Parent = GroupFrame
+
+local GroupTitle = Instance.new("TextLabel")
+GroupTitle.Size = UDim2.new(1, 0, 0, 35)
+GroupTitle.BackgroundColor3 = Color3.fromRGB(35, 50, 75)
+GroupTitle.Text = "GROUP TARGETS [F1]"
+GroupTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+GroupTitle.Font = Enum.Font.SourceSansBold
+GroupTitle.TextSize = 14
+GroupTitle.Parent = GroupFrame
+
+local GroupTitleCorner = Instance.new("UICorner")
+GroupTitleCorner.CornerRadius = UDim.new(0, 8)
+GroupTitleCorner.Parent = GroupTitle
+
+local GroupStatusLabel = Instance.new("TextLabel")
+GroupStatusLabel.Size = UDim2.new(1, -10, 0, 25)
+GroupStatusLabel.Position = UDim2.new(0, 5, 0, 40)
+GroupStatusLabel.BackgroundColor3 = Color3.fromRGB(30, 40, 55)
+GroupStatusLabel.Text = "AUTO KILL (1.4s): ACTIVE"
+GroupStatusLabel.TextColor3 = Color3.fromRGB(0, 255, 180)
+GroupStatusLabel.Font = Enum.Font.SourceSansBold
+GroupStatusLabel.TextSize = 12
+GroupStatusLabel.Parent = GroupFrame
+
+local GroupStatusCorner = Instance.new("UICorner")
+GroupStatusCorner.CornerRadius = UDim.new(0, 4)
+GroupStatusCorner.Parent = GroupStatusLabel
+
+local GroupScroll = Instance.new("ScrollingFrame")
+GroupScroll.Size = UDim2.new(1, -10, 1, -75)
+GroupScroll.Position = UDim2.new(0, 5, 0, 70)
+GroupScroll.BackgroundTransparency = 1
+GroupScroll.BorderSizePixel = 0
+GroupScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+GroupScroll.ScrollBarThickness = 4
+GroupScroll.Parent = GroupFrame
+
+local GroupListLayout = Instance.new("UIListLayout")
+GroupListLayout.Parent = GroupScroll
+GroupListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+GroupListLayout.Padding = UDim.new(0, 5)
+
+GroupListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    GroupScroll.CanvasSize = UDim2.new(0, 0, 0, GroupListLayout.AbsoluteContentSize.Y)
+end)
+
+-- Sự kiện tìm kiếm
 SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     searchFilterText = string.lower(SearchBox.Text)
 end)
 
--- Vòng lặp đếm giờ chính xác 
+-- Đếm giờ
 task.spawn(function()
     while true do
         local elapsed = os.time() - startTime
@@ -360,14 +430,13 @@ local function updateUtilityVisuals()
 end
 updateUtilityVisuals()
 
--- Logic Toggle chọn tất cả / Bỏ chọn tất cả
 local function toggleSelectAll()
     local allPlayers = Players:GetPlayers()
     local otherPlayersCount = 0
     local selectedCount = 0
 
     for _, p in pairs(allPlayers) do
-        if p ~= LocalPlayer then
+        if p ~= LocalPlayer and not groupTargets[p.Name] then
             otherPlayersCount = otherPlayersCount + 1
             if targets[p.Name] then
                 selectedCount = selectedCount + 1
@@ -381,7 +450,7 @@ local function toggleSelectAll()
         SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
     else
         for _, p in pairs(allPlayers) do
-            if p ~= LocalPlayer then
+            if p ~= LocalPlayer and not groupTargets[p.Name] then
                 targets[p.Name] = true
             end
         end
@@ -401,10 +470,9 @@ local function triggerPortal()
     end)
 end
 
--- Hàm thực thi đòn đánh Kill Aura khi nhấp chuột trái
+-- Hàm thực thi Kill Aura chính (Nhấp chuột trái)
 local function performKillAuraAttack()
     if not killAuraActive then return end
-    
     if tick() - lastAttackTime < attackCooldown then return end
     
     local myCharacter = LocalPlayer.Character
@@ -412,7 +480,7 @@ local function performKillAuraAttack()
 
     if myRoot then
         for pName, isTargeted in pairs(targets) do
-            if isTargeted then
+            if isTargeted and not groupTargets[pName] then
                 local targetCharacter = charactersFolder:FindFirstChild(pName)
                 local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
                 
@@ -445,6 +513,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         performKillAuraAttack()
     end
 
+    if input.KeyCode == Enum.KeyCode.F1 then GroupFrame.Visible = not GroupFrame.Visible end
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
     if input.KeyCode == Enum.KeyCode.T then toggleSelectAll() end
     if input.KeyCode == Enum.KeyCode.L then autoDrinkActive = not autoDrinkActive updateUtilityVisuals() end
@@ -466,7 +535,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 ----------------------------------------------------------------
--- 2. HỆ THỐNG ESP SIÊU NHẸ
+-- 2. HỆ THỐNG ESP
 ----------------------------------------------------------------
 
 local function applyESP(player, character)
@@ -499,19 +568,11 @@ end
 
 local function setupPlayerESP(player)
     if player == LocalPlayer then return end
-    
-    player.CharacterAdded:Connect(function(char)
-        applyESP(player, char)
-    end)
-    
-    if player.Character then
-        applyESP(player, player.Character)
-    end
+    player.CharacterAdded:Connect(function(char) applyESP(player, char) end)
+    if player.Character then applyESP(player, player.Character) end
 end
 
-for _, p in pairs(Players:GetPlayers()) do 
-    setupPlayerESP(p) 
-end
+for _, p in pairs(Players:GetPlayers()) do setupPlayerESP(p) end
 Players.PlayerAdded:Connect(setupPlayerESP)
 
 task.spawn(function()
@@ -534,7 +595,10 @@ task.spawn(function()
                                 local distance = math.floor((myRoot.Position - head.Position).Magnitude)
                                 
                                 if distance <= maxDetectDistance then
-                                    if targets[player.Name] then
+                                    if groupTargets[player.Name] then
+                                        txt.Text = string.format("[🛡️ GROUP]\n%s [%dm]", player.Name, distance)
+                                        txt.TextColor3 = Color3.fromRGB(0, 220, 255)
+                                    elseif targets[player.Name] then
                                         if killAuraActive then
                                             txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
                                             txt.TextColor3 = Color3.fromRGB(255, 50, 50)
@@ -561,32 +625,61 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- 3. VÒNG LẶP CHÍNH QUẢN LÝ GIAO DIỆN & TIỆN ÍCH
+-- 3. CẬP NHẬT GIAO DIỆN CẢ 2 BẢNG (MAIN MENU & GROUP MENU)
 ----------------------------------------------------------------
 
 local buttons = {}
+local groupButtons = {}
 
 local function buildButtons()
     for _, child in pairs(ScrollingFrame:GetChildren()) do
-        if child:IsA("TextButton") then child:Destroy() end
+        if child:IsA("Frame") then child:Destroy() end
     end
+    for _, child in pairs(GroupScroll:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    
     buttons = {}
+    groupButtons = {}
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
             local pName = player.Name
-            local Btn = Instance.new("TextButton")
-            Btn.Size = UDim2.new(1, 0, 0, 30)
-            Btn.Font = Enum.Font.SourceSansBold
-            Btn.TextSize = 14
-            Btn.BorderSizePixel = 0
-            Btn.Parent = ScrollingFrame
 
-            local BtnCorner = Instance.new("UICorner")
-            BtnCorner.CornerRadius = UDim.new(0, 4)
-            BtnCorner.Parent = Btn
+            -- Item trong bảng chính
+            local ItemFrame = Instance.new("Frame")
+            ItemFrame.Size = UDim2.new(1, 0, 0, 30)
+            ItemFrame.BackgroundTransparency = 1
+            ItemFrame.Parent = ScrollingFrame
 
-            Btn.MouseButton1Click:Connect(function()
+            local MainBtn = Instance.new("TextButton")
+            MainBtn.Size = UDim2.new(1, -55, 1, 0)
+            MainBtn.Position = UDim2.new(0, 0, 0, 0)
+            MainBtn.Font = Enum.Font.SourceSansBold
+            MainBtn.TextSize = 13
+            MainBtn.BorderSizePixel = 0
+            MainBtn.Parent = ItemFrame
+
+            local MainCorner = Instance.new("UICorner")
+            MainCorner.CornerRadius = UDim.new(0, 4)
+            MainCorner.Parent = MainBtn
+
+            local GroupAddBtn = Instance.new("TextButton")
+            GroupAddBtn.Size = UDim2.new(0, 50, 1, 0)
+            GroupAddBtn.Position = UDim2.new(1, -50, 0, 0)
+            GroupAddBtn.BackgroundColor3 = Color3.fromRGB(35, 75, 110)
+            GroupAddBtn.Text = "GROUP"
+            GroupAddBtn.TextColor3 = Color3.fromRGB(0, 220, 255)
+            GroupAddBtn.Font = Enum.Font.SourceSansBold
+            GroupAddBtn.TextSize = 11
+            GroupAddBtn.BorderSizePixel = 0
+            GroupAddBtn.Parent = ItemFrame
+
+            local GroupAddCorner = Instance.new("UICorner")
+            GroupAddCorner.CornerRadius = UDim.new(0, 4)
+            GroupAddCorner.Parent = GroupAddBtn
+
+            MainBtn.MouseButton1Click:Connect(function()
                 if targets[pName] then
                     targets[pName] = nil
                 else
@@ -594,7 +687,55 @@ local function buildButtons()
                 end
             end)
 
-            buttons[pName] = {Button = Btn}
+            GroupAddBtn.MouseButton1Click:Connect(function()
+                targets[pName] = nil
+                groupTargets[pName] = true
+                buildButtons()
+            end)
+
+            buttons[pName] = {Container = ItemFrame, Button = MainBtn, GroupBtn = GroupAddBtn}
+
+            -- Item trong bảng Group (F1)
+            local GFrame = Instance.new("Frame")
+            GFrame.Size = UDim2.new(1, 0, 0, 30)
+            GFrame.BackgroundTransparency = 1
+            GFrame.Parent = GroupScroll
+
+            local GBtn = Instance.new("TextButton")
+            GBtn.Size = UDim2.new(1, -55, 1, 0)
+            GBtn.BackgroundColor3 = Color3.fromRGB(30, 50, 70)
+            GBtn.Text = pName
+            GBtn.TextColor3 = Color3.fromRGB(0, 220, 255)
+            GBtn.Font = Enum.Font.SourceSansBold
+            GBtn.TextSize = 13
+            GBtn.BorderSizePixel = 0
+            GBtn.Parent = GFrame
+
+            local GBtnCorner = Instance.new("UICorner")
+            GBtnCorner.CornerRadius = UDim.new(0, 4)
+            GBtnCorner.Parent = GBtn
+
+            local GRemoveBtn = Instance.new("TextButton")
+            GRemoveBtn.Size = UDim2.new(0, 50, 1, 0)
+            GRemoveBtn.Position = UDim2.new(1, -50, 0, 0)
+            GRemoveBtn.BackgroundColor3 = Color3.fromRGB(120, 40, 40)
+            GRemoveBtn.Text = "XÓA"
+            GRemoveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            GRemoveBtn.Font = Enum.Font.SourceSansBold
+            GRemoveBtn.TextSize = 11
+            GRemoveBtn.BorderSizePixel = 0
+            GRemoveBtn.Parent = GFrame
+
+            local GRemoveCorner = Instance.new("UICorner")
+            GRemoveCorner.CornerRadius = UDim.new(0, 4)
+            GRemoveCorner.Parent = GRemoveBtn
+
+            GRemoveBtn.MouseButton1Click:Connect(function()
+                groupTargets[pName] = nil
+                buildButtons()
+            end)
+
+            groupButtons[pName] = {Container = GFrame}
         end
     end
 end
@@ -602,6 +743,7 @@ end
 Players.PlayerAdded:Connect(buildButtons)
 Players.PlayerRemoving:Connect(function(player)
     targets[player.Name] = nil
+    groupTargets[player.Name] = nil
     buildButtons()
 end)
 buildButtons()
@@ -619,67 +761,56 @@ task.spawn(function()
                 local p = Players:FindFirstChild(pName)
                 if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     local dist = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
-                    if dist <= maxDetectDistance and dist < minDistance then
+                    if dist <= maxDetectDistance and dist < minDistance and not groupTargets[pName] then
                         minDistance = dist
                         tempClosest = pName
                     end
                     if targets[pName] then
-                        btnData.Button.LayoutOrder = math.floor(dist) - 100000
+                        btnData.Container.LayoutOrder = math.floor(dist) - 100000
                     else
-                        btnData.Button.LayoutOrder = math.floor(dist)
+                        btnData.Container.LayoutOrder = math.floor(dist)
                     end
                 else
-                    btnData.Button.LayoutOrder = 999999
+                    btnData.Container.LayoutOrder = 999999
                 end
             end
         end
         closestPlayerName = tempClosest
 
-        -- Cập nhật trạng thái nút Select All dựa trên số lượng được chọn
-        local totalOtherPlayers = 0
-        local totalSelected = 0
-        for pName, _ in pairs(buttons) do
-            totalOtherPlayers = totalOtherPlayers + 1
-            if targets[pName] then
-                totalSelected = totalSelected + 1
-            end
-        end
-
-        if totalSelected == totalOtherPlayers and totalOtherPlayers > 0 then
-            SelectAllBtn.Text = "☒ DESELECT ALL PLAYERS [T]"
-            SelectAllBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-        else
-            SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
-            SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
-        end
-
         for pName, btnData in pairs(buttons) do
             local Btn = btnData.Button
+            local Container = btnData.Container
             
-            -- Lọc hiển thị theo ô tìm kiếm SearchBox
-            if searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true) then
-                Btn.Visible = true
+            -- Nếu đã vào Group thì ẩn khỏi danh sách chính
+            if groupTargets[pName] then
+                Container.Visible = false
+                if groupButtons[pName] then groupButtons[pName].Container.Visible = true end
             else
-                Btn.Visible = false
-            end
-
-            if targets[pName] then
-                if killAuraActive then
-                    Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-                    Btn.Text = pName .. " [TARGET]"
+                if groupButtons[pName] then groupButtons[pName].Container.Visible = false end
+                if searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true) then
+                    Container.Visible = true
                 else
-                    Btn.BackgroundColor3 = Color3.fromRGB(160, 120, 30)
-                    Btn.Text = pName .. " [PAUSED]"
+                    Container.Visible = false
                 end
-                Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            elseif pName == closestPlayerName then
-                Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
-                Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
-                Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
-            else
-                Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-                Btn.Text = pName
-                Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+
+                if targets[pName] then
+                    if killAuraActive then
+                        Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                        Btn.Text = pName .. " [TARGET]"
+                    else
+                        Btn.BackgroundColor3 = Color3.fromRGB(160, 120, 30)
+                        Btn.Text = pName .. " [PAUSED]"
+                    end
+                    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                elseif pName == closestPlayerName then
+                    Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
+                    Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
+                    Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
+                else
+                    Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+                    Btn.Text = pName
+                    Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                end
             end
         end
 
@@ -702,14 +833,42 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- 4. VÒNG LẶP SKILL BỊ ĐỘNG
+-- 4. VÒNG LẶP KILL AURA GROUP RIÊNG (TỐC ĐỘ 1.4s)
+----------------------------------------------------------------
+task.spawn(function()
+    while true do
+        if groupAuraActive then
+            local myCharacter = LocalPlayer.Character
+            local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+
+            if myRoot then
+                for pName, _ in pairs(groupTargets) do
+                    local targetCharacter = charactersFolder:FindFirstChild(pName)
+                    local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+
+                    if targetRoot then
+                        local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                        if currentDist <= maxDetectDistance then
+                            pcall(function()
+                                damageRemote:FireServer({[1] = targetCharacter})
+                            end)
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(groupAttackCooldown) -- 1.4 giây mỗi đợt tấn công
+    end
+end)
+
+----------------------------------------------------------------
+-- 5. VÒNG LẶP SKILL BỊ ĐỘNG
 ----------------------------------------------------------------
 task.spawn(function()
     while true do
         if passiveSkillActive then
             pcall(function()
-                local ohString1 = "Aggression"
-                stateAilmentRemote:FireServer(ohString1)
+                stateAilmentRemote:FireServer("Aggression")
             end)
         end
         task.wait(passiveCooldown)
@@ -717,7 +876,7 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- 5. VÒNG LẶP AUTO GRAB
+-- 6. VÒNG LẶP AUTO GRAB
 ----------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -727,7 +886,7 @@ task.spawn(function()
 
             if myRoot then
                 for pName, isTargeted in pairs(targets) do
-                    if isTargeted then
+                    if isTargeted and not groupTargets[pName] then
                         local targetCharacter = charactersFolder:FindFirstChild(pName)
                         local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
 
@@ -753,14 +912,13 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- 6. VÒNG LẶP AUTO FORAGEABLE
+-- 7. VÒNG LẶP AUTO FORAGEABLE
 ----------------------------------------------------------------
 task.spawn(function()
     while true do
         if autoForageActive then
             pcall(function()
-                local ohNumber1 = 18
-                forageableRemote:InvokeServer(ohNumber1)
+                forageableRemote:InvokeServer(18)
             end)
         end
         task.wait(forageCooldown)
