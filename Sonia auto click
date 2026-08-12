@@ -1,0 +1,153 @@
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local isEnabled = false
+local clickDelay = 0.8
+
+local targetGui = CoreGui:FindFirstChild("RobloxGui") and CoreGui or LocalPlayer:WaitForChild("PlayerGui")
+
+if targetGui:FindFirstChild("AutoClickerGlowUI") then
+    targetGui.AutoClickerGlowUI:Destroy()
+end
+
+-- TẠO GIAO DIỆN PHÁT SÁNG (GLOW UI)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoClickerGlowUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = targetGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 240, 0, 160)
+MainFrame.Position = UDim2.new(0.5, -120, 0.35, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner", MainFrame)
+UICorner.CornerRadius = UDim.new(0, 12)
+
+local UIStroke = Instance.new("UIStroke", MainFrame)
+UIStroke.Thickness = 2
+UIStroke.Color = Color3.fromRGB(255, 50, 70)
+UIStroke.Transparency = 0.2
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Position = UDim2.new(0, 0, 0, 8)
+Title.BackgroundTransparency = 1
+Title.Text = "AUTO CLICKER [F1]"
+Title.TextColor3 = Color3.fromRGB(220, 220, 220)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+Title.Parent = MainFrame
+
+local StatusBtn = Instance.new("TextButton")
+StatusBtn.Size = UDim2.new(0.85, 0, 0, 38)
+StatusBtn.Position = UDim2.new(0.075, 0, 0, 42)
+StatusBtn.BackgroundColor3 = Color3.fromRGB(45, 15, 20)
+StatusBtn.Text = "STATUS: OFF"
+StatusBtn.TextColor3 = Color3.fromRGB(255, 75, 90)
+StatusBtn.Font = Enum.Font.GothamBlack
+StatusBtn.TextSize = 13
+StatusBtn.AutoButtonColor = false
+StatusBtn.Parent = MainFrame
+
+local StatusCorner = Instance.new("UICorner", StatusBtn)
+StatusCorner.CornerRadius = UDim.new(0, 8)
+
+local StatusGlow = Instance.new("UIStroke", StatusBtn)
+StatusGlow.Thickness = 1.5
+StatusGlow.Color = Color3.fromRGB(255, 60, 80)
+
+local SpeedBox = Instance.new("TextBox")
+SpeedBox.Size = UDim2.new(0.85, 0, 0, 32)
+SpeedBox.Position = UDim2.new(0.075, 0, 0, 90)
+SpeedBox.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+SpeedBox.PlaceholderText = "Tốc độ (s): 0.8"
+SpeedBox.Text = "0.8"
+SpeedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedBox.Font = Enum.Font.GothamSemibold
+SpeedBox.TextSize = 12
+SpeedBox.ClearTextOnFocus = false
+SpeedBox.Parent = MainFrame
+
+local SpeedCorner = Instance.new("UICorner", SpeedBox)
+SpeedCorner.CornerRadius = UDim.new(0, 6)
+
+local Tip = Instance.new("TextLabel")
+Tip.Size = UDim2.new(1, 0, 0, 20)
+Tip.Position = UDim2.new(0, 0, 0, 130)
+Tip.BackgroundTransparency = 1
+Tip.Text = "F1 / Bấm nút để Bật • Vẫn chạy khi chuyển tab"
+Tip.TextColor3 = Color3.fromRGB(120, 120, 130)
+Tip.Font = Enum.Font.Gotham
+Tip.TextSize = 10
+Tip.Parent = MainFrame
+
+-- HIỆU ỨNG GLOW ON/OFF
+local function updateVisuals()
+    local tInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    if isEnabled then
+        StatusBtn.Text = "STATUS: ACTIVE (ON)"
+        TweenService:Create(StatusBtn, tInfo, {BackgroundColor3 = Color3.fromRGB(10, 45, 25), TextColor3 = Color3.fromRGB(0, 255, 140)}):Play()
+        TweenService:Create(StatusGlow, tInfo, {Color = Color3.fromRGB(0, 255, 140)}):Play()
+        TweenService:Create(UIStroke, tInfo, {Color = Color3.fromRGB(0, 255, 140)}):Play()
+    else
+        StatusBtn.Text = "STATUS: OFF"
+        TweenService:Create(StatusBtn, tInfo, {BackgroundColor3 = Color3.fromRGB(45, 15, 20), TextColor3 = Color3.fromRGB(255, 75, 90)}):Play()
+        TweenService:Create(StatusGlow, tInfo, {Color = Color3.fromRGB(255, 60, 80)}):Play()
+        TweenService:Create(UIStroke, tInfo, {Color = Color3.fromRGB(255, 50, 70)}):Play()
+    end
+end
+
+local function toggleState()
+    isEnabled = not isEnabled
+    updateVisuals()
+end
+
+-- HÀM GIẢ LẬP NHẤP CHUỘT TRÁI
+local function autoClickLeftMouse()
+    pcall(function()
+        local vp = Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize or Vector2.new(800, 600)
+        VirtualInputManager:SendMouseButtonEvent(vp.X / 2, vp.Y / 2, 0, true, game, 0)
+        task.wait(0.01)
+        VirtualInputManager:SendMouseButtonEvent(vp.X / 2, vp.Y / 2, 0, false, game, 0)
+    end)
+end
+
+-- VÒNG LẶP CHẠY LIÊN TỤC NGAY CẢ KHI BACKGROUND
+task.spawn(function()
+    while true do
+        if isEnabled then
+            autoClickLeftMouse()
+            task.wait(math.max(0.01, clickDelay))
+        else
+            task.wait(0.1)
+        end
+    end
+end)
+
+-- PHÍM TẮT & SỰ KIỆN GIAO DIỆN
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.F1 then
+        toggleState()
+    end
+end)
+
+StatusBtn.MouseButton1Click:Connect(toggleState)
+
+SpeedBox.FocusLost:Connect(function()
+    local num = tonumber(SpeedBox.Text)
+    if num and num > 0 then
+        clickDelay = num
+    else
+        SpeedBox.Text = tostring(clickDelay)
+    end
+end)
