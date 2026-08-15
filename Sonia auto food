@@ -1,0 +1,178 @@
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local foodRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Food")
+
+-- Biến điều khiển
+local isRunning = false
+local loopTask = nil
+
+-- 1. TẠO GIAO DIỆN (GUI)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoFoodGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 280, 0, 220)
+mainFrame.Position = UDim2.new(0.5, -140, 0.4, -110)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+-- Tiêu đề
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 35)
+title.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+title.Text = "AUTO FOOD ALGAE (F2)"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 14
+title.Font = Enum.Font.SourceSansBold
+title.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = title
+
+-- Ô nhập Số lượng/lần
+local countLabel = Instance.new("TextLabel")
+countLabel.Size = UDim2.new(0, 150, 0, 30)
+countLabel.Position = UDim2.new(0, 15, 0, 45)
+countLabel.Text = "Số lượng/lần:"
+countLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+countLabel.TextXAlignment = Enum.TextXAlignment.Left
+countLabel.BackgroundTransparency = 1
+countLabel.Font = Enum.Font.SourceSans
+countLabel.TextSize = 14
+countLabel.Parent = mainFrame
+
+local countInput = Instance.new("TextBox")
+countInput.Size = UDim2.new(0, 80, 0, 30)
+countInput.Position = UDim2.new(0, 180, 0, 45)
+countInput.Text = "20"
+countInput.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+countInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+countInput.Font = Enum.Font.SourceSansBold
+countInput.TextSize = 14
+countInput.Parent = mainFrame
+
+-- Ô nhập Thời gian chờ (Phút)
+local intervalLabel = Instance.new("TextLabel")
+intervalLabel.Size = UDim2.new(0, 150, 0, 30)
+intervalLabel.Position = UDim2.new(0, 15, 0, 85)
+intervalLabel.Text = "Khoảng cách (Phút):"
+intervalLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+intervalLabel.TextXAlignment = Enum.TextXAlignment.Left
+intervalLabel.BackgroundTransparency = 1
+intervalLabel.Font = Enum.Font.SourceSans
+intervalLabel.TextSize = 14
+intervalLabel.Parent = mainFrame
+
+local intervalInput = Instance.new("TextBox")
+intervalInput.Size = UDim2.new(0, 80, 0, 30)
+intervalInput.Position = UDim2.new(0, 180, 0, 85)
+intervalInput.Text = "2"
+intervalInput.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+intervalInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+intervalInput.Font = Enum.Font.SourceSansBold
+intervalInput.TextSize = 14
+intervalInput.Parent = mainFrame
+
+-- Nút On/Off
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 250, 0, 35)
+toggleBtn.Position = UDim2.new(0, 15, 0, 130)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+toggleBtn.Text = "TRẠNG THÁI: OFF"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.TextSize = 15
+toggleBtn.Parent = mainFrame
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 6)
+btnCorner.Parent = toggleBtn
+
+-- Label thông báo trạng thái
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -30, 0, 25)
+statusLabel.Position = UDim2.new(0, 15, 0, 175)
+statusLabel.Text = "Đang dừng..."
+statusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Font = Enum.Font.SourceSansItalic
+statusLabel.TextSize = 13
+statusLabel.Parent = mainFrame
+
+-- 2. LOGIC XỬ LÝ
+local function startLoop()
+    loopTask = task.spawn(function()
+        while isRunning do
+            local count = tonumber(countInput.Text) or 20
+            local minutes = tonumber(intervalInput.Text) or 2
+
+            -- Thực hiện gọi Remote theo số lượng cấu hình
+            for i = 1, count do
+                if not isRunning then break end
+                pcall(function()
+                    local algae = workspace.Interactions.Food:FindFirstChild("Algae")
+                    if algae then
+                        foodRemote:FireServer(algae)
+                    end
+                end)
+                task.wait(0.1) -- Tránh spam quá nhanh gây lag server
+            end
+
+            -- Chờ khoảng thời gian đã định
+            if isRunning then
+                local waitSeconds = minutes * 60
+                for timeRemaining = waitSeconds, 1, -1 do
+                    if not isRunning then break end
+                    statusLabel.Text = string.format("Chờ lượt tiếp: %d giây", timeRemaining)
+                    task.wait(1)
+                end
+            end
+        end
+    end)
+end
+
+local function toggleState()
+    isRunning = not isRunning
+
+    if isRunning then
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+        toggleBtn.Text = "TRẠNG THÁI: ON"
+        statusLabel.Text = "Đang chạy..."
+        startLoop()
+    else
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        toggleBtn.Text = "TRẠNG THÁI: OFF"
+        statusLabel.Text = "Đang dừng..."
+        if loopTask then
+            task.cancel(loopTask)
+            loopTask = nil
+        end
+    end
+end
+
+-- Bật / Tắt bằng nút bấm
+toggleBtn.MouseButton1Click:Connect(toggleState)
+
+-- Bật / Tắt bằng phím F2
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.F2 then
+        toggleState()
+    end
+end)
