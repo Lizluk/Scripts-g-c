@@ -123,10 +123,10 @@ end
 -- Kích hoạt khi click nút trên UI
 triggerBtn.MouseButton1Click:Connect(executeAction)
 
--- Kích hoạt trực tiếp khi nhấn F3
+-- Kích hoạt trực tiếp khi nhấn F4
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.F3 then
+    if input.KeyCode == Enum.KeyCode.F4 then
         executeAction()
     end
 end)
