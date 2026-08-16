@@ -1,0 +1,132 @@
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local cardMatchRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CardMatchRemote")
+
+-- Biến chống spam trùng lặp khi đang xử lý
+local isExecuting = false
+
+-- 1. TẠO GIAO DIỆN (GUI)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CardMatchGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 260, 0, 160)
+mainFrame.Position = UDim2.new(0.5, -130, 0.4, -80)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+-- Tiêu đề
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 35)
+title.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+title.Text = "CARD MATCH (F3)"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 14
+title.Font = Enum.Font.SourceSansBold
+title.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = title
+
+-- Ô nhập Số lượng lần gọi
+local countLabel = Instance.new("TextLabel")
+countLabel.Size = UDim2.new(0, 130, 0, 30)
+countLabel.Position = UDim2.new(0, 15, 0, 45)
+countLabel.Text = "Số lượng/lần bấm:"
+countLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+countLabel.TextXAlignment = Enum.TextXAlignment.Left
+countLabel.BackgroundTransparency = 1
+countLabel.Font = Enum.Font.SourceSans
+countLabel.TextSize = 14
+countLabel.Parent = mainFrame
+
+local countInput = Instance.new("TextBox")
+countInput.Size = UDim2.new(0, 80, 0, 30)
+countInput.Position = UDim2.new(0, 160, 0, 45)
+countInput.Text = "1"
+countInput.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+countInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+countInput.Font = Enum.Font.SourceSansBold
+countInput.TextSize = 14
+countInput.Parent = mainFrame
+
+-- Nút bấm thủ công
+local triggerBtn = Instance.new("TextButton")
+triggerBtn.Size = UDim2.new(0, 230, 0, 35)
+triggerBtn.Position = UDim2.new(0, 15, 0, 85)
+triggerBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 250)
+triggerBtn.Text = "BẤM ĐỂ GỬI (F3)"
+triggerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+triggerBtn.Font = Enum.Font.SourceSansBold
+triggerBtn.TextSize = 15
+triggerBtn.Parent = mainFrame
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 6)
+btnCorner.Parent = triggerBtn
+
+-- Label trạng thái
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -30, 0, 25)
+statusLabel.Position = UDim2.new(0, 15, 0, 125)
+statusLabel.Text = "Chờ bấm phím F3..."
+statusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Font = Enum.Font.SourceSansItalic
+statusLabel.TextSize = 13
+statusLabel.Parent = mainFrame
+
+-- 2. LOGIC XỬ LÝ (INVOKE SERVER KHI BẤM F3)
+local function executeAction()
+    if isExecuting then return end
+    isExecuting = true
+
+    triggerBtn.BackgroundColor3 = Color3.fromRGB(200, 130, 30)
+    triggerBtn.Text = "ĐANG GỬI..."
+    
+    local count = tonumber(countInput.Text) or 1
+
+    task.spawn(function()
+        for i = 1, count do
+            statusLabel.Text = string.format("Đã gửi %d/%d", i, count)
+            pcall(function()
+                cardMatchRemote:InvokeServer(true)
+            end)
+            if count > 1 then
+                task.wait(0.05)
+            end
+        end
+
+        statusLabel.Text = "Hoàn thành! Chờ bấm tiếp..."
+        triggerBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 250)
+        triggerBtn.Text = "BẤM ĐỂ GỬI (F3)"
+        isExecuting = false
+    end)
+end
+
+-- Kích hoạt khi click nút trên UI
+triggerBtn.MouseButton1Click:Connect(executeAction)
+
+-- Kích hoạt trực tiếp khi nhấn F3
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.F3 then
+        executeAction()
+    end
+end)
