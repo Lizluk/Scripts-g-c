@@ -1,4 +1,4 @@
-local offset = 8 -- CHỈNH SỬA: Đã đổi thành dưới mặt đất 5 block
+local offset = 10 -- CHỈNH SỬA: Đã đổi thành dưới mặt đất 5 block
 local Player = game.Players.LocalPlayer
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
