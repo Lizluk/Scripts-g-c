@@ -1,0 +1,287 @@
+-- Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Remote Event
+local remoteEvent = ReplicatedStorage:WaitForChild("FlowClient"):WaitForChild("ClientRunner"):WaitForChild("Event")
+
+-- State Variables
+local isAuraActive = false
+local selectAll = false
+local selectedNpcMap = {} -- [NpcModel] = boolean
+local espMap = {}          -- [NpcModel] = { Highlight = ..., Billboard = ..., Label = ... }
+local auraThread = nil
+
+-- GUI Setup
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "NpcKillAuraGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = PlayerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 300, 0, 380)
+mainFrame.Position = UDim2.new(0.5, -150, 0.3, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 2
+stroke.Color = Color3.fromRGB(50, 50, 65)
+stroke.Parent = mainFrame
+
+-- Title
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 35)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "NPC KILL AURA [Q]"
+titleLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
+titleLabel.TextSize = 14
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Parent = mainFrame
+
+-- Select All Button
+local selectAllBtn = Instance.new("TextButton")
+selectAllBtn.Size = UDim2.new(1, -20, 0, 32)
+selectAllBtn.Position = UDim2.new(0, 10, 0, 40)
+selectAllBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+selectAllBtn.Text = "CHỌN TẤT CẢ: OFF"
+selectAllBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+selectAllBtn.TextSize = 12
+selectAllBtn.Font = Enum.Font.GothamBold
+selectAllBtn.Parent = mainFrame
+Instance.new("UICorner", selectAllBtn).CornerRadius = UDim.new(0, 6)
+
+-- ScrollingFrame for NPCs
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -20, 0, 220)
+scrollFrame.Position = UDim2.new(0, 10, 0, 80)
+scrollFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 4
+scrollFrame.Parent = mainFrame
+Instance.new("UICorner", scrollFrame).CornerRadius = UDim.new(0, 6)
+
+local uiListLayout = Instance.new("UIListLayout")
+uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+uiListLayout.Padding = UDim.new(0, 4)
+uiListLayout.Parent = scrollFrame
+
+-- Toggle Main Button (Q)
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(1, -20, 0, 40)
+toggleBtn.Position = UDim2.new(0, 10, 0, 325)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+toggleBtn.Text = "KILL AURA: OFF (Q)"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.TextSize = 13
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Parent = mainFrame
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 8)
+
+-- =============================================
+-- HELPER: ALWAYS-ON NAMETAG ESP
+-- =============================================
+local function removeEsp(npcModel)
+	if espMap[npcModel] then
+		if espMap[npcModel].Highlight then espMap[npcModel].Highlight:Destroy() end
+		if espMap[npcModel].Billboard then espMap[npcModel].Billboard:Destroy() end
+		espMap[npcModel] = nil
+	end
+end
+
+local function createOrUpdateEsp(npcModel)
+	if not npcModel or not npcModel.Parent then return end
+	local head = npcModel:FindFirstChild("Head") or npcModel.PrimaryPart or npcModel:FindFirstChildWhichIsA("BasePart")
+	if not head then return end
+
+	local isTargeted = selectAll or selectedNpcMap[npcModel]
+
+	-- Tạo ESP nếu chưa có
+	if not espMap[npcModel] then
+		local billboard = Instance.new("BillboardGui")
+		billboard.Name = "NpcNameESP"
+		billboard.Adornee = head
+		billboard.Size = UDim2.new(0, 180, 0, 40)
+		billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+		billboard.AlwaysOnTop = true
+		billboard.Parent = npcModel
+
+		local nameLabel = Instance.new("TextLabel")
+		nameLabel.Size = UDim2.new(1, 0, 1, 0)
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.TextSize = 14
+		nameLabel.Font = Enum.Font.GothamBold
+		nameLabel.TextStrokeTransparency = 0
+		nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+		nameLabel.Parent = billboard
+
+		local highlight = Instance.new("Highlight")
+		highlight.Name = "NpcTargetESP"
+		highlight.Adornee = npcModel
+		highlight.FillTransparency = 0.5
+		highlight.OutlineTransparency = 0
+		highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+		highlight.Parent = npcModel
+
+		espMap[npcModel] = {
+			Billboard = billboard,
+			Label = nameLabel,
+			Highlight = highlight
+		}
+	end
+
+	-- Cập nhật màu sắc & trạng thái theo lựa chọn
+	local data = espMap[npcModel]
+	if isTargeted then
+		-- Trạng thái CHỌN KILL: Chữ đỏ + Highlight đỏ
+		data.Label.Text = "[KILL] 🎯 " .. npcModel.Name
+		data.Label.TextColor3 = Color3.fromRGB(255, 50, 50)
+		data.Highlight.FillColor = Color3.fromRGB(255, 30, 30)
+		data.Highlight.Enabled = true
+	else
+		-- Trạng thái BÌNH THƯỜNG: Chữ xanh lá + Tắt highlight
+		data.Label.Text = "🟢 " .. npcModel.Name
+		data.Label.TextColor3 = Color3.fromRGB(80, 255, 80)
+		data.Highlight.Enabled = false
+	end
+end
+
+-- Refresh List & GUI
+local function updateListCanvas()
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, uiListLayout.AbsoluteContentSize.Y + 10)
+end
+
+local function refreshNpcList()
+	for _, child in ipairs(scrollFrame:GetChildren()) do
+		if child:IsA("TextButton") then child:Destroy() end
+	end
+	
+	local npcsFolder = Workspace:FindFirstChild("NPCs")
+	if not npcsFolder then return end
+	
+	for _, npc in ipairs(npcsFolder:GetChildren()) do
+		if npc:IsA("Model") then
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(1, -8, 0, 30)
+			btn.Font = Enum.Font.Gotham
+			btn.TextSize = 12
+			btn.Parent = scrollFrame
+			Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+			
+			local function updateBtnVisual()
+				if selectAll or selectedNpcMap[npc] then
+					btn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+					btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+					btn.Text = "☠ " .. npc.Name
+				else
+					btn.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+					btn.TextColor3 = Color3.fromRGB(170, 170, 180)
+					btn.Text = "🟢 " .. npc.Name
+				end
+				createOrUpdateEsp(npc)
+			end
+			
+			btn.MouseButton1Click:Connect(function()
+				if not selectAll then
+					selectedNpcMap[npc] = not selectedNpcMap[npc]
+					updateBtnVisual()
+				end
+			end)
+			
+			updateBtnVisual()
+		end
+	end
+	
+	task.defer(updateListCanvas)
+end
+
+-- Select All Logic
+selectAllBtn.MouseButton1Click:Connect(function()
+	selectAll = not selectAll
+	if selectAll then
+		selectAllBtn.Text = "CHỌN TẤT CẢ: ON"
+		selectAllBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+		selectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	else
+		selectAllBtn.Text = "CHỌN TẤT CẢ: OFF"
+		selectAllBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+		selectAllBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+	end
+	refreshNpcList()
+end)
+
+-- Function: Damage NPC
+local function damageNpc(npcModel)
+	if not npcModel or not npcModel.Parent then return end
+	local humanoid = npcModel:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.Health > 0 then
+		remoteEvent:FireServer("NPCs", "Damage", humanoid, 100)
+	end
+end
+
+-- Aura Execution Loop
+local function startAura()
+	isAuraActive = true
+	toggleBtn.Text = "KILL AURA: ON (Q)"
+	toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+	
+	auraThread = task.spawn(function()
+		while isAuraActive do
+			local npcsFolder = Workspace:FindFirstChild("NPCs")
+			if npcsFolder then
+				local npcList = npcsFolder:GetChildren()
+				for _, npc in ipairs(npcList) do
+					if not isAuraActive then break end
+					
+					if selectAll or selectedNpcMap[npc] then
+						damageNpc(npc)
+					end
+				end
+			end
+			task.wait(0.8)
+		end
+	end)
+end
+
+local function stopAura()
+	isAuraActive = false
+	if auraThread then task.cancel(auraThread) end
+	toggleBtn.Text = "KILL AURA: OFF (Q)"
+	toggleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+end
+
+-- Keybind and Buttons Connection
+toggleBtn.MouseButton1Click:Connect(function()
+	if isAuraActive then stopAura() else startAura() end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+	if input.KeyCode == Enum.KeyCode.Q then
+		if isAuraActive then stopAura() else startAura() end
+	end
+end)
+
+-- Auto Refresh when Folder changes
+local npcsFolder = Workspace:WaitForChild("NPCs")
+npcsFolder.ChildAdded:Connect(function()
+	refreshNpcList()
+end)
+npcsFolder.ChildRemoved:Connect(function(child)
+	selectedNpcMap[child] = nil
+	removeEsp(child)
+	refreshNpcList()
+end)
+
+-- Initial Load
+refreshNpcList()
