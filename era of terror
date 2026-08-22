@@ -1,0 +1,600 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
+
+if not PlayerGui then
+    warn("Không tìm thấy PlayerGui!")
+    return
+end
+
+-- Lấy Remote an toàn
+local inflictDamageRemote
+task.spawn(function()
+    local events = ReplicatedStorage:WaitForChild("Events", 5)
+    if events then
+        inflictDamageRemote = events:WaitForChild("InflictDamage", 5)
+    end
+end)
+
+local targets = {} 
+local killAuraActive = true 
+local closestPlayerName = "" 
+local maxDetectDistance = 50 
+local searchFilterText = ""
+
+-- BIẾN TÙY CHỈNH DAME MỚI (Mặc định: 700,000 và 600,000)
+local customDamage1 = 700000
+local customDamage2 = 600000
+
+local startTime = os.time()
+local attackCooldown = 1.4     
+local lastAttackTime = 0
+
+----------------------------------------------------------------
+-- 1. TẠO GIAO DIỆN (GUI)
+----------------------------------------------------------------
+
+if PlayerGui:FindFirstChild("LizlukKillGUI") then
+    PlayerGui.LizlukKillGUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "LizlukKillGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = PlayerGui
+
+-- KHUNG MENU CHÍNH (Tăng chiều cao lên 530px)
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 220, 0, 530)
+MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Visible = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+-- KHUNG ĐỒNG HỒ TÁCH BIỆT
+local TimeFrame = Instance.new("Frame")
+TimeFrame.Size = UDim2.new(1, 0, 0, 30)
+TimeFrame.Position = UDim2.new(0, 0, 1, 8)
+TimeFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+TimeFrame.BorderSizePixel = 0
+TimeFrame.Parent = MainFrame
+
+local TimeCorner = Instance.new("UICorner")
+TimeCorner.CornerRadius = UDim.new(0, 6)
+TimeCorner.Parent = TimeFrame
+
+local PlaytimeLabel = Instance.new("TextLabel")
+PlaytimeLabel.Size = UDim2.new(1, 0, 1, 0)
+PlaytimeLabel.BackgroundTransparency = 1
+PlaytimeLabel.Text = "⏱️ TIME: 00:00:00"
+PlaytimeLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+PlaytimeLabel.Font = Enum.Font.SourceSansBold
+PlaytimeLabel.TextSize = 14
+PlaytimeLabel.Parent = TimeFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+Title.Text = "LIZLUK MENU [P]"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 15
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = Title
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, -10, 0, 25)
+StatusLabel.Position = UDim2.new(0, 5, 0, 40)
+StatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+StatusLabel.Text = "KILL AURA: READY [Q]"
+StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+StatusLabel.Font = Enum.Font.SourceSansBold
+StatusLabel.TextSize = 13
+StatusLabel.Parent = MainFrame
+
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 4)
+StatusCorner.Parent = StatusLabel
+
+-- KHUNG KHOẢNG CÁCH
+local DistanceInputFrame = Instance.new("Frame")
+DistanceInputFrame.Size = UDim2.new(1, -10, 0, 30)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 72)
+DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+DistanceInputFrame.BorderSizePixel = 0
+DistanceInputFrame.Parent = MainFrame
+
+local InputFrameCorner = Instance.new("UICorner")
+InputFrameCorner.CornerRadius = UDim.new(0, 4)
+InputFrameCorner.Parent = DistanceInputFrame
+
+local DistanceLabel = Instance.new("TextLabel")
+DistanceLabel.Size = UDim2.new(0, 130, 1, 0)
+DistanceLabel.Position = UDim2.new(0, 5, 0, 0)
+DistanceLabel.BackgroundTransparency = 1
+DistanceLabel.Text = "Khoảng cách:"
+DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+DistanceLabel.Font = Enum.Font.SourceSansBold
+DistanceLabel.TextSize = 12
+DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistanceLabel.Parent = DistanceInputFrame
+
+local DistanceBox = Instance.new("TextBox")
+DistanceBox.Size = UDim2.new(0, 65, 0, 22)
+DistanceBox.Position = UDim2.new(1, -70, 0.5, -11)
+DistanceBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+DistanceBox.BorderSizePixel = 0
+DistanceBox.Text = tostring(maxDetectDistance)
+DistanceBox.TextColor3 = Color3.fromRGB(0, 220, 255)
+DistanceBox.Font = Enum.Font.SourceSansBold
+DistanceBox.TextSize = 13
+DistanceBox.ClearTextOnFocus = false
+DistanceBox.Parent = DistanceInputFrame
+
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 4)
+InputCorner.Parent = DistanceBox
+
+DistanceBox.FocusLost:Connect(function()
+    local number = tonumber(DistanceBox.Text)
+    if number and number >= 0 then
+        maxDetectDistance = number
+        DistanceBox.Text = tostring(number)
+    else
+        DistanceBox.Text = tostring(maxDetectDistance)
+    end
+end)
+
+----------------------------------------------------------------
+-- 2 Ô TÙY CHỈNH DAME (NEW)
+----------------------------------------------------------------
+
+-- Ô DAME 1
+local Dmg1Frame = Instance.new("Frame")
+Dmg1Frame.Size = UDim2.new(1, -10, 0, 30)
+Dmg1Frame.Position = UDim2.new(0, 5, 0, 107)
+Dmg1Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+Dmg1Frame.BorderSizePixel = 0
+Dmg1Frame.Parent = MainFrame
+
+local Dmg1FrameCorner = Instance.new("UICorner")
+Dmg1FrameCorner.CornerRadius = UDim.new(0, 4)
+Dmg1FrameCorner.Parent = Dmg1Frame
+
+local Dmg1Label = Instance.new("TextLabel")
+Dmg1Label.Size = UDim2.new(0, 120, 1, 0)
+Dmg1Label.Position = UDim2.new(0, 5, 0, 0)
+Dmg1Label.BackgroundTransparency = 1
+Dmg1Label.Text = "Damage 1:"
+Dmg1Label.TextColor3 = Color3.fromRGB(200, 200, 200)
+Dmg1Label.Font = Enum.Font.SourceSansBold
+Dmg1Label.TextSize = 12
+Dmg1Label.TextXAlignment = Enum.TextXAlignment.Left
+Dmg1Label.Parent = Dmg1Frame
+
+local Dmg1Box = Instance.new("TextBox")
+Dmg1Box.Size = UDim2.new(0, 75, 0, 22)
+Dmg1Box.Position = UDim2.new(1, -80, 0.5, -11)
+Dmg1Box.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+Dmg1Box.BorderSizePixel = 0
+Dmg1Box.Text = tostring(customDamage1)
+Dmg1Box.TextColor3 = Color3.fromRGB(255, 100, 100)
+Dmg1Box.Font = Enum.Font.SourceSansBold
+Dmg1Box.TextSize = 12
+Dmg1Box.ClearTextOnFocus = false
+Dmg1Box.Parent = Dmg1Frame
+
+local Dmg1Corner = Instance.new("UICorner")
+Dmg1Corner.CornerRadius = UDim.new(0, 4)
+Dmg1Corner.Parent = Dmg1Box
+
+Dmg1Box.FocusLost:Connect(function()
+    local number = tonumber(Dmg1Box.Text)
+    if number then
+        customDamage1 = number
+        Dmg1Box.Text = tostring(number)
+    else
+        Dmg1Box.Text = tostring(customDamage1)
+    end
+end)
+
+-- Ô DAME 2
+local Dmg2Frame = Instance.new("Frame")
+Dmg2Frame.Size = UDim2.new(1, -10, 0, 30)
+Dmg2Frame.Position = UDim2.new(0, 5, 0, 142)
+Dmg2Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+Dmg2Frame.BorderSizePixel = 0
+Dmg2Frame.Parent = MainFrame
+
+local Dmg2FrameCorner = Instance.new("UICorner")
+Dmg2FrameCorner.CornerRadius = UDim.new(0, 4)
+Dmg2FrameCorner.Parent = Dmg2Frame
+
+local Dmg2Label = Instance.new("TextLabel")
+Dmg2Label.Size = UDim2.new(0, 120, 1, 0)
+Dmg2Label.Position = UDim2.new(0, 5, 0, 0)
+Dmg2Label.BackgroundTransparency = 1
+Dmg2Label.Text = "Damage 2:"
+Dmg2Label.TextColor3 = Color3.fromRGB(200, 200, 200)
+Dmg2Label.Font = Enum.Font.SourceSansBold
+Dmg2Label.TextSize = 12
+Dmg2Label.TextXAlignment = Enum.TextXAlignment.Left
+Dmg2Label.Parent = Dmg2Frame
+
+local Dmg2Box = Instance.new("TextBox")
+Dmg2Box.Size = UDim2.new(0, 75, 0, 22)
+Dmg2Box.Position = UDim2.new(1, -80, 0.5, -11)
+Dmg2Box.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+Dmg2Box.BorderSizePixel = 0
+Dmg2Box.Text = tostring(customDamage2)
+Dmg2Box.TextColor3 = Color3.fromRGB(255, 100, 100)
+Dmg2Box.Font = Enum.Font.SourceSansBold
+Dmg2Box.TextSize = 12
+Dmg2Box.ClearTextOnFocus = false
+Dmg2Box.Parent = Dmg2Frame
+
+local Dmg2Corner = Instance.new("UICorner")
+Dmg2Corner.CornerRadius = UDim.new(0, 4)
+Dmg2Corner.Parent = Dmg2Box
+
+Dmg2Box.FocusLost:Connect(function()
+    local number = tonumber(Dmg2Box.Text)
+    if number then
+        customDamage2 = number
+        Dmg2Box.Text = tostring(number)
+    else
+        Dmg2Box.Text = tostring(customDamage2)
+    end
+end)
+
+----------------------------------------------------------------
+
+-- Ô TÌM KIẾM TÊN
+local SearchBox = Instance.new("TextBox")
+SearchBox.Size = UDim2.new(1, -10, 0, 25)
+SearchBox.Position = UDim2.new(0, 5, 0, 177)
+SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+SearchBox.BorderSizePixel = 0
+SearchBox.Text = ""
+SearchBox.PlaceholderText = "🔍 Tìm tên người chơi..."
+SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+SearchBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+SearchBox.Font = Enum.Font.SourceSansBold
+SearchBox.TextSize = 13
+SearchBox.ClearTextOnFocus = false
+SearchBox.Parent = MainFrame
+
+local SearchCorner = Instance.new("UICorner")
+SearchCorner.CornerRadius = UDim.new(0, 4)
+SearchCorner.Parent = SearchBox
+
+-- NÚT SELECT ALL
+local SelectAllBtn = Instance.new("TextButton")
+SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 207)
+SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
+SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
+SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SelectAllBtn.Font = Enum.Font.SourceSansBold
+SelectAllBtn.TextSize = 13
+SelectAllBtn.Parent = MainFrame
+
+local SelectAllCorner = Instance.new("UICorner")
+SelectAllCorner.CornerRadius = UDim.new(0, 4)
+SelectAllCorner.Parent = SelectAllBtn
+
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -242)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 237)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.BorderSizePixel = 0
+ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollingFrame.ScrollBarThickness = 4
+ScrollingFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ScrollingFrame
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end)
+
+SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    searchFilterText = string.lower(SearchBox.Text)
+end)
+
+-- Vòng lặp đếm giờ
+task.spawn(function()
+    while task.wait(1) do
+        local elapsed = os.time() - startTime
+        local hours = math.floor(elapsed / 3600)
+        local mins = math.floor((elapsed % 3600) / 60)
+        local secs = elapsed % 60
+        PlaytimeLabel.Text = string.format("⏱️ THỜI GIAN: %02d:%02d:%02d", hours, mins, secs)
+    end
+end)
+
+local function toggleSelectAll()
+    local allPlayers = Players:GetPlayers()
+    local otherPlayersCount = 0
+    local selectedCount = 0
+
+    for _, p in pairs(allPlayers) do
+        if p ~= LocalPlayer then
+            otherPlayersCount = otherPlayersCount + 1
+            if targets[p.Name] then
+                selectedCount = selectedCount + 1
+            end
+        end
+    end
+
+    if selectedCount == otherPlayersCount and otherPlayersCount > 0 then
+        targets = {}
+        SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
+        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
+    else
+        for _, p in pairs(allPlayers) do
+            if p ~= LocalPlayer then
+                targets[p.Name] = true
+            end
+        end
+        SelectAllBtn.Text = "☒ DESELECT ALL PLAYERS [T]"
+        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+    end
+end
+
+SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
+
+-- LỰC ĐÁNH / INFLICT DAMAGE LOGIC (Tự động lấy chỉ số Dame từ 2 ô nhập liệu)
+local function performKillAuraAttack()
+    if not killAuraActive then return end
+    if tick() - lastAttackTime < attackCooldown then return end
+    
+    local myCharacter = LocalPlayer.Character
+    local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+
+    if myRoot then
+        for pName, isTargeted in pairs(targets) do
+            if isTargeted then
+                local charsFolder = workspace:FindFirstChild("Characters")
+                local targetCharacter = workspace:FindFirstChild(pName) or (charsFolder and charsFolder:FindFirstChild(pName))
+                local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot then
+                    local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                    if currentDist <= maxDetectDistance then
+                        local targetPart = targetCharacter:FindFirstChild("Torso") 
+                            or targetCharacter:FindFirstChild("UpperTorso") 
+                            or targetCharacter:FindFirstChild("HumanoidRootPart")
+
+                        if targetPart then
+                            pcall(function()
+                                local remote = inflictDamageRemote or ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("InflictDamage")
+                                if remote then
+                                    local ohTable1 = {
+                                        [1] = targetPart
+                                    }
+                                    local ohNumber2 = customDamage1
+                                    local ohNumber3 = 5
+                                    local ohNumber4 = customDamage2
+                                    local ohNumber5 = 0
+                                    local ohNumber6 = 0
+
+                                    remote:FireServer(ohTable1, ohNumber2, ohNumber3, ohNumber4, ohNumber5, ohNumber6)
+                                end
+                            end)
+                            lastAttackTime = tick()
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if UserInputService:GetFocusedTextBox() or gameProcessed then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        performKillAuraAttack()
+    elseif input.KeyCode == Enum.KeyCode.P then 
+        MainFrame.Visible = not MainFrame.Visible 
+    elseif input.KeyCode == Enum.KeyCode.T then 
+        toggleSelectAll() 
+    elseif input.KeyCode == Enum.KeyCode.Q then
+        killAuraActive = not killAuraActive
+        if killAuraActive then
+            StatusLabel.Text = "KILL AURA: READY [Q]"
+            StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+        else
+            StatusLabel.Text = "KILL AURA: PAUSED [Q]"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+        end
+    end
+end)
+
+----------------------------------------------------------------
+-- 2. HỆ THỐNG ESP
+----------------------------------------------------------------
+
+local function applyESP(player, character)
+    if not character or player == LocalPlayer then return end
+    
+    local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 3)
+    if not head then return end
+
+    if head:FindFirstChild("PlayerESP") then 
+        head.PlayerESP:Destroy() 
+    end
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "PlayerESP"
+    bb.Size = UDim2.new(0, 150, 0, 30)
+    bb.AlwaysOnTop = true
+    bb.ExtentsOffset = Vector3.new(0, 2.5, 0)
+    bb.Adornee = head
+    bb.MaxDistance = maxDetectDistance
+    bb.Parent = head
+
+    local txt = Instance.new("TextLabel")
+    txt.Name = "ESPText"
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.Font = Enum.Font.SourceSansBold
+    txt.TextSize = 13
+    txt.Parent = bb
+end
+
+local function setupPlayerESP(player)
+    if player == LocalPlayer then return end
+    player.CharacterAdded:Connect(function(char) applyESP(player, char) end)
+    if player.Character then applyESP(player, player.Character) end
+end
+
+for _, p in pairs(Players:GetPlayers()) do setupPlayerESP(p) end
+Players.PlayerAdded:Connect(setupPlayerESP)
+
+task.spawn(function()
+    while task.wait(0.3) do
+        local myCharacter = LocalPlayer.Character
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+
+        if myRoot then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    local head = player.Character:FindFirstChild("Head")
+                    if head then
+                        local espGui = head:FindFirstChild("PlayerESP")
+                        if not espGui then
+                            applyESP(player, player.Character)
+                        else
+                            espGui.MaxDistance = maxDetectDistance
+                            local txt = espGui:FindFirstChild("ESPText")
+                            if txt then
+                                local distance = math.floor((myRoot.Position - head.Position).Magnitude)
+                                if distance <= maxDetectDistance then
+                                    if targets[player.Name] then
+                                        txt.Text = string.format(killAuraActive and "[🎯] %s\n[%d m]" or "[⏸️] %s\n[%d m]", player.Name, distance)
+                                        txt.TextColor3 = killAuraActive and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(255, 200, 50)
+                                    elseif player.Name == closestPlayerName then
+                                        txt.Text = string.format("[⭐] %s\n[%d m]", player.Name, distance)
+                                        txt.TextColor3 = Color3.fromRGB(0, 255, 150)
+                                    else
+                                        txt.Text = string.format("%s\n[%d m]", player.Name, distance)
+                                        txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+----------------------------------------------------------------
+-- 3. QUẢN LÝ NÚT TÊN NGƯỜI CHƠI
+----------------------------------------------------------------
+
+local buttons = {}
+
+local function buildButtons()
+    for _, child in pairs(ScrollingFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    buttons = {}
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local pName = player.Name
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, 0, 0, 30)
+            Btn.Font = Enum.Font.SourceSansBold
+            Btn.TextSize = 14
+            Btn.BorderSizePixel = 0
+            Btn.Parent = ScrollingFrame
+
+            local BtnCorner = Instance.new("UICorner")
+            BtnCorner.CornerRadius = UDim.new(0, 4)
+            BtnCorner.Parent = Btn
+
+            Btn.MouseButton1Click:Connect(function()
+                targets[pName] = not targets[pName] and true or nil
+            end)
+
+            buttons[pName] = {Button = Btn}
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(buildButtons)
+Players.PlayerRemoving:Connect(function(player)
+    targets[player.Name] = nil
+    buildButtons()
+end)
+buildButtons()
+
+task.spawn(function()
+    while task.wait(0.3) do
+        local myCharacter = LocalPlayer.Character
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        
+        local minDistance = math.huge
+        local tempClosest = ""
+
+        if myRoot then
+            for pName, btnData in pairs(buttons) do
+                local p = Players:FindFirstChild(pName)
+                if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local dist = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
+                    if dist <= maxDetectDistance and dist < minDistance then
+                        minDistance = dist
+                        tempClosest = pName
+                    end
+                    btnData.Button.LayoutOrder = targets[pName] and (math.floor(dist) - 100000) or math.floor(dist)
+                else
+                    btnData.Button.LayoutOrder = 999999
+                end
+            end
+        end
+        closestPlayerName = tempClosest
+
+        for pName, btnData in pairs(buttons) do
+            local Btn = btnData.Button
+            Btn.Visible = (searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true)) and true or false
+
+            if targets[pName] then
+                Btn.BackgroundColor3 = killAuraActive and Color3.fromRGB(180, 40, 40) or Color3.fromRGB(160, 120, 30)
+                Btn.Text = pName .. (killAuraActive and " [TARGET]" or " [PAUSED]")
+                Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            elseif pName == closestPlayerName then
+                Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
+                Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
+                Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
+            else
+                Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+                Btn.Text = pName
+                Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+            end
+        end
+    end
+end)
