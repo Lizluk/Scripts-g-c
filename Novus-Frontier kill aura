@@ -11,7 +11,7 @@ local meleeRemote = ReplicatedStorage:WaitForChild("Events"):WaitForChild("Weapo
 local consumeRemote = ReplicatedStorage:WaitForChild("Events"):WaitForChild("CreatureEvents"):WaitForChild("ConsumeFood")
 
 local targets = {} 
-local normalAuraActive = true   -- Phím Q
+local normalAuraActive = true   -- Phím B
 local specialAuraActive = true  -- Phím H
 local autoWaterActive = false   -- Phím L (Uống nước)
 local autoEatActive = false     -- Phím J (Ăn uống)
