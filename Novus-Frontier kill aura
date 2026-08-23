@@ -6,12 +6,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Remote Melee mới
+-- Remote Melee
 local meleeRemote = ReplicatedStorage:WaitForChild("Events"):WaitForChild("WeaponEvents"):WaitForChild("meleeWeapon")
-
--- Các đường dẫn Object trong Workspace
-local charactersFolder = workspace:WaitForChild("Characters")
-local interactionsFolder = workspace:WaitForChild("Interactions")
 
 local targets = {} 
 local killAuraActive = true 
@@ -23,7 +19,7 @@ local searchFilterText = ""
 local startTime = os.time()
 
 -- Tốc độ gửi Remote & Cooldown
-local attackCooldown = 0.2     
+local attackCooldown = 0.15     
 local lastAttackTime = 0
 
 ----------------------------------------------------------------
@@ -152,7 +148,7 @@ DistanceBox.FocusLost:Connect(function(enterPressed)
     end
 end)
 
--- Ô TÌM KIẾM TÊN (SEARCH BOX)
+-- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
 SearchBox.Position = UDim2.new(0, 5, 0, 115)
@@ -171,7 +167,7 @@ local SearchCorner = Instance.new("UICorner")
 SearchCorner.CornerRadius = UDim.new(0, 4)
 SearchCorner.Parent = SearchBox
 
--- NÚT CHỌN / BỎ CHỌN TẤT CẢ (SELECT ALL BUTTON)
+-- NÚT CHỌN / BỎ CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
 SelectAllBtn.Position = UDim2.new(0, 5, 0, 145)
@@ -204,12 +200,10 @@ UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
 end)
 
--- Sự kiện thay đổi nội dung tìm kiếm
 SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     searchFilterText = string.lower(SearchBox.Text)
 end)
 
--- Vòng lặp đếm giờ chính xác 
 task.spawn(function()
     while true do
         local elapsed = os.time() - startTime
@@ -221,7 +215,6 @@ task.spawn(function()
     end
 end)
 
--- Logic Toggle chọn tất cả / Bỏ chọn tất cả
 local function toggleSelectAll()
     local allPlayers = Players:GetPlayers()
     local otherPlayersCount = 0
@@ -253,37 +246,56 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- Hàm thực thi đòn đánh Kill Aura với Remote Melee mới
+local function getCharacter(player)
+    if not player then return nil end
+    return player.Character or workspace:FindFirstChild(player.Name)
+end
+
+-- Hàm thực thi đòn đánh Kill Aura (Tích hợp LeftFoot & Shin.R)
 local function performKillAuraAttack()
     if not killAuraActive then return end
     if tick() - lastAttackTime < attackCooldown then return end
 
-    local myCharacter = LocalPlayer.Character or workspace:FindFirstChild(LocalPlayer.Name)
+    local myCharacter = getCharacter(LocalPlayer)
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-    local myPelvis = myCharacter and (myCharacter:FindFirstChild("Pelvis") or myCharacter:FindFirstChild("LowerTorso") or myRoot)
 
-    if myRoot and myPelvis then
+    if myRoot then
         for pName, isTargeted in pairs(targets) do
             if isTargeted then
-                local targetCharacter = workspace:FindFirstChild(pName) or charactersFolder:FindFirstChild(pName)
-                local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-                local targetHead = targetCharacter and (targetCharacter:FindFirstChild("Head") or targetRoot)
+                local targetCharacter = workspace:FindFirstChild(pName) or (Players:FindFirstChild(pName) and Players[pName].Character)
+                
+                if targetCharacter then
+                    -- Quét các bộ phận chân (LeftFoot, Shin.R, RightFoot...) hoặc RootPart/HumanoidRootPart
+                    local bodyPartsToHit = {
+                        targetCharacter:FindFirstChild("LeftFoot"),
+                        targetCharacter:FindFirstChild("Shin.R"),
+                        targetCharacter:FindFirstChild("RightFoot"),
+                        targetCharacter:FindFirstChild("RootPart"),
+                        targetCharacter:FindFirstChild("HumanoidRootPart")
+                    }
+                    
+                    local myHead = myCharacter:FindFirstChild("Head") or myRoot
 
-                if targetRoot and targetHead then
-                    local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
-                    if currentDist <= maxDetectDistance then
-                        pcall(function()
-                            local attackOrigin = myPelvis
-                            local hitPart = targetHead
-                            local hitPos = targetHead.Position
-                            
-                            local attackData = {
-                                ["AttackOrigin"] = attackOrigin,
-                                ["AttackType"] = "PrimaryAttack"
-                            }
+                    if myHead then
+                        for _, hitPart in ipairs(bodyPartsToHit) do
+                            if hitPart then
+                                local currentDist = (myRoot.Position - hitPart.Position).Magnitude
+                                if currentDist <= maxDetectDistance then
+                                    pcall(function()
+                                        local ohInstance1 = hitPart
+                                        local ohNil2 = nil
+                                        local ohVector33 = hitPart.Position -- Cập nhật tọa độ chính xác của vị trí hitPart (LeftFoot, Shin.R, ...)
+                                        local ohInstance4 = myHead
+                                        local ohTable5 = {
+                                            ["AttackOrigin"] = myHead,
+                                            ["AttackType"] = "PrimaryAttack"
+                                        }
 
-                            meleeRemote:FireServer(attackOrigin, nil, hitPos, hitPart, attackData)
-                        end)
+                                        meleeRemote:FireServer(ohInstance1, ohNil2, ohVector33, ohInstance4, ohTable5)
+                                    end)
+                                end
+                            end
+                        end
                         lastAttackTime = tick()
                     end
                 end
@@ -302,7 +314,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
     if input.KeyCode == Enum.KeyCode.T then toggleSelectAll() end
-    if input.KeyCode == Enum.KeyCode.Q then
+    if input.KeyCode == Enum.KeyCode.B then
         killAuraActive = not killAuraActive
         if killAuraActive then
             StatusLabel.Text = "KILL AURA: READY [Q]"
@@ -321,7 +333,7 @@ end)
 local function applyESP(player, character)
     if not character or player == LocalPlayer then return end
     
-    local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 5)
+    local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 3)
     if not head then return end
 
     if head:FindFirstChild("PlayerESP") then 
@@ -353,8 +365,9 @@ local function setupPlayerESP(player)
         applyESP(player, char)
     end)
     
-    if player.Character then
-        applyESP(player, player.Character)
+    local char = getCharacter(player)
+    if char then
+        applyESP(player, char)
     end
 end
 
@@ -365,38 +378,41 @@ Players.PlayerAdded:Connect(setupPlayerESP)
 
 task.spawn(function()
     while true do
-        local myCharacter = LocalPlayer.Character
+        local myCharacter = getCharacter(LocalPlayer)
         local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
         if myRoot then
             for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character then
-                    local head = player.Character:FindFirstChild("Head")
-                    if head then
-                        local espGui = head:FindFirstChild("PlayerESP")
-                        if not espGui then
-                            applyESP(player, player.Character)
-                        else
-                            espGui.MaxDistance = maxDetectDistance
-                            local txt = espGui:FindFirstChild("ESPText")
-                            if txt then
-                                local distance = math.floor((myRoot.Position - head.Position).Magnitude)
-                                
-                                if distance <= maxDetectDistance then
-                                    if targets[player.Name] then
-                                        if killAuraActive then
-                                            txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
-                                            txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                if player ~= LocalPlayer then
+                    local pChar = getCharacter(player)
+                    if pChar then
+                        local head = pChar:FindFirstChild("Head")
+                        if head then
+                            local espGui = head:FindFirstChild("PlayerESP")
+                            if not espGui then
+                                applyESP(player, pChar)
+                            else
+                                espGui.MaxDistance = maxDetectDistance
+                                local txt = espGui:FindFirstChild("ESPText")
+                                if txt then
+                                    local distance = math.floor((myRoot.Position - head.Position).Magnitude)
+                                    
+                                    if distance <= maxDetectDistance then
+                                        if targets[player.Name] then
+                                            if killAuraActive then
+                                                txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
+                                                txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                                            else
+                                                txt.Text = string.format("[⏸️] %s\n[%d m]", player.Name, distance)
+                                                txt.TextColor3 = Color3.fromRGB(255, 200, 50)
+                                            end
+                                        elseif player.Name == closestPlayerName then
+                                            txt.Text = string.format("[⭐] %s\n[%d m]", player.Name, distance)
+                                            txt.TextColor3 = Color3.fromRGB(0, 255, 150)
                                         else
-                                            txt.Text = string.format("[⏸️] %s\n[%d m]", player.Name, distance)
-                                            txt.TextColor3 = Color3.fromRGB(255, 200, 50)
+                                            txt.Text = string.format("%s\n[%d m]", player.Name, distance)
+                                            txt.TextColor3 = Color3.fromRGB(255, 255, 255)
                                         end
-                                    elseif player.Name == closestPlayerName then
-                                        txt.Text = string.format("[⭐] %s\n[%d m]", player.Name, distance)
-                                        txt.TextColor3 = Color3.fromRGB(0, 255, 150)
-                                    else
-                                        txt.Text = string.format("%s\n[%d m]", player.Name, distance)
-                                        txt.TextColor3 = Color3.fromRGB(255, 255, 255)
                                     end
                                 end
                             end
@@ -457,7 +473,7 @@ buildButtons()
 
 task.spawn(function()
     while true do
-        local myCharacter = LocalPlayer.Character
+        local myCharacter = getCharacter(LocalPlayer)
         local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
         
         local minDistance = math.huge
@@ -466,8 +482,9 @@ task.spawn(function()
         if myRoot then
             for pName, btnData in pairs(buttons) do
                 local p = Players:FindFirstChild(pName)
-                if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    local dist = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
+                local pChar = getCharacter(p)
+                if pChar and pChar:FindFirstChild("HumanoidRootPart") then
+                    local dist = (myRoot.Position - pChar.HumanoidRootPart.Position).Magnitude
                     if dist <= maxDetectDistance and dist < minDistance then
                         minDistance = dist
                         tempClosest = pName
@@ -484,10 +501,9 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
-        -- Tự động gọi đòn đánh Kill Aura liên tục khi bật
+        -- Gọi đòn đánh tự động
         performKillAuraAttack()
 
-        -- Cập nhật trạng thái nút Select All
         local totalOtherPlayers = 0
         local totalSelected = 0
         for pName, _ in pairs(buttons) do
