@@ -9,15 +9,20 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 -- Remotes
 local meleeRemote = ReplicatedStorage:WaitForChild("Events"):WaitForChild("WeaponEvents"):WaitForChild("meleeWeapon")
 local consumeRemote = ReplicatedStorage:WaitForChild("Events"):WaitForChild("CreatureEvents"):WaitForChild("ConsumeFood")
+local latchRemote = ReplicatedStorage:WaitForChild("Events"):WaitForChild("CreatureEvents"):WaitForChild("Abilities"):WaitForChild("Latch")
 
 local targets = {} 
-local normalAuraActive = true   -- Phím B
+local teammates = {} -- Danh sách đồng đội (Phím F1)
+
+local normalAuraActive = true   -- Phím Q
 local specialAuraActive = true  -- Phím H
 local autoWaterActive = false   -- Phím L (Uống nước)
 local autoEatActive = false     -- Phím J (Ăn uống)
+local latchActive = false       -- Phím Y (Latch Ability)
 
+local currentViewMode = "KILL" -- "KILL" hoặc "TEAM"
 local closestPlayerName = "" 
-local maxDetectDistance = 30 
+local maxDetectDistance = 50 
 local searchFilterText = ""
 
 -- Thời gian khởi chạy Script
@@ -26,7 +31,6 @@ local startTime = os.time()
 -- Cooldowns
 local attackCooldown = 0.1     
 local lastAttackTime = 0
-
 local consumeCooldown = 0.8     -- Tốc độ mặc định 0.8s cho Ăn/Uống
 
 ----------------------------------------------------------------
@@ -44,7 +48,7 @@ ScreenGui.Parent = PlayerGui
 
 -- KHUNG MENU CHÍNH
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 560)
+MainFrame.Size = UDim2.new(0, 230, 0, 590)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -81,19 +85,16 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.Position = UDim2.new(0, 0, 0, 0)
 Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-Title.Text = "LIZLUK MENU [P]"
+Title.Text = "LIZLUK MENU [P / F1]"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 15
 Title.Parent = MainFrame
-
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 8)
-TitleCorner.Parent = Title
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
 
 -- STATUS NORMAL ATTACK [Q]
 local NormalStatusLabel = Instance.new("TextLabel")
-NormalStatusLabel.Size = UDim2.new(1, -10, 0, 20)
+NormalStatusLabel.Size = UDim2.new(1, -10, 0, 18)
 NormalStatusLabel.Position = UDim2.new(0, 5, 0, 40)
 NormalStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 NormalStatusLabel.Text = "NORMAL ATTACK: ON [Q]"
@@ -101,67 +102,64 @@ NormalStatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
 NormalStatusLabel.Font = Enum.Font.SourceSansBold
 NormalStatusLabel.TextSize = 11
 NormalStatusLabel.Parent = MainFrame
-
-local NormalCorner = Instance.new("UICorner")
-NormalCorner.CornerRadius = UDim.new(0, 4)
-NormalCorner.Parent = NormalStatusLabel
+Instance.new("UICorner", NormalStatusLabel).CornerRadius = UDim.new(0, 4)
 
 -- STATUS SPECIAL ATTACK [H]
 local SpecialStatusLabel = Instance.new("TextLabel")
-SpecialStatusLabel.Size = UDim2.new(1, -10, 0, 20)
-SpecialStatusLabel.Position = UDim2.new(0, 5, 0, 63)
+SpecialStatusLabel.Size = UDim2.new(1, -10, 0, 18)
+SpecialStatusLabel.Position = UDim2.new(0, 5, 0, 61)
 SpecialStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SpecialStatusLabel.Text = "SPECIAL ATTACK: ON [H]"
 SpecialStatusLabel.TextColor3 = Color3.fromRGB(255, 150, 50)
 SpecialStatusLabel.Font = Enum.Font.SourceSansBold
 SpecialStatusLabel.TextSize = 11
 SpecialStatusLabel.Parent = MainFrame
+Instance.new("UICorner", SpecialStatusLabel).CornerRadius = UDim.new(0, 4)
 
-local SpecialCorner = Instance.new("UICorner")
-SpecialCorner.CornerRadius = UDim.new(0, 4)
-SpecialCorner.Parent = SpecialStatusLabel
+-- STATUS LATCH ABILITY [Y]
+local LatchStatusLabel = Instance.new("TextLabel")
+LatchStatusLabel.Size = UDim2.new(1, -10, 0, 18)
+LatchStatusLabel.Position = UDim2.new(0, 5, 0, 82)
+LatchStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+LatchStatusLabel.Text = "LATCH ABILITY: OFF [Y]"
+LatchStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+LatchStatusLabel.Font = Enum.Font.SourceSansBold
+LatchStatusLabel.TextSize = 11
+LatchStatusLabel.Parent = MainFrame
+Instance.new("UICorner", LatchStatusLabel).CornerRadius = UDim.new(0, 4)
 
 -- STATUS WATER [L]
 local WaterStatusLabel = Instance.new("TextLabel")
-WaterStatusLabel.Size = UDim2.new(1, -10, 0, 20)
-WaterStatusLabel.Position = UDim2.new(0, 5, 0, 86)
+WaterStatusLabel.Size = UDim2.new(1, -10, 0, 18)
+WaterStatusLabel.Position = UDim2.new(0, 5, 0, 103)
 WaterStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 WaterStatusLabel.Text = "DRINK WATER: OFF [L]"
 WaterStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
 WaterStatusLabel.Font = Enum.Font.SourceSansBold
 WaterStatusLabel.TextSize = 11
 WaterStatusLabel.Parent = MainFrame
-
-local WaterCorner = Instance.new("UICorner")
-WaterCorner.CornerRadius = UDim.new(0, 4)
-WaterCorner.Parent = WaterStatusLabel
+Instance.new("UICorner", WaterStatusLabel).CornerRadius = UDim.new(0, 4)
 
 -- STATUS EAT [J]
 local EatStatusLabel = Instance.new("TextLabel")
-EatStatusLabel.Size = UDim2.new(1, -10, 0, 20)
-EatStatusLabel.Position = UDim2.new(0, 5, 0, 109)
+EatStatusLabel.Size = UDim2.new(1, -10, 0, 18)
+EatStatusLabel.Position = UDim2.new(0, 5, 0, 124)
 EatStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 EatStatusLabel.Text = "AUTO EAT: OFF [J]"
 EatStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
 EatStatusLabel.Font = Enum.Font.SourceSansBold
 EatStatusLabel.TextSize = 11
 EatStatusLabel.Parent = MainFrame
-
-local EatCorner = Instance.new("UICorner")
-EatCorner.CornerRadius = UDim.new(0, 4)
-EatCorner.Parent = EatStatusLabel
+Instance.new("UICorner", EatStatusLabel).CornerRadius = UDim.new(0, 4)
 
 -- KHOẢNG CÁCH DETECT
 local DistanceInputFrame = Instance.new("Frame")
-DistanceInputFrame.Size = UDim2.new(1, -10, 0, 30)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 134)
+DistanceInputFrame.Size = UDim2.new(1, -10, 0, 28)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 147)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
-
-local InputFrameCorner = Instance.new("UICorner")
-InputFrameCorner.CornerRadius = UDim.new(0, 4)
-InputFrameCorner.Parent = DistanceInputFrame
+Instance.new("UICorner", DistanceInputFrame).CornerRadius = UDim.new(0, 4)
 
 local DistanceLabel = Instance.new("TextLabel")
 DistanceLabel.Size = UDim2.new(0, 130, 1, 0)
@@ -186,10 +184,7 @@ DistanceBox.TextSize = 12
 DistanceBox.ClearTextOnFocus = false
 DistanceBox.PlaceholderText = "Số mét..."
 DistanceBox.Parent = DistanceInputFrame
-
-local InputCorner = Instance.new("UICorner")
-InputCorner.CornerRadius = UDim.new(0, 4)
-InputCorner.Parent = DistanceBox
+Instance.new("UICorner", DistanceBox).CornerRadius = UDim.new(0, 4)
 
 DistanceBox.FocusLost:Connect(function(enterPressed)
     local text = DistanceBox.Text
@@ -205,7 +200,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 23)
-SearchBox.Position = UDim2.new(0, 5, 0, 169)
+SearchBox.Position = UDim2.new(0, 5, 0, 180)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -216,29 +211,23 @@ SearchBox.Font = Enum.Font.SourceSansBold
 SearchBox.TextSize = 12
 SearchBox.ClearTextOnFocus = false
 SearchBox.Parent = MainFrame
+Instance.new("UICorner", SearchBox).CornerRadius = UDim.new(0, 4)
 
-local SearchCorner = Instance.new("UICorner")
-SearchCorner.CornerRadius = UDim.new(0, 4)
-SearchCorner.Parent = SearchBox
-
--- NÚT CHỌN ALL
+-- NÚT CHỌN ALL / CHUYỂN CHẾ ĐỘ VIEW (F1)
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 23)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 197)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 208)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
-SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
+SelectAllBtn.Text = "☑️ SELECT ALL TARGETS [T]"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 SelectAllBtn.Font = Enum.Font.SourceSansBold
 SelectAllBtn.TextSize = 12
 SelectAllBtn.Parent = MainFrame
-
-local SelectAllCorner = Instance.new("UICorner")
-SelectAllCorner.CornerRadius = UDim.new(0, 4)
-SelectAllCorner.Parent = SelectAllBtn
+Instance.new("UICorner", SelectAllBtn).CornerRadius = UDim.new(0, 4)
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -230)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 225)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -240)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 236)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -270,30 +259,31 @@ task.spawn(function()
 end)
 
 local function toggleSelectAll()
+    if currentViewMode ~= "KILL" then return end
     local allPlayers = Players:GetPlayers()
-    local otherPlayersCount = 0
+    local killListCount = 0
     local selectedCount = 0
 
     for _, p in pairs(allPlayers) do
-        if p ~= LocalPlayer then
-            otherPlayersCount = otherPlayersCount + 1
+        if p ~= LocalPlayer and not teammates[p.Name] then
+            killListCount = killListCount + 1
             if targets[p.Name] then
                 selectedCount = selectedCount + 1
             end
         end
     end
 
-    if selectedCount == otherPlayersCount and otherPlayersCount > 0 then
+    if selectedCount == killListCount and killListCount > 0 then
         targets = {}
-        SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
+        SelectAllBtn.Text = "☑️ SELECT ALL TARGETS [T]"
         SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
     else
         for _, p in pairs(allPlayers) do
-            if p ~= LocalPlayer then
+            if p ~= LocalPlayer and not teammates[p.Name] then
                 targets[p.Name] = true
             end
         end
-        SelectAllBtn.Text = "☒ DESELECT ALL PLAYERS [T]"
+        SelectAllBtn.Text = "☒ DESELECT ALL TARGETS [T]"
         SelectAllBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
     end
 end
@@ -306,7 +296,72 @@ local function getCharacter(player)
 end
 
 ----------------------------------------------------------------
--- 2. TẤN CÔNG BẰNG TAY (MANUAL ATTACK VIA LEFT CLICK)
+-- 2. XỬ LÝ LATCH ABILITY (TOGGLE BẰNG PHÍM Y)
+----------------------------------------------------------------
+
+local function toggleLatch()
+    latchActive = not latchActive
+
+    if latchActive then
+        local myCharacter = getCharacter(LocalPlayer)
+        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+        local latchTargetPart = nil
+        local selectedCFrame = nil
+
+        local cframeAntennae = CFrame.new(-0.53503418, 1.49145508, 0.847290039, 0.512408733, -0.788345397, -0.340512812, 0.471051902, -0.0735112578, 0.879037499, -0.718016505, -0.610825658, 0.333683848)
+        local cframeMidriff = CFrame.new(1.92724609, 1.05755615, -0.626220703, 0.0126661658, -0.44036904, 0.897727668, 5.34025304e-08, 0.897799671, 0.440404326, -0.999919891, -0.00557819009, 0.0113717318)
+
+        if myRoot then
+            for pName, isTargeted in pairs(targets) do
+                if isTargeted and not teammates[pName] then
+                    local targetCharacter = workspace:FindFirstChild(pName) or (Players:FindFirstChild(pName) and Players[pName].Character)
+                    if targetCharacter then
+                        if targetCharacter:FindFirstChild("MidriffFin") then
+                            latchTargetPart = targetCharacter.MidriffFin
+                            selectedCFrame = cframeMidriff
+                        elseif targetCharacter:FindFirstChild("Antennae.007.L") then
+                            latchTargetPart = targetCharacter["Antennae.007.L"]
+                            selectedCFrame = cframeAntennae
+                        else
+                            latchTargetPart = targetCharacter:FindFirstChild("Head") or targetCharacter:FindFirstChild("HumanoidRootPart")
+                            selectedCFrame = cframeAntennae
+                        end
+
+                        if latchTargetPart then
+                            local dist = (myRoot.Position - latchTargetPart.Position).Magnitude
+                            if dist <= maxDetectDistance then
+                                break
+                            else
+                                latchTargetPart = nil
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        if latchTargetPart and selectedCFrame then
+            pcall(function()
+                latchRemote:FireServer("LatchStart", latchTargetPart, selectedCFrame)
+            end)
+            LatchStatusLabel.Text = "LATCH ABILITY: ON [Y]"
+            LatchStatusLabel.TextColor3 = Color3.fromRGB(180, 100, 255)
+        else
+            latchActive = false
+            LatchStatusLabel.Text = "LATCH ABILITY: NO TARGET [Y]"
+            LatchStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+        end
+    else
+        pcall(function()
+            latchRemote:FireServer("LatchEnd")
+        end)
+        LatchStatusLabel.Text = "LATCH ABILITY: OFF [Y]"
+        LatchStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+    end
+end
+
+----------------------------------------------------------------
+-- 3. TẤN CÔNG BẰNG TAY (MANUAL ATTACK VIA LEFT CLICK)
 ----------------------------------------------------------------
 
 local function performManualAttack()
@@ -318,15 +373,14 @@ local function performManualAttack()
 
     if myRoot then
         for pName, isTargeted in pairs(targets) do
-            if isTargeted then
+            if isTargeted and not teammates[pName] then
                 local targetCharacter = workspace:FindFirstChild(pName) or (Players:FindFirstChild(pName) and Players[pName].Character)
                 
                 if targetCharacter then
                     -- Normal Attack
                     if normalAuraActive then
                         local myOriginPart = myCharacter:FindFirstChild("Hand.R") or myCharacter:FindFirstChild("Head") or myRoot
-
-                        local primaryParts = {"Claws.002", "Wing.001.L", "LeftFoot", "Shin.R", "RightFoot", "HumanoidRootPart"}
+                        local primaryParts = {"Claws.002", "Wing.001.L", "LeftFoot", "Shin.R", "RightFoot", "HumanoidRootPart", "MidriffFin"}
                         for _, partName in ipairs(primaryParts) do
                             local hitPart = targetCharacter:FindFirstChild(partName)
                             if hitPart and hitPart:IsA("BasePart") then
@@ -351,7 +405,7 @@ local function performManualAttack()
                     -- Special Attack
                     if specialAuraActive then
                         local myFakeHead = myCharacter:FindFirstChild("FakeHead") or myCharacter:FindFirstChild("Head") or myRoot
-                        local chargeParts = {"LeftUpperLeg", "RightUpperLeg", "UpperTorso", "HumanoidRootPart"}
+                        local chargeParts = {"LeftUpperLeg", "RightUpperLeg", "UpperTorso", "HumanoidRootPart", "MidriffFin"}
 
                         for _, partName in ipairs(chargeParts) do
                             local hitPart = targetCharacter:FindFirstChild(partName)
@@ -373,7 +427,7 @@ local function performManualAttack()
 end
 
 ----------------------------------------------------------------
--- 3. VÒNG LẶP UỐNG NƯỚC (L) VÀ ĂN UỐNG (J)
+-- 4. VÒNG LẶP UỐNG NƯỚC (L) VÀ ĂN UỐNG (J)
 ----------------------------------------------------------------
 
 task.spawn(function()
@@ -407,7 +461,7 @@ task.spawn(function()
 end)
 
 ----------------------------------------------------------------
--- BẮT SỰ KIỆN NÚT BẤM (Q, H, L, J, P, T, MOUSE1)
+-- BẮT SỰ KIỆN NÚT BẤM (Q, H, Y, L, J, P, F1, T, MOUSE1)
 ----------------------------------------------------------------
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -418,13 +472,40 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         performManualAttack()
     end
 
-    if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
+    if input.KeyCode == Enum.KeyCode.P then 
+        MainFrame.Visible = not MainFrame.Visible 
+    end
+
+    -- F4: CHUYỂN ĐỔI DANH SÁCH KILL <-> TEAMMATES
+    if input.KeyCode == Enum.KeyCode.F4 then
+        if not MainFrame.Visible then
+            MainFrame.Visible = true
+            currentViewMode = "TEAM"
+        else
+            if currentViewMode == "KILL" then
+                currentViewMode = "TEAM"
+            else
+                currentViewMode = "KILL"
+            end
+        end
+
+        if currentViewMode == "TEAM" then
+            Title.Text = "🤝 TEAMMATES LIST [F1]"
+            Title.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
+            SelectAllBtn.Visible = false
+        else
+            Title.Text = "LIZLUK MENU [P / F1]"
+            Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+            SelectAllBtn.Visible = true
+        end
+    end
+
     if input.KeyCode == Enum.KeyCode.T then toggleSelectAll() end
 
-    -- Q: Normal Attack
-    if input.KeyCode == Enum.KeyCode.B then
+    -- H: Normal Attack
+    if input.KeyCode == Enum.KeyCode.H then
         normalAuraActive = not normalAuraActive
-        NormalStatusLabel.Text = normalAuraActive and "NORMAL ATTACK: ON [B]" or "NORMAL ATTACK: OFF [Q]"
+        NormalStatusLabel.Text = normalAuraActive and "NORMAL ATTACK: ON [Q]" or "NORMAL ATTACK: OFF [Q]"
         NormalStatusLabel.TextColor3 = normalAuraActive and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 70, 70)
     end
 
@@ -433,6 +514,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         specialAuraActive = not specialAuraActive
         SpecialStatusLabel.Text = specialAuraActive and "SPECIAL ATTACK: ON [H]" or "SPECIAL ATTACK: OFF [H]"
         SpecialStatusLabel.TextColor3 = specialAuraActive and Color3.fromRGB(255, 150, 50) or Color3.fromRGB(255, 70, 70)
+    end
+
+    -- Y: Latch Toggle
+    if input.KeyCode == Enum.KeyCode.B then
+        toggleLatch()
     end
 
     -- L: Drink Water
@@ -451,7 +537,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 ----------------------------------------------------------------
--- 4. HỆ THỐNG ESP & QUẢN LÝ GIAO DIỆN
+-- 5. HỆ THỐNG ESP & QUẢN LÝ GIAO DIỆN
 ----------------------------------------------------------------
 
 local function applyESP(player, character)
@@ -509,7 +595,10 @@ task.spawn(function()
                             if txt then
                                 local distance = math.floor((myRoot.Position - head.Position).Magnitude)
                                 if distance <= maxDetectDistance then
-                                    if targets[player.Name] then
+                                    if teammates[player.Name] then
+                                        txt.Text = string.format("[🤝] %s (TEAM)\n[%d m]", player.Name, distance)
+                                        txt.TextColor3 = Color3.fromRGB(0, 200, 255)
+                                    elseif targets[player.Name] then
                                         txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
                                         txt.TextColor3 = Color3.fromRGB(255, 50, 50)
                                     elseif player.Name == closestPlayerName then
@@ -553,7 +642,21 @@ local function buildButtons()
             BtnCorner.Parent = Btn
 
             Btn.MouseButton1Click:Connect(function()
-                targets[pName] = not targets[pName] or nil
+                if currentViewMode == "KILL" then
+                    -- Bấm từ danh sách Kill -> Chuyển sang Team List
+                    teammates[pName] = true
+                    targets[pName] = nil
+                else
+                    -- Bấm từ danh sách Team -> Trả lại Kill List
+                    teammates[pName] = nil
+                end
+            end)
+
+            -- Bấm chuột phải để Toggle Target nhanh khi ở Kill List
+            Btn.MouseButton2Click:Connect(function()
+                if currentViewMode == "KILL" then
+                    targets[pName] = not targets[pName] or nil
+                end
             end)
 
             buttons[pName] = {Button = Btn}
@@ -564,6 +667,7 @@ end
 Players.PlayerAdded:Connect(buildButtons)
 Players.PlayerRemoving:Connect(function(player)
     targets[player.Name] = nil
+    teammates[player.Name] = nil
     buildButtons()
 end)
 buildButtons()
@@ -582,7 +686,7 @@ task.spawn(function()
                 local pChar = getCharacter(p)
                 if pChar and pChar:FindFirstChild("HumanoidRootPart") then
                     local dist = (myRoot.Position - pChar.HumanoidRootPart.Position).Magnitude
-                    if dist <= maxDetectDistance and dist < minDistance then
+                    if dist <= maxDetectDistance and dist < minDistance and not teammates[pName] then
                         minDistance = dist
                         tempClosest = pName
                     end
@@ -596,20 +700,38 @@ task.spawn(function()
 
         for pName, btnData in pairs(buttons) do
             local Btn = btnData.Button
-            Btn.Visible = (searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true))
+            local isSearchMatch = (searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true))
 
-            if targets[pName] then
-                Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-                Btn.Text = pName .. " [TARGET]"
-                Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            elseif pName == closestPlayerName then
-                Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
-                Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
-                Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
-            else
-                Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-                Btn.Text = pName
-                Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+            if currentViewMode == "KILL" then
+                -- Hiển thị những người KHÔNG thuộc danh sách Đồng đội
+                if not teammates[pName] and isSearchMatch then
+                    Btn.Visible = true
+                    if targets[pName] then
+                        Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                        Btn.Text = pName .. " [TARGET]"
+                        Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    elseif pName == closestPlayerName then
+                        Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
+                        Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
+                        Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
+                    else
+                        Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+                        Btn.Text = pName
+                        Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                    end
+                else
+                    Btn.Visible = false
+                end
+            elseif currentViewMode == "TEAM" then
+                -- Hiển thị những người THUỘC danh sách Đồng đội (F1)
+                if teammates[pName] and isSearchMatch then
+                    Btn.Visible = true
+                    Btn.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
+                    Btn.Text = "🤝 " .. pName .. " [TEAMMATE]"
+                    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                else
+                    Btn.Visible = false
+                end
             end
         end
 
