@@ -1,0 +1,190 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local LocalPlayer = Players.LocalPlayer
+
+local savedAnswers = {}
+local connectedTexts = {}
+
+-- 1. TẠO LẠI BẢNG GUI HIỂN THỊ DANH SÁCH Ở GÓC MÀN HÌNH
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AnswerTrackerGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 200, 0, 250)
+mainFrame.Position = UDim2.new(0.02, 0, 0.3, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BackgroundTransparency = 0.2
+mainFrame.Active = true
+mainFrame.Draggable = true -- Có thể kéo thả bảng này
+mainFrame.Parent = screenGui
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 30)
+titleLabel.Text = "ĐÁP ÁN ĐÃ LƯU (F1: Xóa)"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 13
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+titleLabel.Parent = mainFrame
+
+local scrollingFrame = Instance.new("ScrollingFrame")
+scrollingFrame.Size = UDim2.new(1, -10, 1, -40)
+scrollingFrame.Position = UDim2.new(0, 5, 0, 35)
+scrollingFrame.BackgroundTransparency = 1
+scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scrollingFrame.ScrollBarThickness = 6
+scrollingFrame.Parent = mainFrame
+
+local listText = Instance.new("TextLabel")
+listText.Size = UDim2.new(1, 0, 0, 0)
+listText.AutomaticSize = Enum.AutomaticSize.Y
+listText.Text = "Đang chờ đáp án..."
+listText.TextColor3 = Color3.fromRGB(0, 255, 150)
+listText.TextSize = 15
+listText.Font = Enum.Font.Code
+listText.TextXAlignment = Enum.TextXAlignment.Left
+listText.TextYAlignment = Enum.TextYAlignment.Top
+listText.BackgroundTransparency = 1
+listText.Parent = scrollingFrame
+
+local function updateUIList()
+	local sortedKeys = {}
+	for qNum in pairs(savedAnswers) do
+		table.insert(sortedKeys, qNum)
+	end
+	table.sort(sortedKeys)
+
+	if #sortedKeys == 0 then
+		listText.Text = "Đang chờ đáp án..."
+		return
+	end
+
+	local textLines = {}
+	for _, qNum in ipairs(sortedKeys) do
+		table.insert(textLines, qNum .. ". " .. savedAnswers[qNum])
+	end
+	listText.Text = table.concat(textLines, "\n")
+end
+
+-- 2. GIẢ LẬP CLICK THẬT VÀO NÚT ĐÁP ÁN TRÊN PHIẾU
+local function autoClickButton(choiceObject)
+	if not choiceObject or not choiceObject:IsA("GuiObject") then return end
+	
+	choiceObject.Visible = true
+	task.wait(0.02)
+	
+	local absolutePosition = choiceObject.AbsolutePosition
+	local absoluteSize = choiceObject.AbsoluteSize
+	local inset = GuiService:GetGuiInset()
+	
+	local clickX = absolutePosition.X + (absoluteSize.X / 2)
+	local clickY = absolutePosition.Y + (absoluteSize.Y / 2) + inset.Y
+
+	VirtualInputManager:SendMouseMoveEvent(clickX, clickY, game)
+	task.wait(0.03)
+	VirtualInputManager:SendMouseButtonEvent(clickX, clickY, 0, true, game, 0)
+	task.wait(0.03)
+	VirtualInputManager:SendMouseButtonEvent(clickX, clickY, 0, false, game, 0)
+end
+
+-- 3. ĐIỀN ĐÁP ÁN LÊN BẢNG TRẢ LỜI CỦA GAME
+local function applyAnswerToPaper(questionNum, choice)
+	local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+	if not playerGui then return end
+	
+	local paperGui = playerGui:FindFirstChild("AnswerPaperScreenGui")
+	if not paperGui then return end
+	
+	local imageButton = paperGui:FindFirstChild("ImageButton")
+	if not imageButton then return end
+
+	local qFolder = imageButton:FindFirstChild(tostring(questionNum))
+	if qFolder then
+		local choiceObject = qFolder:FindFirstChild(choice)
+		if choiceObject then
+			autoClickButton(choiceObject)
+		end
+	end
+end
+
+-- 4. XỬ LÝ LƯU TRỮ VÀ GỌI HÀM BẤM
+local function parseAnswers(text)
+	if not text or text == "" then return end
+	local hasNew = false
+
+	for line in string.gmatch(text, "[^\r\n]+") do
+		local qNum, choice = string.match(line, "(%d+)%s*%.%s*([A-Da-d])")
+		if qNum and choice then
+			qNum = tonumber(qNum)
+			choice = string.upper(choice)
+			
+			if not savedAnswers[qNum] then
+				savedAnswers[qNum] = choice
+				applyAnswerToPaper(qNum, choice)
+				hasNew = true
+			end
+		end
+	end
+
+	if hasNew then
+		updateUIList()
+	end
+end
+
+-- 5. LẮNG NGHE SỰ KIỆN TỪ ĐIỆN THOẠI
+local function listenToAnswersText(answersText)
+	if not answersText or connectedTexts[answersText] then return end
+	connectedTexts[answersText] = true
+
+	parseAnswers(answersText.Text)
+
+	answersText:GetPropertyChangedSignal("Text"):Connect(function()
+		parseAnswers(answersText.Text)
+	end)
+end
+
+local function checkContainer(container)
+	if not container then return end
+	for _, item in ipairs(container:GetChildren()) do
+		if string.find(item.Name, "Phone") then
+			local answersText = item:FindFirstChild("AnswersText", true)
+			if answersText and answersText:IsA("TextLabel") then
+				listenToAnswersText(answersText)
+			end
+		end
+	end
+end
+
+-- Tự động quét điện thoại trong balo và trên người
+local function init()
+	local backpack = LocalPlayer:WaitForChild("Backpack")
+	checkContainer(backpack)
+	backpack.ChildAdded:Connect(function() checkContainer(backpack) end)
+
+	if LocalPlayer.Character then
+		checkContainer(LocalPlayer.Character)
+	end
+	LocalPlayer.CharacterAdded:Connect(function(char)
+		char.ChildAdded:Connect(function() checkContainer(char) end)
+	end)
+end
+
+init()
+
+-- 6. PHÍM F1: XÓA SẠCH DỮ LIỆU ĐÃ LƯU
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.F1 then
+		savedAnswers = {}
+		updateUIList()
+	end
+end)
