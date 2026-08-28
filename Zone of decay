@@ -1,0 +1,209 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
+local player = Players.LocalPlayer
+
+-- Tạo ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "WeaponModifierGui"
+screenGui.ResetOnSpawn = false
+
+-- Sử dụng CoreGui nếu được phép, không thì đưa vào PlayerGui
+pcall(function()
+	screenGui.Parent = CoreGui
+end)
+if not screenGui.Parent then
+	screenGui.Parent = player:WaitForChild("PlayerGui")
+end
+
+-- Khung chính của GUI
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 260, 0, 190)
+mainFrame.Position = UDim2.new(0.5, -130, 0.4, -95)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Visible = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+-- Tiêu đề
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 30)
+titleLabel.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+titleLabel.Text = "Weapon Modifier (F1: GUI | F2: Chamber)"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 13
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = titleLabel
+
+-- Layout nội dung
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 8)
+listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = mainFrame
+
+-- Frame khoảng trống bên trên list
+local paddingFrame = Instance.new("Frame")
+paddingFrame.Size = UDim2.new(1, 0, 0, 30)
+paddingFrame.BackgroundTransparency = 1
+paddingFrame.LayoutOrder = 0
+paddingFrame.Parent = mainFrame
+
+-- Ô chỉnh MagAmmo
+local magFrame = Instance.new("Frame")
+magFrame.Size = UDim2.new(0.9, 0, 0, 30)
+magFrame.BackgroundTransparency = 1
+magFrame.LayoutOrder = 1
+magFrame.Parent = magFrame
+
+local magLabel = Instance.new("TextLabel")
+magLabel.Size = UDim2.new(0.5, 0, 1, 0)
+magLabel.Text = "MagAmmo:"
+magLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+magLabel.TextXAlignment = Enum.TextXAlignment.Left
+magLabel.Font = Enum.Font.SourceSans
+magLabel.TextSize = 14
+magLabel.Parent = magFrame
+
+local magBox = Instance.new("TextBox")
+magBox.Size = UDim2.new(0.45, 0, 1, 0)
+magBox.Position = UDim2.new(0.55, 0, 0, 0)
+magBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+magBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+magBox.Text = "30"
+magBox.Font = Enum.Font.SourceSans
+magBox.TextSize = 14
+magBox.Parent = magFrame
+
+-- Ô chỉnh FireMode
+local fireFrame = Instance.new("Frame")
+fireFrame.Size = UDim2.new(0.9, 0, 0, 30)
+fireFrame.BackgroundTransparency = 1
+fireFrame.LayoutOrder = 2
+fireFrame.Parent = mainFrame
+
+local fireLabel = Instance.new("TextLabel")
+fireLabel.Size = UDim2.new(0.5, 0, 1, 0)
+fireLabel.Text = "FireMode:"
+fireLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+fireLabel.TextXAlignment = Enum.TextXAlignment.Left
+fireLabel.Font = Enum.Font.SourceSans
+fireLabel.TextSize = 14
+fireLabel.Parent = fireFrame
+
+local fireBox = Instance.new("TextBox")
+fireBox.Size = UDim2.new(0.45, 0, 1, 0)
+fireBox.Position = UDim2.new(0.55, 0, 0, 0)
+fireBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+fireBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+fireBox.Text = "1"
+fireBox.Font = Enum.Font.SourceSans
+fireBox.TextSize = 14
+fireBox.Parent = fireFrame
+
+-- Nút Toggle Chambered
+local chamberBtn = Instance.new("TextButton")
+chamberBtn.Size = UDim2.new(0.9, 0, 0, 30)
+chamberBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+chamberBtn.Text = "Chambered: OFF (F2)"
+chamberBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+chamberBtn.Font = Enum.Font.SourceSansBold
+chamberBtn.TextSize = 14
+chamberBtn.LayoutOrder = 3
+chamberBtn.Parent = mainFrame
+
+local chamberCorner = Instance.new("UICorner")
+chamberCorner.CornerRadius = UDim.new(0, 5)
+chamberCorner.Parent = chamberBtn
+
+local isChamberedON = false
+
+-- Hàm cập nhật giao diện nút Chambered
+local function toggleChamberedState(state)
+	if state ~= nil then
+		isChamberedON = state
+	else
+		isChamberedON = not isChamberedON
+	end
+
+	if isChamberedON then
+		chamberBtn.Text = "Chambered: ON (F2)"
+		chamberBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+	else
+		chamberBtn.Text = "Chambered: OFF (F2)"
+		chamberBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+	end
+end
+
+-- Bấm chuột vào nút trên GUI
+chamberBtn.MouseButton1Click:Connect(function()
+	toggleChamberedState()
+end)
+
+-- Hàm quét và cập nhật các chỉ số của tất cả súng
+local function applyWeaponStats()
+	local magValue = tonumber(magBox.Text)
+	local fireValue = tonumber(fireBox.Text)
+
+	local searchContainers = {}
+	if player:FindFirstChild("Backpack") then table.insert(searchContainers, player.Backpack) end
+	if player.Character then table.insert(searchContainers, player.Character) end
+	if player:FindFirstChild("Balo") then table.insert(searchContainers, player.Balo) end
+
+	for _, container in ipairs(searchContainers) do
+		for _, item in ipairs(container:GetDescendants()) do
+			-- Tìm MagAmmo
+			if item.Name == "MagAmmo" and (item:IsA("ValueBase") or item:IsA("DoubleConstrainedValue")) then
+				if magValue then
+					item.Value = magValue
+				end
+			end
+			
+			-- Tìm FireMode
+			if item.Name == "FireMode" and item:IsA("ValueBase") then
+				if fireValue then
+					item.Value = fireValue
+				end
+			end
+			
+			-- Tìm Chambered (BoolValue)
+			if item.Name == "Chambered" and item:IsA("BoolValue") then
+				item.Value = isChamberedON
+			end
+		end
+	end
+end
+
+-- Tự động chạy quét liên tục
+task.spawn(function()
+	while true do
+		applyWeaponStats()
+		task.wait(0.2)
+	end
+end)
+
+-- Lắng nghe các phím bấm
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	
+	-- Phím F1: Bật/Tắt giao diện
+	if input.KeyCode == Enum.KeyCode.F1 then
+		mainFrame.Visible = not mainFrame.Visible
+	
+	-- Phím F2: Bật/Tắt Chambered (Tích xanh / Bỏ tích)
+	elseif input.KeyCode == Enum.KeyCode.F2 then
+		toggleChamberedState()
+	end
+end)
