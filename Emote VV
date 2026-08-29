@@ -1,7 +1,8 @@
--- Roblox LocalScript: Animation & Custom Emote Manager (Fixed UI Layout)
+-- Roblox LocalScript: Animation & Custom Emote Manager (Fixed UI Layout + Heartbeat Loop)
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 local SAVE_FILE_NAME = "AnimPacks_SavedData.json"
@@ -44,6 +45,8 @@ local ExtraEmoteInputs = {}
 local ExtraEmoteCount = 1
 
 local ActiveEmoteTracks = {}
+local emoteLoopConn = nil
+local isEmoteLocked = false
 
 -- ==========================================
 -- HÀM QUẢN LÝ FILE & CLONE TABLE
@@ -103,13 +106,39 @@ local function LoadFromFile()
 end
 
 -- ==========================================
--- HÀM PHÁT & DỪNG EMOTE / ANIMATION
+-- HÀM PHÁT & DỪNG EMOTE / ANIMATION (HEARTBEAT LOOP)
 -- ==========================================
 local function StopAllEmotes()
+    isEmoteLocked = false
+    if emoteLoopConn then
+        emoteLoopConn:Disconnect()
+        emoteLoopConn = nil
+    end
     for _, track in ipairs(ActiveEmoteTracks) do
-        pcall(function() track:Stop() end)
+        pcall(function() track:Stop(0.2) end)
     end
     ActiveEmoteTracks = {}
+end
+
+local function StartEmoteLoop()
+    if emoteLoopConn then emoteLoopConn:Disconnect() end
+    emoteLoopConn = RunService.Heartbeat:Connect(function()
+        if not isEmoteLocked or #ActiveEmoteTracks == 0 then return end
+        for _, track in ipairs(ActiveEmoteTracks) do
+            if track then
+                if not track.IsPlaying then
+                    pcall(function()
+                        track:Play(0, 1, 1)
+                        track.Priority = Enum.AnimationPriority.Action4
+                    end)
+                else
+                    pcall(function()
+                        track.Priority = Enum.AnimationPriority.Action4
+                    end)
+                end
+            end
+        end
+    end)
 end
 
 local function PlayEmote(idData)
@@ -138,9 +167,14 @@ local function PlayEmote(idData)
         local anim = Instance.new("Animation")
         anim.AnimationId = "rbxassetid://" .. rawId
         local track = Animator:LoadAnimation(anim)
-        track:Play()
+        track.Priority = Enum.AnimationPriority.Action4
+        track.Looped = true
+        track:Play(0, 1, 1)
         table.insert(ActiveEmoteTracks, track)
     end
+
+    isEmoteLocked = true
+    StartEmoteLoop()
 end
 
 local function ApplyAnimations(packData)
@@ -280,7 +314,7 @@ Tabs.Main:AddButton({
 })
 
 -- ==========================================
--- TAB 2: SAVED ANIMS (ĐÃ SỬA GIAO DIỆN KHÔNG BỊ DÀI CHỮ)
+-- TAB 2: SAVED ANIMS
 -- ==========================================
 local ScrollAnims = Instance.new("ScrollingFrame")
 ScrollAnims.Size = UDim2.new(1, 0, 1, 0)
@@ -302,7 +336,7 @@ function RenderSavedPacks()
 
     for name, data in pairs(PresetList) do
         local Card = Instance.new("Frame")
-        Card.Size = UDim2.new(1, 0, 0, 62) -- Tăng chiều cao lên 62px
+        Card.Size = UDim2.new(1, 0, 0, 62)
         Card.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
         Card.Parent = ScrollAnims
         Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 8)
@@ -478,7 +512,7 @@ Tabs.Emotes:AddButton({
 })
 
 -- ==========================================
--- TAB 4: SAVED EMOTES (ĐÃ SỬA GIAO DIỆN KHÔNG BỊ DÀI CHỮ)
+-- TAB 4: SAVED EMOTES
 -- ==========================================
 local ScrollEmotes = Instance.new("ScrollingFrame")
 ScrollEmotes.Size = UDim2.new(1, 0, 1, 0)
@@ -514,7 +548,7 @@ function RenderSavedEmotes()
         end
 
         local Card = Instance.new("Frame")
-        Card.Size = UDim2.new(1, 0, 0, 62) -- Tăng chiều cao lên 62px
+        Card.Size = UDim2.new(1, 0, 0, 62)
         Card.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
         Card.Parent = ScrollEmotes
         Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 8)
