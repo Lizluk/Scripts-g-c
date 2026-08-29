@@ -1,4 +1,4 @@
--- XXDDD Private Mod Menu - Overwrite & Custom Naming Edition
+-- Made For XXDDD private dino sim Mod menu (Vehicle Teleporting & Saved List Updated)
 local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -6,7 +6,6 @@ local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
 
 -- Global Data Storage File Name
 local fileName = "DinoSim_SavedPositions_" .. tostring(game.GameId) .. ".json"
@@ -23,15 +22,6 @@ local activeHighlights = {}
 local activeLabels = {}
 local targetHitboxPart = "Head"
 local npcConnections = {}
-
--- Fly States
-local flyEnabled = false
-local flySpeed = 100
-local currentVehicle = nil
-local primaryPart = nil
-local bodyVelocity = nil
-local bodyGyro = nil
-local renderConnection = nil
 
 -- Load & Save Functions
 local function loadSavedData()
@@ -56,50 +46,56 @@ end
 loadSavedData()
 
 --------------------------------------------------
--- HÀM LẤY TỌA ĐỘ HIỆN TẠI (NHÂN VẬT HOẶC XE)
+-- SMART TELEPORT HELPER (DỊCH CHUYỂN CẢ XE VÀ NGUỜI)
 --------------------------------------------------
+local function getMyVehicle()
+    local character = LocalPlayer.Character
+    if not character then return nil end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid or not humanoid.SeatPart then return nil end
+
+    local seat = humanoid.SeatPart
+    local vehiclesFolder = Workspace:FindFirstChild("Vehicles")
+
+    if vehiclesFolder and seat:IsDescendantOf(vehiclesFolder) then
+        local model = seat
+        while model and model.Parent ~= vehiclesFolder and model.Parent ~= Workspace do
+            model = model.Parent
+        end
+        return model, seat
+    else
+        return seat:FindFirstAncestorOfClass("Model"), seat
+    end
+end
+
+local function tpToPos(posTable)
+    local targetCFrame = CFrame.new(posTable.x, posTable.y + 2, posTable.z)
+    local veh, seat = getMyVehicle()
+
+    if veh then
+        if veh.PrimaryPart then
+            veh:PivotTo(targetCFrame)
+        else
+            seat.CFrame = targetCFrame
+        end
+    elseif LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        LocalPlayer.Character.HumanoidRootPart.CFrame = targetCFrame
+    end
+end
+
 local function getCurrentPosition()
-    local char = LocalPlayer.Character
-    if not char then return nil end
-    
-    local hum = char:FindFirstChild("Humanoid")
-    if hum and hum.SeatPart then
-        local veh = hum.SeatPart:FindFirstAncestorOfClass("Model") or hum.SeatPart
-        local root = veh.PrimaryPart or hum.SeatPart
-        return root.Position
-    elseif char:FindFirstChild("HumanoidRootPart") then
-        return char.HumanoidRootPart.Position
+    local veh, seat = getMyVehicle()
+    if veh then
+        local part = veh.PrimaryPart or seat
+        return part.Position
+    elseif LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        return LocalPlayer.Character.HumanoidRootPart.Position
     end
     return nil
 end
 
 --------------------------------------------------
--- HÀM TELEPORT (HỖ TRỢ TP CẢ XE)
---------------------------------------------------
-local function tpToPos(posTable)
-    local targetCFrame = CFrame.new(posTable.x, posTable.y + 2, posTable.z)
-    local character = LocalPlayer.Character
-
-    if character and character:FindFirstChild("Humanoid") then
-        local humanoid = character.Humanoid
-        
-        if humanoid.SeatPart then
-            local seat = humanoid.SeatPart
-            local vehicle = seat:FindFirstAncestorOfClass("Model") or seat
-            if vehicle then
-                vehicle:PivotTo(targetCFrame)
-                return
-            end
-        end
-
-        if character:FindFirstChild("HumanoidRootPart") then
-            character.HumanoidRootPart.CFrame = targetCFrame
-        end
-    end
-end
-
---------------------------------------------------
--- KHỞI TẠO GUI CHÍNH
+-- GUI INITIALIZATION
 --------------------------------------------------
 local DUI = Instance.new("ScreenGui")
 DUI.Name = "DUI_Master"
@@ -112,7 +108,7 @@ DinoFrame.Draggable = true
 DinoFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 DinoFrame.BackgroundTransparency = 0.2
 DinoFrame.Position = UDim2.new(0.036, 0, 0.1, 0)
-DinoFrame.Size = UDim2.new(0, 220, 0, 560)
+DinoFrame.Size = UDim2.new(0, 220, 0, 480)
 
 local T = Instance.new("TextLabel", DinoFrame)
 T.Size = UDim2.new(1, -30, 0, 35)
@@ -134,58 +130,34 @@ Close.TextSize = 18
 local function createButton(name, text, posY, color)
     local btn = Instance.new("TextButton", DinoFrame)
     btn.Name = name
-    btn.Size = UDim2.new(0.9, 0, 0, 28)
+    btn.Size = UDim2.new(0.9, 0, 0, 32)
     btn.Position = UDim2.new(0.05, 0, posY, 0)
     btn.BackgroundColor3 = color or Color3.fromRGB(30, 30, 30)
     btn.Font = Enum.Font.SourceSans
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 13
+    btn.TextSize = 14
     btn.BorderSizePixel = 0
     return btn
 end
 
--- Khung gõ tên trước khi lưu
-local CustomNameBox = Instance.new("TextBox", DinoFrame)
-CustomNameBox.Name = "CustomNameBox"
-CustomNameBox.Size = UDim2.new(0.9, 0, 0, 26)
-CustomNameBox.Position = UDim2.new(0.05, 0, 0.07, 0)
-CustomNameBox.PlaceholderText = "Tên Điểm Lưu Mới..."
-CustomNameBox.Text = ""
-CustomNameBox.Font = Enum.Font.SourceSans
-CustomNameBox.TextSize = 12
-CustomNameBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-CustomNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+local SaveP = createButton("SaveP", "Lưu Vị Trí Mới", 0.08)
+local OpenListBtn = createButton("OpenListBtn", "Danh Sách Saved", 0.16, Color3.fromRGB(20, 50, 20))
+local OpenDeathBtn = createButton("OpenDeathBtn", "Vị Trí Đã Chết", 0.24, Color3.fromRGB(50, 20, 20))
+local AutoRespawnBtn = createButton("AutoRespawnBtn", "Auto TP Chết: OFF (F5)", 0.32, Color3.fromRGB(70, 0, 0))
+local ESPBtn = createButton("ESPBtn", "Hostile NPC ESP: OFF", 0.40, Color3.fromRGB(50, 50, 0))
 
-local SaveP = createButton("SaveP", "Lưu Vị Trí Hiện Tại", 0.13, Color3.fromRGB(0, 100, 150))
-local OpenListBtn = createButton("OpenListBtn", "Danh Sách Saved", 0.19, Color3.fromRGB(20, 50, 20))
-local OpenDeathBtn = createButton("OpenDeathBtn", "Vị Trí Đã Chết", 0.25, Color3.fromRGB(50, 20, 20))
-local AutoRespawnBtn = createButton("AutoRespawnBtn", "Auto TP Chết: OFF (F5)", 0.31, Color3.fromRGB(70, 0, 0))
-
-local VehicleFlyBtn = createButton("VehicleFlyBtn", "Vehicle Fly: OFF (F2)", 0.37, Color3.fromRGB(0, 80, 120))
-local FlySpeedBox = Instance.new("TextBox", DinoFrame)
-FlySpeedBox.Name = "FlySpeedBox"
-FlySpeedBox.Size = UDim2.new(0.9, 0, 0, 26)
-FlySpeedBox.Position = UDim2.new(0.05, 0, 0.43, 0)
-FlySpeedBox.PlaceholderText = "Tốc độ Fly Xe (Default = 100)"
-FlySpeedBox.Text = "100"
-FlySpeedBox.Font = Enum.Font.SourceSans
-FlySpeedBox.TextSize = 12
-FlySpeedBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-FlySpeedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-
-local ESPBtn = createButton("ESPBtn", "Hostile NPC ESP: OFF", 0.49, Color3.fromRGB(50, 50, 0))
-local HitboxBtn = createButton("HitboxBtn", "NPC Hitbox: OFF (F4)", 0.55, Color3.fromRGB(60, 0, 60))
-local HitboxPartBtn = createButton("HitboxPartBtn", "Hitbox Part: Head", 0.61)
+local HitboxBtn = createButton("HitboxBtn", "NPC Hitbox: OFF (F4)", 0.48, Color3.fromRGB(60, 0, 60))
+local HitboxPartBtn = createButton("HitboxPartBtn", "Hitbox Part: Head", 0.56)
 
 local HitboxSizeBox = Instance.new("TextBox", DinoFrame)
 HitboxSizeBox.Name = "HitboxSizeBox"
-HitboxSizeBox.Size = UDim2.new(0.9, 0, 0, 26)
-HitboxSizeBox.Position = UDim2.new(0.05, 0, 0.67, 0)
-HitboxSizeBox.PlaceholderText = "Kích thước Hitbox (Default = 7)"
+HitboxSizeBox.Size = UDim2.new(0.9, 0, 0, 30)
+HitboxSizeBox.Position = UDim2.new(0.05, 0, 0.64, 0)
+HitboxSizeBox.PlaceholderText = "Kích thước Hitbox (Mặc định = 7)"
 HitboxSizeBox.Text = ""
 HitboxSizeBox.Font = Enum.Font.SourceSans
-HitboxSizeBox.TextSize = 12
+HitboxSizeBox.TextSize = 13
 HitboxSizeBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 HitboxSizeBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 
@@ -199,18 +171,18 @@ ListFrame.Draggable = true
 ListFrame.Visible = false
 ListFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 ListFrame.Position = UDim2.new(0.2, 0, 0.1, 0)
-ListFrame.Size = UDim2.new(0, 360, 0, 340)
+ListFrame.Size = UDim2.new(0, 360, 0, 320)
 
 local ListTitle = Instance.new("TextLabel", ListFrame)
 ListTitle.Size = UDim2.new(1, -30, 0, 30)
 ListTitle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-ListTitle.Text = "  Danh Sách Saved (Sửa tên & Save đè)"
+ListTitle.Text = "  Danh Sách Vị Trí Saved"
 ListTitle.TextColor3 = Color3.fromRGB(0, 255, 150)
 ListTitle.TextXAlignment = Enum.TextXAlignment.Left
 
 local ListClose = Instance.new("TextButton", ListFrame)
 ListClose.Size = UDim2.new(0, 30, 0, 30)
-ListClose.Position = UDim2.new(0.91, 0, 0, 0)
+ListClose.Position = UDim2.new(0.9, 0, 0, 0)
 ListClose.Text = "X"
 ListClose.TextColor3 = Color3.fromRGB(255, 50, 50)
 ListClose.BackgroundTransparency = 1
@@ -223,7 +195,6 @@ ScrollContainer.BackgroundTransparency = 1
 local UIListLayout = Instance.new("UIListLayout", ScrollContainer)
 UIListLayout.Padding = UDim.new(0, 5)
 
--- Cập nhật danh sách Saved có chỉnh sửa tên & Save chồng
 local function refreshSavedList()
     for _, child in pairs(ScrollContainer:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
@@ -233,40 +204,35 @@ local function refreshSavedList()
         ItemFrame.Size = UDim2.new(1, -10, 0, 35)
         ItemFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 
-        -- Ô hiển thị & cho phép sửa tên trực tiếp
-        local NameInput = Instance.new("TextBox", ItemFrame)
-        NameInput.Size = UDim2.new(0.32, 0, 0.8, 0)
-        NameInput.Position = UDim2.new(0.02, 0, 0.1, 0)
-        NameInput.Text = data.name
-        NameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-        NameInput.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        NameInput.Font = Enum.Font.SourceSans
-        NameInput.TextSize = 12
-        NameInput.TextXAlignment = Enum.TextXAlignment.Left
+        -- TextBox cho phép đổi tên trực tiếp
+        local NameBox = Instance.new("TextBox", ItemFrame)
+        NameBox.Size = UDim2.new(0.30, 0, 0.8, 0)
+        NameBox.Position = UDim2.new(0.02, 0, 0.1, 0)
+        NameBox.Text = data.name
+        NameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        NameBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        NameBox.BorderSizePixel = 0
+        NameBox.TextXAlignment = Enum.TextXAlignment.Left
+        NameBox.Font = Enum.Font.SourceSans
+        NameBox.TextSize = 13
 
-        NameInput.FocusLost:Connect(function()
-            if NameInput.Text ~= "" then
-                data.name = NameInput.Text
+        NameBox.FocusLost:Connect(function()
+            if NameBox.Text ~= "" then
+                data.name = NameBox.Text
                 saveData()
+            else
+                NameBox.Text = data.name
             end
         end)
 
-        -- Nút Teleport
-        local TPBtn = Instance.new("TextButton", ItemFrame)
-        TPBtn.Size = UDim2.new(0.13, 0, 0.8, 0)
-        TPBtn.Position = UDim2.new(0.35, 0, 0.1, 0)
-        TPBtn.Text = "TP"
-        TPBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-        TPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        TPBtn.MouseButton1Click:Connect(function() tpToPos(data.pos) end)
-
-        -- Nút SAVE CHỒNG (Ghi đè tọa độ hiện tại vào mục này)
+        -- Nút Lưu Đè (Overwrite position)
         local OverwriteBtn = Instance.new("TextButton", ItemFrame)
-        OverwriteBtn.Size = UDim2.new(0.18, 0, 0.8, 0)
-        OverwriteBtn.Position = UDim2.new(0.49, 0, 0.1, 0)
-        OverwriteBtn.Text = "Chồng"
-        OverwriteBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 180)
+        OverwriteBtn.Size = UDim2.new(0.13, 0, 0.8, 0)
+        OverwriteBtn.Position = UDim2.new(0.33, 0, 0.1, 0)
+        OverwriteBtn.Text = "Đè"
+        OverwriteBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 0)
         OverwriteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        OverwriteBtn.Font = Enum.Font.SourceSansBold
         
         OverwriteBtn.MouseButton1Click:Connect(function()
             local pos = getCurrentPosition()
@@ -274,27 +240,37 @@ local function refreshSavedList()
                 data.pos = {x = pos.X, y = pos.Y, z = pos.Z}
                 saveData()
                 
-                -- Tạo hiệu ứng nháy màu báo thành công
+                -- Hiệu ứng phản hồi trực quan khi lưu đè thành công
+                local origText = OverwriteBtn.Text
                 OverwriteBtn.Text = "OK!"
-                OverwriteBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+                OverwriteBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
                 task.wait(0.6)
-                OverwriteBtn.Text = "Chồng"
-                OverwriteBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 180)
+                OverwriteBtn.Text = origText
+                OverwriteBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 0)
             end
         end)
 
-        -- Nút Phím Gán
+        -- Nút Teleport
+        local TPBtn = Instance.new("TextButton", ItemFrame)
+        TPBtn.Size = UDim2.new(0.14, 0, 0.8, 0)
+        TPBtn.Position = UDim2.new(0.47, 0, 0.1, 0)
+        TPBtn.Text = "TP"
+        TPBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        TPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        TPBtn.MouseButton1Click:Connect(function() tpToPos(data.pos) end)
+
+        -- Nút Gán Phím Tắt
         local KeyBtn = Instance.new("TextButton", ItemFrame)
-        KeyBtn.Size = UDim2.new(0.18, 0, 0.8, 0)
-        KeyBtn.Position = UDim2.new(0.68, 0, 0.1, 0)
-        KeyBtn.Text = data.key or "Phím"
-        KeyBtn.BackgroundColor3 = Color3.fromRGB(150, 100, 0)
+        KeyBtn.Size = UDim2.new(0.23, 0, 0.8, 0)
+        KeyBtn.Position = UDim2.new(0.62, 0, 0.1, 0)
+        KeyBtn.Text = data.key or "Gán Phím"
+        KeyBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         KeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 
         KeyBtn.MouseButton1Click:Connect(function()
-            KeyBtn.Text = "Ấn..."
+            KeyBtn.Text = "Bấm Phím..."
             local conn
-            conn = UserInputService.InputBegan:Connect(function(input)
+            conn = UserInputService.InputBegan:Connect(function(input, gpe)
                 if input.UserInputType == Enum.UserInputType.Keyboard then
                     data.key = input.KeyCode.Name
                     KeyBtn.Text = input.KeyCode.Name
@@ -307,11 +283,10 @@ local function refreshSavedList()
         -- Nút Xóa
         local DelBtn = Instance.new("TextButton", ItemFrame)
         DelBtn.Size = UDim2.new(0.11, 0, 0.8, 0)
-        DelBtn.Position = UDim2.new(0.87, 0, 0.1, 0)
+        DelBtn.Position = UDim2.new(0.86, 0, 0.1, 0)
         DelBtn.Text = "Xóa"
         DelBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
         DelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        
         DelBtn.MouseButton1Click:Connect(function()
             table.remove(savedLocations, index)
             saveData()
@@ -393,7 +368,7 @@ local function refreshDeathList()
 end
 
 --------------------------------------------------
--- SỰ KIỆN NÚT LƯU MỚI
+-- BUTTON EVENTS
 --------------------------------------------------
 OpenListBtn.MouseButton1Click:Connect(function()
     ListFrame.Visible = not ListFrame.Visible
@@ -408,18 +383,12 @@ end)
 SaveP.MouseButton1Click:Connect(function()
     local pos = getCurrentPosition()
     if pos then
-        local entryName = CustomNameBox.Text
-        if entryName == "" then
-            entryName = "Điểm " .. tostring(#savedLocations + 1)
-        end
-
         table.insert(savedLocations, {
-            name = entryName,
+            name = "Điểm " .. tostring(#savedLocations + 1),
             pos = {x = pos.X, y = pos.Y, z = pos.Z},
             key = nil
         })
         saveData()
-        CustomNameBox.Text = "" -- Xóa khung nhập sau khi lưu thành công
         refreshSavedList()
     end
 end)
@@ -429,110 +398,7 @@ DeathClose.MouseButton1Click:Connect(function() DeathFrame.Visible = false end)
 Close.MouseButton1Click:Connect(function() DUI:Destroy() end)
 
 --------------------------------------------------
--- VEHICLE FLY SYSTEM
---------------------------------------------------
-local function getMyVehicle()
-    local character = LocalPlayer.Character
-    if not character then return nil end
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or not humanoid.SeatPart then return nil end
-
-    local seat = humanoid.SeatPart
-    local vehiclesFolder = Workspace:FindFirstChild("Vehicles")
-
-    if vehiclesFolder and seat:IsDescendantOf(vehiclesFolder) then
-        local model = seat
-        while model and model.Parent ~= vehiclesFolder do
-            model = model.Parent
-        end
-        return model, seat
-    else
-        return seat:FindFirstAncestorOfClass("Model"), seat
-    end
-end
-
-local function stopFly()
-    flyEnabled = false
-    VehicleFlyBtn.Text = "Vehicle Fly: OFF (F2)"
-    VehicleFlyBtn.BackgroundColor3 = Color3.fromRGB(0, 80, 120)
-
-    if renderConnection then renderConnection:Disconnect() renderConnection = nil end
-    if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
-    if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
-    primaryPart = nil
-    currentVehicle = nil
-end
-
-local function startFly()
-    local veh, seat = getMyVehicle()
-    if not veh then return end
-
-    currentVehicle = veh
-    primaryPart = veh.PrimaryPart or seat
-
-    bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-    bodyVelocity.Parent = primaryPart
-
-    bodyGyro = Instance.new("BodyGyro")
-    bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-    bodyGyro.P = 10000
-    bodyGyro.D = 500
-    bodyGyro.CFrame = primaryPart.CFrame
-    bodyGyro.Parent = primaryPart
-
-    flyEnabled = true
-    VehicleFlyBtn.Text = "Vehicle Fly: ON (F2)"
-    VehicleFlyBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
-
-    renderConnection = RunService.RenderStepped:Connect(function()
-        if not flyEnabled or not primaryPart or not primaryPart.Parent then
-            stopFly()
-            return
-        end
-
-        local moveDir = Vector3.new(0, 0, 0)
-        local camCFrame = Camera.CFrame
-
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.E) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Q) then moveDir = moveDir - Vector3.new(0, 1, 0) end
-
-        if moveDir.Magnitude > 0 then
-            bodyVelocity.Velocity = moveDir.Unit * flySpeed
-        else
-            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-        end
-
-        local lookVector = camCFrame.LookVector
-        local flatLookVector = Vector3.new(lookVector.X, 0, lookVector.Z).Unit
-
-        if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-            if flatLookVector.Magnitude > 0 then
-                bodyGyro.CFrame = CFrame.lookAt(primaryPart.Position, primaryPart.Position + flatLookVector)
-            end
-        else
-            bodyGyro.CFrame = CFrame.lookAt(primaryPart.Position, primaryPart.Position + primaryPart.CFrame.LookVector)
-        end
-    end)
-end
-
-local function toggleFly()
-    if flyEnabled then stopFly() else startFly() end
-end
-
-VehicleFlyBtn.MouseButton1Click:Connect(toggleFly)
-FlySpeedBox.FocusLost:Connect(function()
-    local val = tonumber(FlySpeedBox.Text)
-    if val then flySpeed = val else FlySpeedBox.Text = tostring(flySpeed) end
-end)
-
---------------------------------------------------
--- HITBOX LOGIC
+-- HITBOX EXPANDER LOGIC
 --------------------------------------------------
 local function isNPC(char)
     return char and char:IsA("Model") and char:FindFirstChild("Humanoid") and not Players:GetPlayerFromCharacter(char)
@@ -547,6 +413,7 @@ local function applyHitbox(npc, size)
             origSize.Value = part.Size
             origSize.Parent = part
         end
+
         part.Size = Vector3.new(size, size, size)
         part.Material = Enum.Material.ForceField
         part.Transparency = 0.5
@@ -693,13 +560,11 @@ if hostileFolder then
 end
 
 --------------------------------------------------
--- SỰ KIỆN BÀN PHÍM & AUTO RESPAWN
+-- KEYBOARD SHORTCUTS & DEATH TRACKER
 --------------------------------------------------
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.UserInputType == Enum.UserInputType.Keyboard then
-        if input.KeyCode == Enum.KeyCode.F2 then
-            toggleFly()
-        elseif input.KeyCode == Enum.KeyCode.F4 then
+        if input.KeyCode == Enum.KeyCode.F4 then
             toggleHitbox()
         elseif input.KeyCode == Enum.KeyCode.F5 then
             autoRespawnEnabled = not autoRespawnEnabled
