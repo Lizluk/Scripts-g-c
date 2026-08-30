@@ -1,4 +1,4 @@
--- Roblox LocalScript: Independent & Mượt mà Animation Pack Handler (Full Feature + Auto Marketplace Name)
+-- Roblox LocalScript: Independent & Mượt mà Animation Pack Handler (Full Feature + Tool/Seat Handler + Auto Marketplace Name)
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
@@ -41,7 +41,7 @@ local InputReferences = {
     Jump = nil,
     Fall = nil,
     EmoteID1 = nil,
-    EmoteName = nil -- Tham chiếu tới ô Tên Emote
+    EmoteName = nil
 }
 
 local PresetList = {}
@@ -72,11 +72,7 @@ local currentPlayingState = ""
 local function CloneTable(t)
     local copy = {}
     for k, v in pairs(t) do
-        if type(v) == "table" then
-            copy[k] = CloneTable(v)
-        else
-            copy[k] = v
-        end
+        if type(v) == "table" then copy[k] = CloneTable(v) else copy[k] = v end
     end
     return copy
 end
@@ -112,13 +108,9 @@ local function LoadFromFile()
                 AppliedPack = decoded.AppliedPack or nil
                 if decoded.Keybind then
                     ToggleGUIKeybindStr = decoded.Keybind
-                    if Enum.KeyCode[ToggleGUIKeybindStr] then
-                        Window.MinimizeKey = Enum.KeyCode[ToggleGUIKeybindStr]
-                    end
+                    if Enum.KeyCode[ToggleGUIKeybindStr] then Window.MinimizeKey = Enum.KeyCode[ToggleGUIKeybindStr] end
                 end
-                if decoded.StopKeybind then
-                    StopEmoteKeybindStr = decoded.StopKeybind
-                end
+                if decoded.StopKeybind then StopEmoteKeybindStr = decoded.StopKeybind end
             end
         end)
     end
@@ -126,13 +118,8 @@ end
 
 local function StopAllEmotes()
     isEmoteLocked = false
-    if emoteLoopConn then
-        emoteLoopConn:Disconnect()
-        emoteLoopConn = nil
-    end
-    for _, track in ipairs(ActiveEmoteTracks) do
-        pcall(function() track:Stop(0.2) end)
-    end
+    if emoteLoopConn then emoteLoopConn:Disconnect(); emoteLoopConn = nil end
+    for _, track in ipairs(ActiveEmoteTracks) do pcall(function() track:Stop(0.2) end) end
     ActiveEmoteTracks = {}
 end
 
@@ -143,14 +130,9 @@ local function StartEmoteLoop()
         for _, track in ipairs(ActiveEmoteTracks) do
             if track then
                 if not track.IsPlaying then
-                    pcall(function()
-                        track:Play(0.1, 1, 1)
-                        track.Priority = Enum.AnimationPriority.Action4
-                    end)
+                    pcall(function() track:Play(0.1, 1, 1); track.Priority = Enum.AnimationPriority.Action4 end)
                 else
-                    pcall(function()
-                        track.Priority = Enum.AnimationPriority.Action4
-                    end)
+                    pcall(function() track.Priority = Enum.AnimationPriority.Action4 end)
                 end
             end
         end
@@ -159,7 +141,6 @@ end
 
 local function PlayEmote(idData)
     StopAllEmotes()
-    
     local idsToPlay = {}
     if type(idData) == "table" then
         for _, id in ipairs(idData) do
@@ -170,13 +151,11 @@ local function PlayEmote(idData)
         local cId = CleanID(idData)
         if cId ~= "" then table.insert(idsToPlay, cId) end
     end
-
     if #idsToPlay == 0 then return end
 
     local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local Humanoid = Character:WaitForChild("Humanoid", 5)
     if not Humanoid then return end
-
     local Animator = Humanoid:FindFirstChildOfClass("Animator") or Humanoid:WaitForChild("Animator", 5)
     if not Animator then return end
 
@@ -189,18 +168,15 @@ local function PlayEmote(idData)
         track:Play(0.1, 1, 1)
         table.insert(ActiveEmoteTracks, track)
     end
-
     isEmoteLocked = true
     StartEmoteLoop()
 end
 
 local function StopCustomTracks()
-    for name, track in pairs(activeMovementTracks) do
+    for _, track in pairs(activeMovementTracks) do
         if track then
             if type(track) == "table" then
-                for _, t in ipairs(track) do
-                    pcall(function() t:Stop(0.15) end)
-                end
+                for _, t in ipairs(track) do pcall(function() t:Stop(0.15) end) end
             else
                 pcall(function() track:Stop(0.15) end)
             end
@@ -212,7 +188,6 @@ end
 
 local function PlayCustomState(stateName, trackObj)
     if not trackObj then return end
-
     if currentPlayingState ~= stateName then
         currentPlayingState = stateName
         for name, track in pairs(activeMovementTracks) do
@@ -237,9 +212,7 @@ local function PlayCustomState(stateName, trackObj)
                     end
                 else
                     if type(track) == "table" then
-                        for _, t in ipairs(track) do
-                            pcall(function() t:AdjustWeight(0, 0.1) end)
-                        end
+                        for _, t in ipairs(track) do pcall(function() t:AdjustWeight(0, 0.1) end) end
                     else
                         pcall(function() track:AdjustWeight(0, 0.1) end)
                     end
@@ -249,9 +222,7 @@ local function PlayCustomState(stateName, trackObj)
     else
         pcall(function()
             trackObj.Priority = Enum.AnimationPriority.Action4
-            if not trackObj.IsPlaying then
-                trackObj:Play(0.1, 1, 1)
-            end
+            if not trackObj.IsPlaying then trackObj:Play(0.1, 1, 1) end
             trackObj:AdjustWeight(1, 0.1)
         end)
     end
@@ -260,12 +231,7 @@ end
 local function ApplyAnimations(packData)
     if not packData then return end
     AppliedPack = packData
-
-    if customAnimConn then
-        customAnimConn:Disconnect()
-        customAnimConn = nil
-    end
-
+    if customAnimConn then customAnimConn:Disconnect(); customAnimConn = nil end
     StopCustomTracks()
 
     task.spawn(function()
@@ -275,9 +241,6 @@ local function ApplyAnimations(packData)
 
         local AnimateScript = Character:FindFirstChild("Animate")
         if AnimateScript then AnimateScript:Destroy() end
-
-        local humDesc = Humanoid:FindFirstChildOfClass("HumanoidDescription")
-        if humDesc then pcall(function() humDesc:Destroy() end) end
 
         local Animator = Humanoid:FindFirstChildOfClass("Animator") or Humanoid:WaitForChild("Animator", 5)
         if not Animator then return end
@@ -294,24 +257,12 @@ local function ApplyAnimations(packData)
         end
 
         local loadedIdleTracks = {}
-        local rawIdleList = {}
-        
-        if packData.IdleList and type(packData.IdleList) == "table" then
-            rawIdleList = packData.IdleList
-        elseif packData.Idle1 then
-            rawIdleList = {packData.Idle1, packData.Idle2}
-        end
-
+        local rawIdleList = packData.IdleList or {packData.Idle1, packData.Idle2}
         for _, id in ipairs(rawIdleList) do
             local track = LoadTrack(id, true)
-            if track then
-                table.insert(loadedIdleTracks, track)
-            end
+            if track then table.insert(loadedIdleTracks, track) end
         end
-
-        if #loadedIdleTracks == 0 then
-            table.insert(loadedIdleTracks, LoadTrack("507766388", true))
-        end
+        if #loadedIdleTracks == 0 then table.insert(loadedIdleTracks, LoadTrack("507766388", true)) end
 
         activeMovementTracks.Idle = loadedIdleTracks
         activeMovementTracks.Walk = LoadTrack(packData.Walk, true)
@@ -325,25 +276,6 @@ local function ApplyAnimations(packData)
         customAnimConn = RunService.RenderStepped:Connect(function()
             if not Character or not Character.Parent or Humanoid.Health <= 0 then return end
             if isEmoteLocked then return end
-
-            for _, track in ipairs(Animator:GetPlayingAnimationTracks()) do
-                local isOurTrack = false
-                if type(activeMovementTracks.Idle) == "table" then
-                    for _, idleT in ipairs(activeMovementTracks.Idle) do
-                        if track == idleT then isOurTrack = true break end
-                    end
-                end
-                for name, ourT in pairs(activeMovementTracks) do
-                    if name ~= "Idle" and track == ourT then isOurTrack = true break end
-                end
-                
-                if not isOurTrack then
-                    pcall(function()
-                        track:Stop(0)
-                        track:AdjustWeight(0)
-                    end)
-                end
-            end
 
             local velocity = (Character:FindFirstChild("HumanoidRootPart") and Character.HumanoidRootPart.AssemblyLinearVelocity * Vector3.new(1,0,1)) or Vector3.new(0,0,0)
             local speed = velocity.Magnitude
@@ -361,43 +293,71 @@ local function ApplyAnimations(packData)
                 elseif activeMovementTracks.Walk and CleanID(packData.Walk) ~= "" then
                     PlayCustomState("Walk", activeMovementTracks.Walk)
                 else
-                    if type(activeMovementTracks.Idle) == "table" then
-                        PlayCustomState("Idle", currentIdleTrack)
-                    else
-                        PlayCustomState("Idle", activeMovementTracks.Idle)
-                    end
+                    PlayCustomState("Idle", currentIdleTrack)
                 end
             else
                 if type(activeMovementTracks.Idle) == "table" and #activeMovementTracks.Idle > 1 then
                     if not currentIdleTrack.IsPlaying or tick() - lastIdleSwitch > 8 then
                         local nextIdle = activeMovementTracks.Idle[math.random(1, #activeMovementTracks.Idle)]
-                        if nextIdle ~= currentIdleTrack then
-                            currentIdleTrack = nextIdle
-                            lastIdleSwitch = tick()
-                        end
+                        if nextIdle ~= currentIdleTrack then currentIdleTrack = nextIdle; lastIdleSwitch = tick() end
                     end
                 end
-                
-                if type(activeMovementTracks.Idle) == "table" then
-                    PlayCustomState("Idle", currentIdleTrack)
-                else
-                    PlayCustomState("Idle", activeMovementTracks.Idle)
-                end
+                PlayCustomState("Idle", currentIdleTrack)
             end
         end)
     end)
 end
 
+-- Bộ lọc thông minh tự động nhường quyền khi Cầm Tool hoặc Ngồi Xe
+local function SetupToolAndSeatListeners(character)
+    local humanoid = character:WaitForChild("Humanoid", 10)
+    if not humanoid then return end
+
+    local function HasEquippedTool()
+        for _, child in ipairs(character:GetChildren()) do
+            if child:IsA("Tool") then return true end
+        end
+        return false
+    end
+
+    humanoid.StateChanged:Connect(function(oldState, newState)
+        if newState == Enum.HumanoidStateType.Seated then
+            if customAnimConn then customAnimConn:Disconnect(); customAnimConn = nil end
+            StopCustomTracks()
+        elseif oldState == Enum.HumanoidStateType.Seated then
+            if AppliedPack then task.wait(0.2); ApplyAnimations(AppliedPack) end
+        end
+    end)
+
+    character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            if customAnimConn then customAnimConn:Disconnect(); customAnimConn = nil end
+            StopCustomTracks()
+        end
+    end)
+
+    character.ChildRemoved:Connect(function(child)
+        if child:IsA("Tool") then
+            task.delay(0.1, function()
+                if not HasEquippedTool() and AppliedPack then ApplyAnimations(AppliedPack) end
+            end)
+        end
+    end)
+end
+
 LocalPlayer.CharacterAdded:Connect(function(newChar)
     newChar:WaitForChild("Humanoid")
-    if AppliedPack then
-        task.wait(1.2)
-        ApplyAnimations(AppliedPack)
-    end
+    SetupToolAndSeatListeners(newChar)
+    if AppliedPack then task.wait(1.2); ApplyAnimations(AppliedPack) end
 end)
+
+if LocalPlayer.Character then
+    task.spawn(function() SetupToolAndSeatListeners(LocalPlayer.Character) end)
+end
 
 LoadFromFile()
 
+-- Xây dựng các thành phần Fluent UI
 CurrentPack.IdleList[1] = ""
 CurrentPack.IdleList[2] = ""
 
@@ -410,7 +370,6 @@ Tabs.Main:AddButton({
         ExtraIdleCount = ExtraIdleCount + 1
         local index = ExtraIdleCount
         CurrentPack.IdleList[index] = ""
-        
         local newInput = Tabs.Main:AddInput("DynamicIdle_" .. index, {
             Title = "Idle " .. index .. " ID",
             Default = "",
@@ -437,7 +396,7 @@ Tabs.Main:AddButton({
         AppliedPack = CloneTable(CurrentPack)
         ApplyAnimations(CurrentPack)
         SaveToFile()
-        Fluent:Notify({Title = "Thành công!", Content = "Đã áp dụng Anim Pack mượt mà như Emote!", Duration = 3})
+        Fluent:Notify({Title = "Thành công!", Content = "Đã áp dụng Anim Pack mượt mà!", Duration = 3})
     end
 })
 
@@ -454,15 +413,12 @@ Tabs.Main:AddButton({
             Fluent:Notify({Title = "Lỗi", Content = "Chưa nhập tên Pack!", Duration = 3})
             return
         end
-        
         local newPackData = CloneTable(CurrentPack)
         newPackData.Keybind = "None"
         PresetList[PackTitleToSave] = newPackData
         SaveToFile()
-        
         if RenderSavedPacks then RenderSavedPacks() end
         Fluent:Notify({Title = "Đã Lưu!", Content = "Pack '" .. PackTitleToSave .. "' đã được lưu!", Duration = 3})
-        
         ClearDynamicIdleInputs()
         CurrentPack = { IdleList = { "", "" }, Walk = "", Run = "", Jump = "", Fall = "" }
     end
@@ -477,7 +433,6 @@ ScrollAnims.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
 local UIAnimList = Instance.new("UIListLayout", ScrollAnims)
 UIAnimList.Padding = UDim.new(0, 8)
-
 local UIAnimPadding = Instance.new("UIPadding", ScrollAnims)
 UIAnimPadding.PaddingTop = UDim.new(0, 5)
 UIAnimPadding.PaddingLeft = UDim.new(0, 5)
@@ -485,7 +440,6 @@ UIAnimPadding.PaddingRight = UDim.new(0, 5)
 
 function RenderSavedPacks()
     for _, child in ipairs(ScrollAnims:GetChildren()) do if child:IsA("Frame") then child:Destroy() end end
-
     for name, data in pairs(PresetList) do
         local Card = Instance.new("Frame")
         Card.Size = UDim2.new(1, 0, 0, 62)
@@ -605,7 +559,6 @@ Tabs.Emotes:AddButton({
         ExtraEmoteCount = ExtraEmoteCount + 1
         local index = ExtraEmoteCount
         EmoteIDsList[index] = ""
-        
         local newInput = Tabs.Emotes:AddInput("DynamicEmote_" .. index, {
             Title = "ID Emote " .. index,
             Default = "",
@@ -629,23 +582,19 @@ Tabs.Emotes:AddButton({
             Fluent:Notify({Title = "Lỗi Nhập Liệu", Content = "Vui lòng nhập tên Emote!", Duration = 3})
             return
         end
-
         local validIDs = {}
         for _, id in ipairs(EmoteIDsList) do
             local cId = CleanID(id)
             if cId ~= "" then table.insert(validIDs, cId) end
         end
-
         if #validIDs == 0 then
             Fluent:Notify({Title = "Lỗi Nhập Liệu", Content = "Vui lòng nhập ít nhất 1 ID hợp lệ!", Duration = 3})
             return
         end
-
         EmoteList[EmoteNameInputStr] = { ID = validIDs, Keybind = "None" }
         SaveToFile()
         if RenderSavedEmotes then RenderSavedEmotes() end
         Fluent:Notify({Title = "Thành công!", Content = "Đã thêm Emote: '" .. EmoteNameInputStr .. "'!", Duration = 3})
-
         ClearDynamicEmoteInputs()
         EmoteNameInputStr = ""
         EmoteIDsList = { "" }
@@ -669,7 +618,6 @@ ScrollEmotes.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
 local UIEmoteList = Instance.new("UIListLayout", ScrollEmotes)
 UIEmoteList.Padding = UDim.new(0, 8)
-
 local UIPadding = Instance.new("UIPadding", ScrollEmotes)
 UIPadding.PaddingTop = UDim.new(0, 5)
 UIPadding.PaddingLeft = UDim.new(0, 5)
@@ -677,14 +625,12 @@ UIPadding.PaddingRight = UDim.new(0, 5)
 
 function RenderSavedEmotes()
     for _, child in ipairs(ScrollEmotes:GetChildren()) do if child:IsA("Frame") then child:Destroy() end end
-
     local SortedNames = {}
     for name in pairs(EmoteList) do table.insert(SortedNames, name) end
     table.sort(SortedNames, function(a, b) return string.lower(a) < string.lower(b) end)
 
     for _, name in ipairs(SortedNames) do
         local data = EmoteList[name]
-        
         local displayID = ""
         if type(data.ID) == "table" then
             displayID = CleanID(data.ID[1])
@@ -758,12 +704,7 @@ function RenderSavedEmotes()
         Instance.new("UICorner", DelBtn).CornerRadius = UDim.new(0, 6)
 
         PlayBtn.MouseButton1Click:Connect(function() PlayEmote(data.ID) end)
-
-        DelBtn.MouseButton1Click:Connect(function()
-            EmoteList[name] = nil
-            SaveToFile()
-            RenderSavedEmotes()
-        end)
+        DelBtn.MouseButton1Click:Connect(function() EmoteList[name] = nil; SaveToFile(); RenderSavedEmotes() end)
 
         KeyBtn.MouseButton1Click:Connect(function()
             KeyBtn.Text = "..."
@@ -783,7 +724,7 @@ function RenderSavedEmotes()
             data.Keybind = "None"
             SaveToFile()
             RenderSavedEmotes()
-            Fluent:Notify({Title = "Đã Xóa Phím", Content = "Đã hủy phím tắt cho emote: " + name, Duration = 2})
+            Fluent:Notify({Title = "Đã Xóa Phím", Content = "Đã hủy phím tắt cho emote", Duration = 2})
         end)
     end
 end
@@ -801,7 +742,6 @@ ScrollFinder.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
 local UIFinderList = Instance.new("UIListLayout", ScrollFinder)
 UIFinderList.Padding = UDim.new(0, 6)
-
 local UIFinderPad = Instance.new("UIPadding", ScrollFinder)
 UIFinderPad.PaddingTop = UDim.new(0, 4)
 UIFinderPad.PaddingLeft = UDim.new(0, 5)
@@ -810,17 +750,13 @@ UIFinderPad.PaddingRight = UDim.new(0, 5)
 Tabs.IDFinder:AddToggle("ScannerToggle", {
     Title = "Bật/Tắt Quét ID (Scanner)",
     Default = false,
-    Callback = function(Value)
-        IsScanning = Value
-    end
+    Callback = function(Value) IsScanning = Value end
 })
 
 Tabs.IDFinder:AddButton({
     Title = "🗑️ Clear All IDs",
     Callback = function()
-        for _, child in ipairs(ScrollFinder:GetChildren()) do
-            if child:IsA("Frame") then child:Destroy() end
-        end
+        for _, child in ipairs(ScrollFinder:GetChildren()) do if child:IsA("Frame") then child:Destroy() end end
         TrackedFinderIDs = {}
     end
 })
@@ -845,18 +781,10 @@ local function AddIDFinderCard(animId, fallbackName)
     Info.Parent = Card
 
     local resolvedName = fallbackName or "Unknown"
-
-    -- Tự động lấy tên chính xác từ Marketplace của Roblox
     task.spawn(function()
-        local success, info = pcall(function()
-            return MarketplaceService:GetProductInfo(tonumber(animId))
-        end)
-        if success and info and info.Name then
-            resolvedName = info.Name
-        end
-        if Info and Info.Parent then
-            Info.Text = "<b>" .. resolvedName .. "</b>\n<font color=\"#8A8A8A\">ID: " .. animId .. "</font>"
-        end
+        local success, info = pcall(function() return MarketplaceService:GetProductInfo(tonumber(animId)) end)
+        if success and info and info.Name then resolvedName = info.Name end
+        if Info and Info.Parent then Info.Text = "<b>" .. resolvedName .. "</b>\n<font color=\"#8A8A8A\">ID: " .. animId .. "</font>" end
     end)
 
     local CopyBtn = Instance.new("TextButton")
@@ -893,7 +821,6 @@ local function AddIDFinderCard(animId, fallbackName)
     PasteBtn.MouseButton1Click:Connect(function()
         local lName = string.lower(resolvedName)
         local targetKey = ""
-
         local isOnlyNumber = (lName:match("^%d+$") ~= nil)
 
         if isOnlyNumber or not (lName:find("walk") or lName:find("run") or lName:find("jump") or lName:find("fall") or lName:find("animation2")) then
@@ -953,13 +880,11 @@ task.spawn(function()
                             if track.Animation then
                                 local fullId = track.Animation.AnimationId
                                 local animId = fullId:match("%d+")
-
                                 if animId and not TrackedFinderIDs[animId] then
                                     local isDefault = false
                                     for _, defId in ipairs(defaults) do
                                         if animId == defId then isDefault = true break end
                                     end
-
                                     if not isDefault then
                                         TrackedFinderIDs[animId] = true
                                         AddIDFinderCard(animId, track.Name)
@@ -978,20 +903,11 @@ end)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.UserInputType == Enum.UserInputType.Keyboard then
         if input.KeyCode == Window.MinimizeKey or input.KeyCode.Name == ToggleGUIKeybindStr then
-            if Window then
-                pcall(function()
-                    Window:Minimize()
-                end)
-            end
+            if Window then pcall(function() Window:Minimize() end) end
             return
         end
-
         if gameProcessed then return end
-
-        if input.KeyCode.Name == StopEmoteKeybindStr then
-            StopAllEmotes()
-            return
-        end
+        if input.KeyCode.Name == StopEmoteKeybindStr then StopAllEmotes(); return end
 
         for _, data in pairs(EmoteList) do
             if data.Keybind and data.Keybind ~= "None" and data.Keybind == input.KeyCode.Name then
@@ -1019,10 +935,7 @@ Tabs.Settings:AddKeybind("ToggleGUIKeybind", {
     Default = ToggleGUIKeybindStr,
     ChangedCallback = function(NewKey)
         local keyCode = typeof(NewKey) == "EnumItem" and NewKey or Enum.KeyCode[tostring(NewKey)]
-        if keyCode then
-            ToggleGUIKeybindStr = keyCode.Name
-            Window.MinimizeKey = keyCode
-        end
+        if keyCode then ToggleGUIKeybindStr = keyCode.Name; Window.MinimizeKey = keyCode end
         SaveToFile()
     end
 })
