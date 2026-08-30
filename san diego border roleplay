@@ -69,7 +69,8 @@ local function getMyVehicle()
 end
 
 local function tpToPos(posTable)
-    local targetCFrame = CFrame.new(posTable.x, posTable.y + 2, posTable.z)
+    -- Tăng độ cao (Y) thêm 5 đơn vị để tránh xe to bị lọt bánh xuống đất
+    local targetCFrame = CFrame.new(posTable.x, posTable.y + 5, posTable.z)
     local veh, seat = getMyVehicle()
 
     if veh then
@@ -95,7 +96,7 @@ local function getCurrentPosition()
 end
 
 --------------------------------------------------
--- GUI INITIALIZATION
+-- GUI INITIALIZATION (TĂNG CỠ CHỮ TO HƠN)
 --------------------------------------------------
 local DUI = Instance.new("ScreenGui")
 DUI.Name = "DUI_Master"
@@ -108,14 +109,14 @@ DinoFrame.Draggable = true
 DinoFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 DinoFrame.BackgroundTransparency = 0.2
 DinoFrame.Position = UDim2.new(0.036, 0, 0.1, 0)
-DinoFrame.Size = UDim2.new(0, 220, 0, 480)
+DinoFrame.Size = UDim2.new(0, 240, 0, 500)
 
 local T = Instance.new("TextLabel", DinoFrame)
 T.Size = UDim2.new(1, -30, 0, 35)
 T.BackgroundTransparency = 1
 T.Text = "XXDDD Mod Menu"
 T.TextColor3 = Color3.fromRGB(0, 170, 255)
-T.TextSize = 18
+T.TextSize = 20 -- Tăng cỡ chữ tiêu đề
 T.Font = Enum.Font.SourceSansBold
 
 local Close = Instance.new("TextButton", DinoFrame)
@@ -125,18 +126,18 @@ Close.Text = "X"
 Close.TextColor3 = Color3.fromRGB(255, 50, 50)
 Close.BackgroundTransparency = 1
 Close.Font = Enum.Font.SourceSansBold
-Close.TextSize = 18
+Close.TextSize = 20
 
 local function createButton(name, text, posY, color)
     local btn = Instance.new("TextButton", DinoFrame)
     btn.Name = name
-    btn.Size = UDim2.new(0.9, 0, 0, 32)
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
     btn.Position = UDim2.new(0.05, 0, posY, 0)
     btn.BackgroundColor3 = color or Color3.fromRGB(30, 30, 30)
-    btn.Font = Enum.Font.SourceSans
+    btn.Font = Enum.Font.SourceSansBold -- Đổi sang chữ đậm cho dễ đọc
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 14
+    btn.TextSize = 16 -- Tăng cỡ chữ nút bấm (từ 14 lên 16)
     btn.BorderSizePixel = 0
     return btn
 end
@@ -152,12 +153,12 @@ local HitboxPartBtn = createButton("HitboxPartBtn", "Hitbox Part: Head", 0.56)
 
 local HitboxSizeBox = Instance.new("TextBox", DinoFrame)
 HitboxSizeBox.Name = "HitboxSizeBox"
-HitboxSizeBox.Size = UDim2.new(0.9, 0, 0, 30)
+HitboxSizeBox.Size = UDim2.new(0.9, 0, 0, 32)
 HitboxSizeBox.Position = UDim2.new(0.05, 0, 0.64, 0)
 HitboxSizeBox.PlaceholderText = "Kích thước Hitbox (Mặc định = 7)"
 HitboxSizeBox.Text = ""
-HitboxSizeBox.Font = Enum.Font.SourceSans
-HitboxSizeBox.TextSize = 13
+HitboxSizeBox.Font = Enum.Font.SourceSansBold
+HitboxSizeBox.TextSize = 15 -- Tăng cỡ chữ ô nhập
 HitboxSizeBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 HitboxSizeBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 
@@ -171,29 +172,32 @@ ListFrame.Draggable = true
 ListFrame.Visible = false
 ListFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 ListFrame.Position = UDim2.new(0.2, 0, 0.1, 0)
-ListFrame.Size = UDim2.new(0, 360, 0, 320)
+ListFrame.Size = UDim2.new(0, 400, 0, 350) -- Mở rộng bảng để chứa chữ to
 
 local ListTitle = Instance.new("TextLabel", ListFrame)
-ListTitle.Size = UDim2.new(1, -30, 0, 30)
+ListTitle.Size = UDim2.new(1, -30, 0, 35)
 ListTitle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-ListTitle.Text = "  Danh Sách Vị Trí Saved"
+ListTitle.Text = "   Danh Sách Vị Trí Saved"
 ListTitle.TextColor3 = Color3.fromRGB(0, 255, 150)
+ListTitle.TextSize = 16
+ListTitle.Font = Enum.Font.SourceSansBold
 ListTitle.TextXAlignment = Enum.TextXAlignment.Left
 
 local ListClose = Instance.new("TextButton", ListFrame)
-ListClose.Size = UDim2.new(0, 30, 0, 30)
+ListClose.Size = UDim2.new(0, 35, 0, 35)
 ListClose.Position = UDim2.new(0.9, 0, 0, 0)
 ListClose.Text = "X"
 ListClose.TextColor3 = Color3.fromRGB(255, 50, 50)
+ListClose.TextSize = 18
 ListClose.BackgroundTransparency = 1
 
 local ScrollContainer = Instance.new("ScrollingFrame", ListFrame)
-ScrollContainer.Position = UDim2.new(0.02, 0, 0.11, 0)
-ScrollContainer.Size = UDim2.new(0.96, 0, 0.86, 0)
+ScrollContainer.Position = UDim2.new(0.02, 0, 0.12, 0)
+ScrollContainer.Size = UDim2.new(0.96, 0, 0.85, 0)
 ScrollContainer.BackgroundTransparency = 1
 
 local UIListLayout = Instance.new("UIListLayout", ScrollContainer)
-UIListLayout.Padding = UDim.new(0, 5)
+UIListLayout.Padding = UDim.new(0, 6)
 
 local function refreshSavedList()
     for _, child in pairs(ScrollContainer:GetChildren()) do
@@ -201,7 +205,7 @@ local function refreshSavedList()
     end
     for index, data in ipairs(savedLocations) do
         local ItemFrame = Instance.new("Frame", ScrollContainer)
-        ItemFrame.Size = UDim2.new(1, -10, 0, 35)
+        ItemFrame.Size = UDim2.new(1, -10, 0, 40) -- Tăng chiều cao mỗi dòng item
         ItemFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 
         -- TextBox cho phép đổi tên trực tiếp
@@ -213,8 +217,8 @@ local function refreshSavedList()
         NameBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
         NameBox.BorderSizePixel = 0
         NameBox.TextXAlignment = Enum.TextXAlignment.Left
-        NameBox.Font = Enum.Font.SourceSans
-        NameBox.TextSize = 13
+        NameBox.Font = Enum.Font.SourceSansBold
+        NameBox.TextSize = 14 -- Tăng cỡ chữ tên điểm
 
         NameBox.FocusLost:Connect(function()
             if NameBox.Text ~= "" then
@@ -233,6 +237,7 @@ local function refreshSavedList()
         OverwriteBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 0)
         OverwriteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         OverwriteBtn.Font = Enum.Font.SourceSansBold
+        OverwriteBtn.TextSize = 14
         
         OverwriteBtn.MouseButton1Click:Connect(function()
             local pos = getCurrentPosition()
@@ -240,7 +245,6 @@ local function refreshSavedList()
                 data.pos = {x = pos.X, y = pos.Y, z = pos.Z}
                 saveData()
                 
-                -- Hiệu ứng phản hồi trực quan khi lưu đè thành công
                 local origText = OverwriteBtn.Text
                 OverwriteBtn.Text = "OK!"
                 OverwriteBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
@@ -257,6 +261,8 @@ local function refreshSavedList()
         TPBtn.Text = "TP"
         TPBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
         TPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        TPBtn.Font = Enum.Font.SourceSansBold
+        TPBtn.TextSize = 14
         TPBtn.MouseButton1Click:Connect(function() tpToPos(data.pos) end)
 
         -- Nút Gán Phím Tắt
@@ -266,6 +272,8 @@ local function refreshSavedList()
         KeyBtn.Text = data.key or "Gán Phím"
         KeyBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         KeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        KeyBtn.Font = Enum.Font.SourceSansBold
+        KeyBtn.TextSize = 13
 
         KeyBtn.MouseButton1Click:Connect(function()
             KeyBtn.Text = "Bấm Phím..."
@@ -287,13 +295,15 @@ local function refreshSavedList()
         DelBtn.Text = "Xóa"
         DelBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
         DelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        DelBtn.Font = Enum.Font.SourceSansBold
+        DelBtn.TextSize = 14
         DelBtn.MouseButton1Click:Connect(function()
             table.remove(savedLocations, index)
             saveData()
             refreshSavedList()
         end)
     end
-    ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, #savedLocations * 40)
+    ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, #savedLocations * 46)
 end
 
 local DeathFrame = Instance.new("Frame", DUI)
@@ -303,29 +313,32 @@ DeathFrame.Draggable = true
 DeathFrame.Visible = false
 DeathFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 DeathFrame.Position = UDim2.new(0.45, 0, 0.1, 0)
-DeathFrame.Size = UDim2.new(0, 300, 0, 320)
+DeathFrame.Size = UDim2.new(0, 340, 0, 350)
 
 local DeathTitle = Instance.new("TextLabel", DeathFrame)
-DeathTitle.Size = UDim2.new(1, -30, 0, 30)
+DeathTitle.Size = UDim2.new(1, -30, 0, 35)
 DeathTitle.BackgroundColor3 = Color3.fromRGB(40, 20, 20)
-DeathTitle.Text = "  Nhật Ký Vị Trí Đã Chết"
+DeathTitle.Text = "   Nhật Ký Vị Trí Đã Chết"
 DeathTitle.TextColor3 = Color3.fromRGB(255, 100, 100)
+DeathTitle.TextSize = 16
+DeathTitle.Font = Enum.Font.SourceSansBold
 DeathTitle.TextXAlignment = Enum.TextXAlignment.Left
 
 local DeathClose = Instance.new("TextButton", DeathFrame)
-DeathClose.Size = UDim2.new(0, 30, 0, 30)
+DeathClose.Size = UDim2.new(0, 35, 0, 35)
 DeathClose.Position = UDim2.new(0.9, 0, 0, 0)
 DeathClose.Text = "X"
 DeathClose.TextColor3 = Color3.fromRGB(255, 50, 50)
+DeathClose.TextSize = 18
 DeathClose.BackgroundTransparency = 1
 
 local DeathScrollContainer = Instance.new("ScrollingFrame", DeathFrame)
-DeathScrollContainer.Position = UDim2.new(0.02, 0, 0.11, 0)
-DeathScrollContainer.Size = UDim2.new(0.96, 0, 0.86, 0)
+DeathScrollContainer.Position = UDim2.new(0.02, 0, 0.12, 0)
+DeathScrollContainer.Size = UDim2.new(0.96, 0, 0.85, 0)
 DeathScrollContainer.BackgroundTransparency = 1
 
 local DeathUIListLayout = Instance.new("UIListLayout", DeathScrollContainer)
-DeathUIListLayout.Padding = UDim.new(0, 5)
+DeathUIListLayout.Padding = UDim.new(0, 6)
 
 local function refreshDeathList()
     for _, child in pairs(DeathScrollContainer:GetChildren()) do
@@ -333,7 +346,7 @@ local function refreshDeathList()
     end
     for index, data in ipairs(deathLocations) do
         local ItemFrame = Instance.new("Frame", DeathScrollContainer)
-        ItemFrame.Size = UDim2.new(1, -10, 0, 35)
+        ItemFrame.Size = UDim2.new(1, -10, 0, 40)
         ItemFrame.BackgroundColor3 = Color3.fromRGB(35, 25, 25)
 
         local NameLabel = Instance.new("TextLabel", ItemFrame)
@@ -343,7 +356,8 @@ local function refreshDeathList()
         NameLabel.TextColor3 = Color3.fromRGB(255, 180, 180)
         NameLabel.BackgroundTransparency = 1
         NameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        NameLabel.TextSize = 13
+        NameLabel.Font = Enum.Font.SourceSansBold
+        NameLabel.TextSize = 14
 
         local TPBtn = Instance.new("TextButton", ItemFrame)
         TPBtn.Size = UDim2.new(0.15, 0, 0.8, 0)
@@ -351,6 +365,8 @@ local function refreshDeathList()
         TPBtn.Text = "TP"
         TPBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
         TPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        TPBtn.Font = Enum.Font.SourceSansBold
+        TPBtn.TextSize = 14
         TPBtn.MouseButton1Click:Connect(function() tpToPos(data.pos) end)
 
         local DelBtn = Instance.new("TextButton", ItemFrame)
@@ -359,12 +375,14 @@ local function refreshDeathList()
         DelBtn.Text = "Xóa"
         DelBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
         DelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        DelBtn.Font = Enum.Font.SourceSansBold
+        DelBtn.TextSize = 14
         DelBtn.MouseButton1Click:Connect(function()
             table.remove(deathLocations, index)
             refreshDeathList()
         end)
     end
-    DeathScrollContainer.CanvasSize = UDim2.new(0, 0, 0, #deathLocations * 40)
+    DeathScrollContainer.CanvasSize = UDim2.new(0, 0, 0, #deathLocations * 46)
 end
 
 --------------------------------------------------
@@ -515,7 +533,7 @@ local function createESP(npc)
         label.Size = UDim2.new(1, 0, 1, 0)
         label.BackgroundTransparency = 1
         label.Font = Enum.Font.SourceSansBold
-        label.TextSize = 15
+        label.TextSize = 16
         label.TextColor3 = Color3.fromRGB(255, 255, 255)
         label.TextStrokeTransparency = 0
 
