@@ -1,4 +1,4 @@
--- Made For XXDDD private dino sim Mod menu (Vehicle Teleporting & Saved List Updated)
+-- Made For XXDDD private dino sim Mod menu (Vehicle Specific NoClip SanDiego & Gates Updated)
 local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -17,6 +17,7 @@ local autoRespawnEnabled = false
 local lastDeathPosition = nil
 local espEnabled = false
 local hitboxEnabled = false
+local carNoClipEnabled = false
 
 local activeHighlights = {}
 local activeLabels = {}
@@ -46,7 +47,7 @@ end
 loadSavedData()
 
 --------------------------------------------------
--- SMART TELEPORT HELPER (DỊCH CHUYỂN CẢ XE VÀ NGUỜI)
+-- SMART TELEPORT HELPER
 --------------------------------------------------
 local function getMyVehicle()
     local character = LocalPlayer.Character
@@ -68,11 +69,19 @@ local function getMyVehicle()
     end
 end
 
-local function tpToPos(posTable)
-    -- Tăng độ cao (Y) thêm 5 đơn vị để tránh xe to bị lọt bánh xuống đất
-    local targetCFrame = CFrame.new(posTable.x, posTable.y + 5, posTable.z)
-    local veh, seat = getMyVehicle()
+local function tpToPos(cframeData)
+    local targetCFrame
+    if type(cframeData) == "table" then
+        if cframeData.components then
+            targetCFrame = CFrame.new(unpack(cframeData.components))
+        else
+            targetCFrame = CFrame.new(cframeData.x, cframeData.y + 5, cframeData.z)
+        end
+    else
+        return
+    end
 
+    local veh, seat = getMyVehicle()
     if veh then
         if veh.PrimaryPart then
             veh:PivotTo(targetCFrame)
@@ -84,19 +93,24 @@ local function tpToPos(posTable)
     end
 end
 
-local function getCurrentPosition()
+local function getCurrentCFrameData()
     local veh, seat = getMyVehicle()
+    local cf
     if veh then
         local part = veh.PrimaryPart or seat
-        return part.Position
+        cf = part:GetPivot()
     elseif LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        return LocalPlayer.Character.HumanoidRootPart.Position
+        cf = LocalPlayer.Character.HumanoidRootPart.CFrame
+    else
+        return nil
     end
-    return nil
+
+    local raisedCf = cf + Vector3.new(0, 5, 0)
+    return {components = {raisedCf:GetComponents()}}
 end
 
 --------------------------------------------------
--- GUI INITIALIZATION (TĂNG CỠ CHỮ TO HƠN)
+-- GUI INITIALIZATION
 --------------------------------------------------
 local DUI = Instance.new("ScreenGui")
 DUI.Name = "DUI_Master"
@@ -109,14 +123,14 @@ DinoFrame.Draggable = true
 DinoFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 DinoFrame.BackgroundTransparency = 0.2
 DinoFrame.Position = UDim2.new(0.036, 0, 0.1, 0)
-DinoFrame.Size = UDim2.new(0, 240, 0, 500)
+DinoFrame.Size = UDim2.new(0, 240, 0, 540)
 
 local T = Instance.new("TextLabel", DinoFrame)
 T.Size = UDim2.new(1, -30, 0, 35)
 T.BackgroundTransparency = 1
 T.Text = "XXDDD Mod Menu"
 T.TextColor3 = Color3.fromRGB(0, 170, 255)
-T.TextSize = 20 -- Tăng cỡ chữ tiêu đề
+T.TextSize = 20
 T.Font = Enum.Font.SourceSansBold
 
 local Close = Instance.new("TextButton", DinoFrame)
@@ -134,33 +148,95 @@ local function createButton(name, text, posY, color)
     btn.Size = UDim2.new(0.9, 0, 0, 35)
     btn.Position = UDim2.new(0.05, 0, posY, 0)
     btn.BackgroundColor3 = color or Color3.fromRGB(30, 30, 30)
-    btn.Font = Enum.Font.SourceSansBold -- Đổi sang chữ đậm cho dễ đọc
+    btn.Font = Enum.Font.SourceSansBold
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 16 -- Tăng cỡ chữ nút bấm (từ 14 lên 16)
+    btn.TextSize = 15
     btn.BorderSizePixel = 0
     return btn
 end
 
-local SaveP = createButton("SaveP", "Lưu Vị Trí Mới", 0.08)
-local OpenListBtn = createButton("OpenListBtn", "Danh Sách Saved", 0.16, Color3.fromRGB(20, 50, 20))
-local OpenDeathBtn = createButton("OpenDeathBtn", "Vị Trí Đã Chết", 0.24, Color3.fromRGB(50, 20, 20))
-local AutoRespawnBtn = createButton("AutoRespawnBtn", "Auto TP Chết: OFF (F5)", 0.32, Color3.fromRGB(70, 0, 0))
-local ESPBtn = createButton("ESPBtn", "Hostile NPC ESP: OFF", 0.40, Color3.fromRGB(50, 50, 0))
+local SaveP = createButton("SaveP", "Lưu Vị Trí Mới", 0.07)
+local OpenListBtn = createButton("OpenListBtn", "Danh Sách Saved", 0.14, Color3.fromRGB(20, 50, 20))
+local OpenDeathBtn = createButton("OpenDeathBtn", "Vị Trí Đã Chết", 0.21, Color3.fromRGB(50, 20, 20))
+local AutoRespawnBtn = createButton("AutoRespawnBtn", "Auto TP Chết: OFF (F5)", 0.28, Color3.fromRGB(70, 0, 0))
+local ESPBtn = createButton("ESPBtn", "Hostile NPC ESP: OFF", 0.35, Color3.fromRGB(50, 50, 0))
 
-local HitboxBtn = createButton("HitboxBtn", "NPC Hitbox: OFF (F4)", 0.48, Color3.fromRGB(60, 0, 60))
+local HitboxBtn = createButton("HitboxBtn", "NPC Hitbox: OFF (F4)", 0.42, Color3.fromRGB(60, 0, 60))
+local CarNoClipBtn = createButton("CarNoClipBtn", "NoClip Custom: OFF", 0.49, Color3.fromRGB(0, 50, 80))
+
 local HitboxPartBtn = createButton("HitboxPartBtn", "Hitbox Part: Head", 0.56)
 
 local HitboxSizeBox = Instance.new("TextBox", DinoFrame)
 HitboxSizeBox.Name = "HitboxSizeBox"
 HitboxSizeBox.Size = UDim2.new(0.9, 0, 0, 32)
-HitboxSizeBox.Position = UDim2.new(0.05, 0, 0.64, 0)
+HitboxSizeBox.Position = UDim2.new(0.05, 0, 0.63, 0)
 HitboxSizeBox.PlaceholderText = "Kích thước Hitbox (Mặc định = 7)"
 HitboxSizeBox.Text = ""
 HitboxSizeBox.Font = Enum.Font.SourceSansBold
-HitboxSizeBox.TextSize = 15 -- Tăng cỡ chữ ô nhập
+HitboxSizeBox.TextSize = 15
 HitboxSizeBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 HitboxSizeBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+--------------------------------------------------
+-- CONFIRMATION DIALOG (YES/NO KHI ĐÈ)
+--------------------------------------------------
+local ConfirmFrame = Instance.new("Frame", DUI)
+ConfirmFrame.Name = "ConfirmFrame"
+ConfirmFrame.Active = true
+ConfirmFrame.Visible = false
+ConfirmFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+ConfirmFrame.BorderSizePixel = 1
+ConfirmFrame.BorderColor3 = Color3.fromRGB(0, 170, 255)
+ConfirmFrame.Position = UDim2.new(0.35, 0, 0.35, 0)
+ConfirmFrame.Size = UDim2.new(0, 300, 0, 140)
+ConfirmFrame.ZIndex = 10
+
+local ConfirmText = Instance.new("TextLabel", ConfirmFrame)
+ConfirmText.Size = UDim2.new(1, -20, 0, 60)
+ConfirmText.Position = UDim2.new(0, 10, 0, 15)
+ConfirmText.BackgroundTransparency = 1
+ConfirmText.Text = "Bạn có chắc chắn muốn ghi đè lên vị trí này không?"
+ConfirmText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ConfirmText.TextSize = 15
+ConfirmText.Font = Enum.Font.SourceSansBold
+ConfirmText.TextWrapped = true
+ConfirmText.ZIndex = 11
+
+local YesBtn = Instance.new("TextButton", ConfirmFrame)
+YesBtn.Size = UDim2.new(0, 120, 0, 35)
+YesBtn.Position = UDim2.new(0.08, 0, 0.68, 0)
+YesBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+YesBtn.Text = "Yes (Ghi đè)"
+YesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+YesBtn.Font = Enum.Font.SourceSansBold
+YesBtn.TextSize = 14
+YesBtn.ZIndex = 11
+
+local NoBtn = Instance.new("TextButton", ConfirmFrame)
+NoBtn.Size = UDim2.new(0, 120, 0, 35)
+NoBtn.Position = UDim2.new(0.52, 0, 0.68, 0)
+NoBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+NoBtn.Text = "No (Hủy)"
+NoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+NoBtn.Font = Enum.Font.SourceSansBold
+NoBtn.TextSize = 14
+NoBtn.ZIndex = 11
+
+local pendingOverwriteCallback = nil
+
+YesBtn.MouseButton1Click:Connect(function()
+    ConfirmFrame.Visible = false
+    if pendingOverwriteCallback then
+        pendingOverwriteCallback()
+        pendingOverwriteCallback = nil
+    end
+end)
+
+NoBtn.MouseButton1Click:Connect(function()
+    ConfirmFrame.Visible = false
+    pendingOverwriteCallback = nil
+end)
 
 --------------------------------------------------
 -- POPUP LISTS (SAVED & DEATH)
@@ -172,7 +248,7 @@ ListFrame.Draggable = true
 ListFrame.Visible = false
 ListFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 ListFrame.Position = UDim2.new(0.2, 0, 0.1, 0)
-ListFrame.Size = UDim2.new(0, 400, 0, 350) -- Mở rộng bảng để chứa chữ to
+ListFrame.Size = UDim2.new(0, 400, 0, 350)
 
 local ListTitle = Instance.new("TextLabel", ListFrame)
 ListTitle.Size = UDim2.new(1, -30, 0, 35)
@@ -205,10 +281,9 @@ local function refreshSavedList()
     end
     for index, data in ipairs(savedLocations) do
         local ItemFrame = Instance.new("Frame", ScrollContainer)
-        ItemFrame.Size = UDim2.new(1, -10, 0, 40) -- Tăng chiều cao mỗi dòng item
+        ItemFrame.Size = UDim2.new(1, -10, 0, 40)
         ItemFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 
-        -- TextBox cho phép đổi tên trực tiếp
         local NameBox = Instance.new("TextBox", ItemFrame)
         NameBox.Size = UDim2.new(0.30, 0, 0.8, 0)
         NameBox.Position = UDim2.new(0.02, 0, 0.1, 0)
@@ -218,7 +293,7 @@ local function refreshSavedList()
         NameBox.BorderSizePixel = 0
         NameBox.TextXAlignment = Enum.TextXAlignment.Left
         NameBox.Font = Enum.Font.SourceSansBold
-        NameBox.TextSize = 14 -- Tăng cỡ chữ tên điểm
+        NameBox.TextSize = 14
 
         NameBox.FocusLost:Connect(function()
             if NameBox.Text ~= "" then
@@ -229,7 +304,6 @@ local function refreshSavedList()
             end
         end)
 
-        -- Nút Lưu Đè (Overwrite position)
         local OverwriteBtn = Instance.new("TextButton", ItemFrame)
         OverwriteBtn.Size = UDim2.new(0.13, 0, 0.8, 0)
         OverwriteBtn.Position = UDim2.new(0.33, 0, 0.1, 0)
@@ -240,21 +314,24 @@ local function refreshSavedList()
         OverwriteBtn.TextSize = 14
         
         OverwriteBtn.MouseButton1Click:Connect(function()
-            local pos = getCurrentPosition()
-            if pos then
-                data.pos = {x = pos.X, y = pos.Y, z = pos.Z}
-                saveData()
-                
-                local origText = OverwriteBtn.Text
-                OverwriteBtn.Text = "OK!"
-                OverwriteBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
-                task.wait(0.6)
-                OverwriteBtn.Text = origText
-                OverwriteBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 0)
+            ConfirmText.Text = "Ghi đè tọa độ mới cho [" .. data.name .. "]?"
+            pendingOverwriteCallback = function()
+                local cfData = getCurrentCFrameData()
+                if cfData then
+                    data.pos = cfData
+                    saveData()
+                    
+                    local origText = OverwriteBtn.Text
+                    OverwriteBtn.Text = "OK!"
+                    OverwriteBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
+                    task.wait(0.6)
+                    OverwriteBtn.Text = origText
+                    OverwriteBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 0)
+                end
             end
+            ConfirmFrame.Visible = true
         end)
 
-        -- Nút Teleport
         local TPBtn = Instance.new("TextButton", ItemFrame)
         TPBtn.Size = UDim2.new(0.14, 0, 0.8, 0)
         TPBtn.Position = UDim2.new(0.47, 0, 0.1, 0)
@@ -265,7 +342,6 @@ local function refreshSavedList()
         TPBtn.TextSize = 14
         TPBtn.MouseButton1Click:Connect(function() tpToPos(data.pos) end)
 
-        -- Nút Gán Phím Tắt
         local KeyBtn = Instance.new("TextButton", ItemFrame)
         KeyBtn.Size = UDim2.new(0.23, 0, 0.8, 0)
         KeyBtn.Position = UDim2.new(0.62, 0, 0.1, 0)
@@ -288,7 +364,6 @@ local function refreshSavedList()
             end)
         end)
 
-        -- Nút Xóa
         local DelBtn = Instance.new("TextButton", ItemFrame)
         DelBtn.Size = UDim2.new(0.11, 0, 0.8, 0)
         DelBtn.Position = UDim2.new(0.86, 0, 0.1, 0)
@@ -399,11 +474,11 @@ OpenDeathBtn.MouseButton1Click:Connect(function()
 end)
 
 SaveP.MouseButton1Click:Connect(function()
-    local pos = getCurrentPosition()
-    if pos then
+    local cfData = getCurrentCFrameData()
+    if cfData then
         table.insert(savedLocations, {
             name = "Điểm " .. tostring(#savedLocations + 1),
-            pos = {x = pos.X, y = pos.Y, z = pos.Z},
+            pos = cfData,
             key = nil
         })
         saveData()
@@ -414,6 +489,68 @@ end)
 ListClose.MouseButton1Click:Connect(function() ListFrame.Visible = false end)
 DeathClose.MouseButton1Click:Connect(function() DeathFrame.Visible = false end)
 Close.MouseButton1Click:Connect(function() DUI:Destroy() end)
+
+--------------------------------------------------
+-- VEHICLE NOCLIP SPECIFIC FOR SAN DIEGO & GATES
+--------------------------------------------------
+local sanDiegoFolder = Workspace:FindFirstChild("Map") 
+    and Workspace.Map:FindFirstChild("Static") 
+    and Workspace.Map.Static:FindFirstChild("Locations") 
+    and Workspace.Map.Static.Locations:FindFirstChild("SanDiego")
+
+local gatesFolder = Workspace:FindFirstChild("Map") 
+    and Workspace.Map:FindFirstChild("Static") 
+    and Workspace.Map.Static:FindFirstChild("Global") 
+    and Workspace.Map.Static.Global:FindFirstChild("Gates")
+
+local function updateTargetCollisions(canCollideState)
+    -- Xử lý SanDiego
+    if sanDiegoFolder then
+        for _, obj in pairs(sanDiegoFolder:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                obj.CanCollide = canCollideState
+            end
+        end
+    end
+    -- Xử lý Gates & Barrier
+    if gatesFolder then
+        for _, obj in pairs(gatesFolder:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                obj.CanCollide = canCollideState
+            end
+        end
+    end
+end
+
+CarNoClipBtn.MouseButton1Click:Connect(function()
+    carNoClipEnabled = not carNoClipEnabled
+    if carNoClipEnabled then
+        CarNoClipBtn.Text = "NoClip Custom: ON"
+        CarNoClipBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+        updateTargetCollisions(false)
+    else
+        CarNoClipBtn.Text = "NoClip Custom: OFF"
+        CarNoClipBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 80)
+        updateTargetCollisions(true)
+    end
+end)
+
+-- Tự động cập nhật nếu có vật dụng mới spawn trong SanDiego hoặc Gates khi đang bật NoClip
+if sanDiegoFolder then
+    sanDiegoFolder.DescendantAdded:Connect(function(obj)
+        if carNoClipEnabled and obj:IsA("BasePart") then
+            obj.CanCollide = false
+        end
+    end)
+end
+
+if gatesFolder then
+    gatesFolder.DescendantAdded:Connect(function(obj)
+        if carNoClipEnabled and obj:IsA("BasePart") then
+            obj.CanCollide = false
+        end
+    end)
+end
 
 --------------------------------------------------
 -- HITBOX EXPANDER LOGIC
@@ -608,8 +745,8 @@ local function setupDeathTracker(character)
         local function checkHealth()
             if humanoid.Health <= 0 and not hasDied then
                 hasDied = true
-                local pos = hrp.Position
-                lastDeathPosition = {x = pos.X, y = pos.Y, z = pos.Z}
+                local cf = hrp.CFrame + Vector3.new(0, 5, 0)
+                lastDeathPosition = {components = {cf:GetComponents()}}
                 table.insert(deathLocations, 1, {
                     name = "Điểm Chết #" .. tostring(#deathLocations + 1),
                     time = os.date("%H:%M:%S"),
