@@ -51,7 +51,7 @@ end
 loadSavedData()
 
 --------------------------------------------------
--- SMART TELEPORT HELPER (ĐÃ CẬP NHẬT TÍNH NĂNG CHUYỂN GHẾ PHỤ)
+-- SMART TELEPORT HELPER (CHỜ NHÂN VẬT NGỒI XONG MỚI TP)
 --------------------------------------------------
 local function getMyVehicle()
     local character = LocalPlayer.Character
@@ -88,9 +88,9 @@ local function tpToPos(cframeData)
     local veh, currentSeat = getMyVehicle()
     local character = LocalPlayer.Character
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
 
-    -- Tự động đổi sang ghế phụ trống trước khi TP nếu đang ngồi trong xe
-    if veh and humanoid then
+    if veh and humanoid and hrp then
         local availableSeats = {}
         for _, descendant in pairs(veh:GetDescendants()) do
             if (descendant:IsA("Seat") or descendant:IsA("VehicleSeat")) and descendant ~= currentSeat then
@@ -102,19 +102,37 @@ local function tpToPos(cframeData)
 
         if #availableSeats > 0 then
             local randomSeat = availableSeats[math.random(1, #availableSeats)]
+            
+            -- Tạm thời tắt va chạm để không bị kẹt khi đổi ghế
+            for _, part in pairs(character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+
+            -- Gửi yêu cầu ngồi vào ghế phụ
             randomSeat:Sit(humanoid)
-            task.wait(0.1)
+            
+            -- Đợi và kiểm tra liên tục tối đa 0.6 giây cho đến khi server xác nhận nhân vật đã thực sự ngồi vào ghế
+            local startTime = tick()
+            while tick() - startTime < 0.6 do
+                if humanoid.SeatPart == randomSeat then
+                    break
+                end
+                task.wait(0.05)
+            end
         end
     end
 
+    -- Tiến hành dịch chuyển xe (kéo theo nhân vật đã ngồi chắc chắn bên trong)
     if veh then
         if veh.PrimaryPart then
             veh:PivotTo(targetCFrame)
         else
             currentSeat.CFrame = targetCFrame
         end
-    elseif character and character:FindFirstChild("HumanoidRootPart") then
-        character.HumanoidRootPart.CFrame = targetCFrame
+    elseif hrp then
+        hrp.CFrame = targetCFrame
     end
 end
 
