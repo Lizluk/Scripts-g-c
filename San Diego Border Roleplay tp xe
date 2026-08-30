@@ -1,23 +1,28 @@
--- Made For XXDDD private dino sim Mod menu (Vehicle Specific NoClip SanDiego & Gates Updated)
+-- Made For XXDDD private dino sim Mod menu (Integrated Split Vehicle/Player TP Logic)
 local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 
--- Xóa GUI cũ nếu bị kẹt
-if LocalPlayer.PlayerGui:FindFirstChild("DUI_Master") then
-    LocalPlayer.PlayerGui.DUI_Master:Destroy()
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+if CoreGui:FindFirstChild("DUI_Master") then
+    CoreGui.DUI_Master:Destroy()
+end
+if playerGui:FindFirstChild("DUI_Master") then
+    playerGui.DUI_Master:Destroy()
 end
 
--- Global Data Storage File Name
 local fileName = "DinoSim_SavedPositions_" .. tostring(game.GameId) .. ".json"
 local savedLocations = {}
 local deathLocations = {}
 
--- States
 local autoRespawnEnabled = false
+local splitVehicleTpEnabled = false -- Trạng thái chế độ xe đi trước, người ở lại (Bật/Tắt bằng F5)
 local lastDeathPosition = nil
 local espEnabled = false
 local hitboxEnabled = false
@@ -28,7 +33,6 @@ local activeLabels = {}
 local targetHitboxPart = "Head"
 local npcConnections = {}
 
--- Load & Save Functions
 local function loadSavedData()
     if readfile and isfile and isfile(fileName) then
         local success, result = pcall(function()
@@ -51,7 +55,7 @@ end
 loadSavedData()
 
 --------------------------------------------------
--- SMART TELEPORT HELPER (CHỜ NHÂN VẬT NGỒI XONG MỚI TP)
+-- SMART TELEPORT HELPER (HỖ TRỢ TÁCH XE VÀ NGƯỜI KHI BẬT F5)
 --------------------------------------------------
 local function getMyVehicle()
     local character = LocalPlayer.Character
@@ -86,6 +90,29 @@ local function tpToPos(cframeData)
     end
 
     local veh, currentSeat = getMyVehicle()
+
+    -- Nếu bật chế độ F5 (Xe đi trước, người ở lại)
+    if splitVehicleTpEnabled and veh then
+        -- 1. Cho nhân vật rời ghế trước (để người ở lại vị trí cũ)
+        local character = LocalPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if humanoid and hrp then
+            humanoid.Sit = false
+            hrp.CFrame = hrp.CFrame + Vector3.new(0, 3, 0)
+        end
+        task.wait(0.05)
+
+        -- 2. Tiến hành TP toàn bộ xe đi đến tọa độ mục tiêu
+        if veh.PrimaryPart then
+            veh:PivotTo(targetCFrame)
+        else
+            currentSeat.CFrame = targetCFrame
+        end
+        return
+    end
+
+    -- Chế độ bình thường (Cả người lẫn xe cùng TP)
     local character = LocalPlayer.Character
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
@@ -93,7 +120,7 @@ local function tpToPos(cframeData)
     if veh and humanoid and hrp then
         local availableSeats = {}
         for _, descendant in pairs(veh:GetDescendants()) do
-            if (descendant:IsA("Seat") or descendant:IsA("VehicleSeat")) and descendant ~= currentSeat then
+            if (descendant:IsA("Seat") or descendant:IsA("VehicleSeat")) then
                 if not descendant.Occupant then
                     table.insert(availableSeats, descendant)
                 end
@@ -101,30 +128,45 @@ local function tpToPos(cframeData)
         end
 
         if #availableSeats > 0 then
-            local randomSeat = availableSeats[math.random(1, #availableSeats)]
-            
-            -- Tạm thời tắt va chạm để không bị kẹt khi đổi ghế
+            local targetSeat = availableSeats[1]
+
             for _, part in pairs(character:GetDescendants()) do
                 if part:IsA("BasePart") then
                     part.CanCollide = false
                 end
             end
 
-            -- Gửi yêu cầu ngồi vào ghế phụ
-            randomSeat:Sit(humanoid)
+            humanoid.Sit = false
+            hrp.CFrame = hrp.CFrame + Vector3.new(0, 4, 0)
+            task.wait(0.05)
             
-            -- Đợi và kiểm tra liên tục tối đa 0.6 giây cho đến khi server xác nhận nhân vật đã thực sự ngồi vào ghế
+            hrp.CFrame = targetSeat.CFrame
+            task.wait(0.05)
+
+            local prompt = targetSeat:FindFirstChildOfClass("ProximityPrompt")
+            if prompt then
+                fireproximityprompt(prompt)
+            else
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+                task.wait(0.05)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                humanoid:Sit(targetSeat)
+            end
+
             local startTime = tick()
-            while tick() - startTime < 0.6 do
-                if humanoid.SeatPart == randomSeat then
+            while tick() - startTime < 1.0 do
+                if humanoid.SeatPart == targetSeat then
                     break
+                else
+                    hrp.CFrame = targetSeat.CFrame
                 end
                 task.wait(0.05)
             end
+            
+            task.wait(0.2)
         end
     end
 
-    -- Tiến hành dịch chuyển xe (kéo theo nhân vật đã ngồi chắc chắn bên trong)
     if veh then
         if veh.PrimaryPart then
             veh:PivotTo(targetCFrame)
@@ -158,7 +200,14 @@ end
 local DUI = Instance.new("ScreenGui")
 DUI.Name = "DUI_Master"
 DUI.ResetOnSpawn = false
-DUI.Parent = LocalPlayer:WaitForChild("PlayerGui")
+DUI.IgnoreGuiInset = true
+
+local success, err = pcall(function()
+    DUI.Parent = CoreGui
+end)
+if not success then
+    DUI.Parent = playerGui
+end
 
 local DinoFrame = Instance.new("Frame", DUI)
 DinoFrame.Name = "DinoFrame"
@@ -166,8 +215,8 @@ DinoFrame.Active = true
 DinoFrame.Draggable = true
 DinoFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 DinoFrame.BackgroundTransparency = 0.2
-DinoFrame.Position = UDim2.new(0.036, 0, 0.1, 0)
-DinoFrame.Size = UDim2.new(0, 240, 0, 540)
+DinoFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
+DinoFrame.Size = UDim2.new(0, 240, 0, 580)
 
 local T = Instance.new("TextLabel", DinoFrame)
 T.Size = UDim2.new(1, -30, 0, 35)
@@ -195,26 +244,27 @@ local function createButton(name, text, posY, color)
     btn.Font = Enum.Font.SourceSansBold
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 15
+    btn.TextSize = 14
     btn.BorderSizePixel = 0
     return btn
 end
 
 local SaveP = createButton("SaveP", "Lưu Vị Trí Mới", 0.07)
-local OpenListBtn = createButton("OpenListBtn", "Danh Sách Saved", 0.14, Color3.fromRGB(20, 50, 20))
-local OpenDeathBtn = createButton("OpenDeathBtn", "Vị Trí Đã Chết", 0.21, Color3.fromRGB(50, 20, 20))
-local AutoRespawnBtn = createButton("AutoRespawnBtn", "Auto TP Chết: OFF (F5)", 0.28, Color3.fromRGB(70, 0, 0))
-local ESPBtn = createButton("ESPBtn", "Hostile NPC ESP: OFF", 0.35, Color3.fromRGB(50, 50, 0))
+local OpenListBtn = createButton("OpenListBtn", "Danh Sách Saved", 0.135, Color3.fromRGB(20, 50, 20))
+local OpenDeathBtn = createButton("OpenDeathBtn", "Vị Trí Đã Chết", 0.20, Color3.fromRGB(50, 20, 20))
+local SplitTpBtn = createButton("SplitTpBtn", "Xe Đi Trước Người Ở: OFF (F5)", 0.265, Color3.fromRGB(70, 0, 0))
+local AutoRespawnBtn = createButton("AutoRespawnBtn", "Auto TP Chết: OFF", 0.33, Color3.fromRGB(70, 0, 0))
+local ESPBtn = createButton("ESPBtn", "Hostile NPC ESP: OFF", 0.395, Color3.fromRGB(50, 50, 0))
 
-local HitboxBtn = createButton("HitboxBtn", "NPC Hitbox: OFF (F4)", 0.42, Color3.fromRGB(60, 0, 60))
-local CarNoClipBtn = createButton("CarNoClipBtn", "NoClip Custom: OFF", 0.49, Color3.fromRGB(0, 50, 80))
+local HitboxBtn = createButton("HitboxBtn", "NPC Hitbox: OFF (F4)", 0.46, Color3.fromRGB(60, 0, 60))
+local CarNoClipBtn = createButton("CarNoClipBtn", "NoClip Custom: OFF", 0.525, Color3.fromRGB(0, 50, 80))
 
-local HitboxPartBtn = createButton("HitboxPartBtn", "Hitbox Part: Head", 0.56)
+local HitboxPartBtn = createButton("HitboxPartBtn", "Hitbox Part: Head", 0.59)
 
 local HitboxSizeBox = Instance.new("TextBox", DinoFrame)
 HitboxSizeBox.Name = "HitboxSizeBox"
 HitboxSizeBox.Size = UDim2.new(0.9, 0, 0, 32)
-HitboxSizeBox.Position = UDim2.new(0.05, 0, 0.63, 0)
+HitboxSizeBox.Position = UDim2.new(0.05, 0, 0.655, 0)
 HitboxSizeBox.PlaceholderText = "Kích thước Hitbox (Mặc định = 7)"
 HitboxSizeBox.Text = ""
 HitboxSizeBox.Font = Enum.Font.SourceSansBold
@@ -223,7 +273,7 @@ HitboxSizeBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 HitboxSizeBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 
 --------------------------------------------------
--- CONFIRMATION DIALOG (YES/NO KHI ĐÈ)
+-- CONFIRMATION DIALOG
 --------------------------------------------------
 local ConfirmFrame = Instance.new("Frame", DUI)
 ConfirmFrame.Name = "ConfirmFrame"
@@ -572,6 +622,18 @@ ListClose.MouseButton1Click:Connect(function() ListFrame.Visible = false end)
 DeathClose.MouseButton1Click:Connect(function() DeathFrame.Visible = false end)
 Close.MouseButton1Click:Connect(function() DUI:Destroy() end)
 
+-- Sự kiện bật/tắt chế độ F5 trên GUI
+SplitTpBtn.MouseButton1Click:Connect(function()
+    splitVehicleTpEnabled = not splitVehicleTpEnabled
+    if splitVehicleTpEnabled then
+        SplitTpBtn.Text = "Xe Đi Trước Người Ở: ON (F5)"
+        SplitTpBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
+    else
+        SplitTpBtn.Text = "Xe Đi Trước Người Ở: OFF (F5)"
+        SplitTpBtn.BackgroundColor3 = Color3.fromRGB(70, 0, 0)
+    end
+end)
+
 --------------------------------------------------
 -- VEHICLE NOCLIP SPECIFIC FOR SAN DIEGO & GATES
 --------------------------------------------------
@@ -801,9 +863,10 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if input.KeyCode == Enum.KeyCode.F4 then
             toggleHitbox()
         elseif input.KeyCode == Enum.KeyCode.F5 then
-            autoRespawnEnabled = not autoRespawnEnabled
-            AutoRespawnBtn.Text = autoRespawnEnabled and "Auto TP Chết: ON (F5)" or "Auto TP Chết: OFF (F5)"
-            AutoRespawnBtn.BackgroundColor3 = autoRespawnEnabled and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(70, 0, 0)
+            -- Phím F5: Bật/Tắt chế độ xe đi trước, người ở lại
+            splitVehicleTpEnabled = not splitVehicleTpEnabled
+            SplitTpBtn.Text = splitVehicleTpEnabled and "Xe Đi Trước Người Ở: ON (F5)" or "Xe Đi Trước Người Ở: OFF (F5)"
+            SplitTpBtn.BackgroundColor3 = splitVehicleTpEnabled and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(70, 0, 0)
         else
             if not gameProcessed then
                 for _, data in ipairs(savedLocations) do
