@@ -1,0 +1,558 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+-- Tên file lưu theo từng Game (PlaceId)
+local gameId = game.PlaceId
+local configFileName = "SeatCamConfig_" .. gameId .. ".json"
+
+-- Dữ liệu Ghế & Camera
+local seatKeybinds = {}       -- { [tên_ghế] = Enum.KeyCode }
+local savedCameraPoints = {}  -- { { name = "...", cframe = CFrame }, ... }
+
+local waitingForKeySeat = nil
+local autoDelayTime = 0.2
+local currentVehicle = nil
+
+local isViewingCamera = false
+local currentCamFocusCFrame = nil
+local isRightMouseDown = false
+local camAngles = Vector2.new()
+
+----------------------------------------------------
+-- HỆ THỐNG LƯU / TẢI DỮ LIỆU TỰ ĐỘNG (An toàn tuyệt đối)
+----------------------------------------------------
+local function saveData()
+	pcall(function()
+		if not writefile then return end
+		
+		local serializableKeybinds = {}
+		for seatName, keyCode in pairs(seatKeybinds) do
+			serializableKeybinds[seatName] = keyCode.Name
+		end
+		
+		local serializableCams = {}
+		for _, cam in ipairs(savedCameraPoints) do
+			local p = cam.cframe.Position
+			local _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cam.cframe:GetComponents()
+			table.insert(serializableCams, {
+				name = cam.name,
+				components = {p.X, p.Y, p.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22}
+			})
+		end
+		
+		local data = {
+			keybinds = serializableKeybinds,
+			cameras = serializableCams,
+			autoDelay = autoDelayTime
+		}
+		
+		writefile(configFileName, HttpService:JSONEncode(data))
+	end)
+end
+
+local function loadData()
+	pcall(function()
+		if not readfile or not isfile or not isfile(configFileName) then return end
+		local content = readfile(configFileName)
+		local data = HttpService:JSONDecode(content)
+		
+		if data then
+			if data.keybinds then
+				for seatName, keyName in pairs(data.keybinds) do
+					local success, keyCode = pcall(function()
+						return Enum.KeyCode[keyName]
+					end)
+					if success and keyCode then
+						seatKeybinds[seatName] = keyCode
+					end
+				end
+			end
+			
+			if data.cameras then
+				savedCameraPoints = {}
+				for _, cam in ipairs(data.cameras) do
+					if cam.components and #cam.components >= 12 then
+						local c = cam.components
+						local cf = CFrame.new(c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12])
+						table.insert(savedCameraPoints, { name = cam.name, cframe = cf })
+					end
+				end
+			end
+			
+			if data.autoDelay then
+				autoDelayTime = data.autoDelay
+			end
+		end
+	end)
+end
+
+-- Tải dữ liệu an toàn
+loadData()
+
+----------------------------------------------------
+-- XÂY DỰNG GIAO DIỆN GUI
+----------------------------------------------------
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "VehicleAndCameraGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 280, 0, 420)
+mainFrame.Position = UDim2.new(0.5, -140, 0.5, -210)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 30)
+titleLabel.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Text = "Vehicle & Camera (F9: Ẩn/Hiện)"
+titleLabel.TextSize = 12
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.Parent = mainFrame
+
+-- Thanh Tab
+local tabFrame = Instance.new("Frame")
+tabFrame.Size = UDim2.new(1, -10, 0, 30)
+tabFrame.Position = UDim2.new(0, 5, 0, 35)
+tabFrame.BackgroundTransparency = 1
+tabFrame.Parent = mainFrame
+
+local tabSeatBtn = Instance.new("TextButton")
+tabSeatBtn.Size = UDim2.new(0.48, 0, 1, 0)
+tabSeatBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+tabSeatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tabSeatBtn.Text = "Ghế Ngồi"
+tabSeatBtn.TextSize = 13
+tabSeatBtn.Font = Enum.Font.SourceSansBold
+tabSeatBtn.Parent = tabFrame
+
+local tabCamBtn = Instance.new("TextButton")
+tabCamBtn.Size = UDim2.new(0.48, 0, 1, 0)
+tabCamBtn.Position = UDim2.new(0.52, 0, 0, 0)
+tabCamBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+tabCamBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tabCamBtn.Text = "Camera Lưu"
+tabCamBtn.TextSize = 13
+tabCamBtn.Font = Enum.Font.SourceSansBold
+tabCamBtn.Parent = tabFrame
+
+----------------------------------------------------
+-- TAB 1: GHẾ NGỒI
+----------------------------------------------------
+local seatContainer = Instance.new("Frame")
+seatContainer.Size = UDim2.new(1, 0, 1, -70)
+seatContainer.Position = UDim2.new(0, 0, 0, 70)
+seatContainer.BackgroundTransparency = 1
+seatContainer.Visible = true
+seatContainer.Parent = mainFrame
+
+local autoToggleBtn = Instance.new("TextButton")
+autoToggleBtn.Size = UDim2.new(1, -10, 0, 25)
+autoToggleBtn.Position = UDim2.new(0, 5, 0, 0)
+autoToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+autoToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoToggleBtn.Text = "Auto Vào Ghế Lái: OFF"
+autoToggleBtn.TextSize = 12
+autoToggleBtn.Font = Enum.Font.SourceSansBold
+autoToggleBtn.Parent = seatContainer
+
+local autoEnabled = false
+autoToggleBtn.MouseButton1Click:Connect(function()
+	autoEnabled = not autoEnabled
+	if autoEnabled then
+		autoToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+		autoToggleBtn.Text = "Auto Vào Ghế Lái: ON"
+	else
+		autoToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+		autoToggleBtn.Text = "Auto Vào Ghế Lái: OFF"
+	end
+end)
+
+local delayFrame = Instance.new("Frame")
+delayFrame.Size = UDim2.new(1, -10, 0, 25)
+delayFrame.Position = UDim2.new(0, 5, 0, 30)
+delayFrame.BackgroundTransparency = 1
+delayFrame.Parent = seatContainer
+
+local delayLabel = Instance.new("TextLabel")
+delayLabel.Size = UDim2.new(0.65, 0, 1, 0)
+delayLabel.BackgroundTransparency = 1
+delayLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+delayLabel.Text = "Độ trễ Auto (giây):"
+delayLabel.TextSize = 12
+delayLabel.Font = Enum.Font.SourceSans
+delayLabel.TextXAlignment = Enum.TextXAlignment.Left
+delayLabel.Parent = delayFrame
+
+local delayTextBox = Instance.new("TextBox")
+delayTextBox.Size = UDim2.new(0.32, 0, 1, 0)
+delayTextBox.Position = UDim2.new(0.68, 0, 0, 0)
+delayTextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+delayTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+delayTextBox.Text = tostring(autoDelayTime)
+delayTextBox.TextSize = 12
+delayTextBox.Font = Enum.Font.SourceSansBold
+delayTextBox.ClearTextOnFocus = false
+delayTextBox.Parent = delayFrame
+
+delayTextBox.FocusLost:Connect(function()
+	local num = tonumber(delayTextBox.Text)
+	if num and num >= 0 then 
+		autoDelayTime = num 
+		saveData()
+	else 
+		delayTextBox.Text = tostring(autoDelayTime) 
+	end
+end)
+
+local scrollingSeats = Instance.new("ScrollingFrame")
+scrollingSeats.Size = UDim2.new(1, -10, 1, -95)
+scrollingSeats.Position = UDim2.new(0, 5, 0, 60)
+scrollingSeats.BackgroundTransparency = 1
+scrollingSeats.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollingSeats.Parent = seatContainer
+
+local seatListLayout = Instance.new("UIListLayout")
+seatListLayout.Parent = scrollingSeats
+seatListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+seatListLayout.Padding = UDim.new(0, 5)
+
+local refreshBtn = Instance.new("TextButton")
+refreshBtn.Size = UDim2.new(1, -10, 0, 25)
+refreshBtn.Position = UDim2.new(0, 5, 1, -28)
+refreshBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+refreshBtn.Text = "Quét Lại Ghế Thủ Công"
+refreshBtn.TextSize = 12
+refreshBtn.Font = Enum.Font.SourceSansBold
+refreshBtn.Parent = seatContainer
+
+----------------------------------------------------
+-- TAB 2: CAMERA LƯU
+----------------------------------------------------
+local camContainer = Instance.new("Frame")
+camContainer.Size = UDim2.new(1, 0, 1, -70)
+camContainer.Position = UDim2.new(0, 0, 0, 70)
+camContainer.BackgroundTransparency = 1
+camContainer.Visible = false
+camContainer.Parent = mainFrame
+
+local saveCamBtn = Instance.new("TextButton")
+saveCamBtn.Size = UDim2.new(1, -10, 0, 30)
+saveCamBtn.Position = UDim2.new(0, 5, 0, 0)
+saveCamBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 100)
+saveCamBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+saveCamBtn.Text = "+ Lưu Vị Trí Camera Này"
+saveCamBtn.TextSize = 12
+saveCamBtn.Font = Enum.Font.SourceSansBold
+saveCamBtn.Parent = camContainer
+
+local exitCamBtn = Instance.new("TextButton")
+exitCamBtn.Size = UDim2.new(1, -10, 0, 25)
+exitCamBtn.Position = UDim2.new(0, 5, 0, 35)
+exitCamBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+exitCamBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+exitCamBtn.Text = "Thoát Camera (Về Nhân Vật)"
+exitCamBtn.TextSize = 12
+exitCamBtn.Font = Enum.Font.SourceSansBold
+exitCamBtn.Parent = camContainer
+
+local guideLabel = Instance.new("TextLabel")
+guideLabel.Size = UDim2.new(1, -10, 0, 20)
+guideLabel.Position = UDim2.new(0, 5, 0, 62)
+guideLabel.BackgroundTransparency = 1
+guideLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+guideLabel.Text = "*Giữ Chuột Phải & Kéo để xoay nhìn xung quanh*"
+guideLabel.TextSize = 10
+guideLabel.Font = Enum.Font.SourceSansItalic
+guideLabel.Parent = camContainer
+
+local scrollingCams = Instance.new("ScrollingFrame")
+scrollingCams.Size = UDim2.new(1, -10, 1, -95)
+scrollingCams.Position = UDim2.new(0, 5, 0, 85)
+scrollingCams.BackgroundTransparency = 1
+scrollingCams.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollingCams.Parent = camContainer
+
+local camListLayout = Instance.new("UIListLayout")
+camListLayout.Parent = scrollingCams
+camListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+camListLayout.Padding = UDim.new(0, 5)
+
+----------------------------------------------------
+-- CÁC HÀM XỬ LÝ GHẾ & XE (ĐÃ KHÔI PHỤC TỰ ĐỘNG QUÉT)
+----------------------------------------------------
+local function teleportToSeat(descendant)
+	if descendant and descendant:IsA("BasePart") then
+		local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+		if rootPart then
+			humanoid.Sit = false
+			rootPart.CFrame = rootPart.CFrame + Vector3.new(0, 4, 0)
+			task.wait(0.05)
+			rootPart.CFrame = descendant.CFrame
+			task.wait(0.05)
+			local prompt = descendant:FindFirstChildOfClass("ProximityPrompt")
+			if prompt then
+				fireproximityprompt(prompt)
+			else
+				VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+				task.wait(0.05)
+				VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+				humanoid:Sit(descendant)
+			end
+		end
+	end
+end
+
+function clearSeatsList()
+	for _, child in ipairs(scrollingSeats:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+end
+
+local function updateSeatsList()
+	clearSeatsList()
+	local seatPart = humanoid.SeatPart
+	if not seatPart then return end
+
+	local vehicle = seatPart.Parent
+	currentVehicle = vehicle
+	local vehicleSeats, normalSeats = {}, {}
+
+	if vehicle and vehicle:IsA("Model") then
+		for _, descendant in ipairs(vehicle:GetDescendants()) do
+			if descendant:IsA("VehicleSeat") then table.insert(vehicleSeats, descendant)
+			elseif descendant:IsA("Seat") then table.insert(normalSeats, descendant) end
+		end
+
+		local driverSeatFound = vehicleSeats[1] or normalSeats[1]
+		local allFoundSeats = {}
+		for _, s in ipairs(vehicleSeats) do table.insert(allFoundSeats, s) end
+		for _, s in ipairs(normalSeats) do table.insert(allFoundSeats, s) end
+
+		for _, descendant in ipairs(allFoundSeats) do
+			local rowFrame = Instance.new("Frame")
+			rowFrame.Size = UDim2.new(1, 0, 0, 30)
+			rowFrame.BackgroundTransparency = 1
+			rowFrame.Parent = scrollingSeats
+
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(0.65, 0, 1, 0)
+			btn.BackgroundColor3 = (descendant == seatPart) and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(60, 60, 60)
+			btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			btn.Text = descendant.Name
+			btn.TextSize = 12
+			btn.Font = Enum.Font.SourceSans
+			btn.Parent = rowFrame
+
+			btn.MouseButton1Click:Connect(function() teleportToSeat(descendant) end)
+
+			local keyBtn = Instance.new("TextButton")
+			keyBtn.Size = UDim2.new(0.32, 0, 1, 0)
+			keyBtn.Position = UDim2.new(0.68, 0, 0, 0)
+			keyBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+			keyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			
+			local currentKey = seatKeybinds[descendant.Name]
+			keyBtn.Text = currentKey and currentKey.Name or "Set Phím"
+			keyBtn.TextSize = 11
+			keyBtn.Font = Enum.Font.SourceSans
+			keyBtn.Parent = rowFrame
+
+			keyBtn.MouseButton1Click:Connect(function()
+				waitingForKeySeat = descendant.Name
+				keyBtn.Text = "Bấm phím..."
+			end)
+		end
+		scrollingSeats.CanvasSize = UDim2.new(0, 0, 0, seatListLayout.AbsoluteContentSize.Y)
+
+		if autoEnabled and driverSeatFound and seatPart ~= driverSeatFound then
+			task.wait(autoDelayTime)
+			teleportToSeat(driverSeatFound)
+		end
+	end
+end
+
+-- Lắng nghe sự kiện đổi nhân vật & đổi xe tự động quét
+local function setupCharacter(newChar)
+	character = newChar
+	humanoid = newChar:WaitForChild("Humanoid")
+	
+	humanoid:GetPropertyChangedSignal("SeatPart"):Connect(function()
+		local seatPart = humanoid.SeatPart
+		if seatPart then
+			local vehicle = seatPart.Parent
+			if vehicle and vehicle ~= currentVehicle then
+				currentVehicle = vehicle
+				updateSeatsList() -- TỰ ĐỘNG QUÉT KHI ĐỔI XE MỚI
+			end
+		else
+			currentVehicle = nil
+			clearSeatsList()
+		end
+	end)
+end
+
+setupCharacter(character)
+player.CharacterAdded:Connect(setupCharacter)
+
+refreshBtn.MouseButton1Click:Connect(updateSeatsList)
+
+----------------------------------------------------
+-- CÁC HÀM XỬ LÝ CAMERA
+----------------------------------------------------
+local function updateCameraList()
+	for _, child in ipairs(scrollingCams:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+
+	for i, camData in ipairs(savedCameraPoints) do
+		local rowFrame = Instance.new("Frame")
+		rowFrame.Size = UDim2.new(1, 0, 0, 30)
+		rowFrame.BackgroundTransparency = 1
+		rowFrame.Parent = scrollingCams
+
+		local viewBtn = Instance.new("TextButton")
+		viewBtn.Size = UDim2.new(0.75, 0, 1, 0)
+		viewBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		viewBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		viewBtn.Text = camData.name
+		viewBtn.TextSize = 12
+		viewBtn.Font = Enum.Font.SourceSans
+		viewBtn.Parent = rowFrame
+
+		viewBtn.MouseButton1Click:Connect(function()
+			isViewingCamera = true
+			currentCamFocusCFrame = camData.cframe
+			camAngles = Vector2.new(0, 0)
+			camera.CameraType = Enum.CameraType.Scriptable
+			camera.CFrame = camData.cframe
+		end)
+
+		local delBtn = Instance.new("TextButton")
+		delBtn.Size = UDim2.new(0.22, 0, 1, 0)
+		delBtn.Position = UDim2.new(0.78, 0, 0, 0)
+		delBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
+		delBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		delBtn.Text = "Xóa"
+		delBtn.TextSize = 11
+		delBtn.Font = Enum.Font.SourceSansBold
+		delBtn.Parent = rowFrame
+
+		delBtn.MouseButton1Click:Connect(function()
+			table.remove(savedCameraPoints, i)
+			updateCameraList()
+			saveData()
+		end)
+	end
+	scrollingCams.CanvasSize = UDim2.new(0, 0, 0, camListLayout.AbsoluteContentSize.Y)
+end
+
+updateCameraList()
+
+saveCamBtn.MouseButton1Click:Connect(function()
+	local camName = "Cam Điểm #" .. (#savedCameraPoints + 1)
+	table.insert(savedCameraPoints, { name = camName, cframe = camera.CFrame })
+	updateCameraList()
+	saveData()
+end)
+
+exitCamBtn.MouseButton1Click:Connect(function()
+	isViewingCamera = false
+	currentCamFocusCFrame = nil
+	camera.CameraType = Enum.CameraType.Custom
+	if character and character:FindFirstChild("HumanoidRootPart") then
+		camera.CameraSubject = humanoid
+	end
+end)
+
+----------------------------------------------------
+-- QUẢN LÝ PHÍM TẮT & F9 ẨN/HIỆN GUI
+----------------------------------------------------
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if input.KeyCode == Enum.KeyCode.F9 then
+		mainFrame.Visible = not mainFrame.Visible
+		return
+	end
+
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		if isViewingCamera then
+			isRightMouseDown = true
+			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+		end
+	end
+	
+	if gameProcessed then return end
+	
+	if waitingForKeySeat then
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			seatKeybinds[waitingForKeySeat] = input.KeyCode
+			waitingForKeySeat = nil
+			updateSeatsList()
+			saveData()
+		end
+		return
+	end
+	
+	local seatPart = humanoid.SeatPart
+	if seatPart and seatPart.Parent then
+		local vehicle = seatPart.Parent
+		if vehicle and vehicle:IsA("Model") then
+			for _, descendant in ipairs(vehicle:GetDescendants()) do
+				if (descendant:IsA("Seat") or descendant:IsA("VehicleSeat")) then
+					if seatKeybinds[descendant.Name] == input.KeyCode then
+						teleportToSeat(descendant)
+						break
+					end
+				end
+			end
+		end
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isRightMouseDown = false
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	if isViewingCamera and currentCamFocusCFrame then
+		camera.CameraType = Enum.CameraType.Scriptable
+		if isRightMouseDown then
+			local delta = UserInputService:GetMouseDelta()
+			camAngles = camAngles + Vector2.new(-delta.Y * 0.003, -delta.X * 0.003)
+			camAngles = Vector2.new(math.clamp(camAngles.X, -math.rad(85), math.rad(85)), camAngles.Y)
+		end
+		local rot = CFrame.Angles(0, camAngles.Y, 0) * CFrame.Angles(camAngles.X, 0, 0)
+		camera.CFrame = CFrame.new(currentCamFocusCFrame.Position) * rot
+	end
+end)
+
+tabSeatBtn.MouseButton1Click:Connect(function()
+	tabSeatBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+	tabCamBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+	seatContainer.Visible = true
+	camContainer.Visible = false
+end)
+
+tabCamBtn.MouseButton1Click:Connect(function()
+	tabCamBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+	tabSeatBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+	camContainer.Visible = true
+	seatContainer.Visible = false
+end)
