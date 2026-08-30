@@ -3,9 +3,13 @@ local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local CoreGui = game:GetService("CoreGui")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
+
+-- Xóa GUI cũ nếu bị kẹt
+if LocalPlayer.PlayerGui:FindFirstChild("DUI_Master") then
+    LocalPlayer.PlayerGui.DUI_Master:Destroy()
+end
 
 -- Global Data Storage File Name
 local fileName = "DinoSim_SavedPositions_" .. tostring(game.GameId) .. ".json"
@@ -114,7 +118,8 @@ end
 --------------------------------------------------
 local DUI = Instance.new("ScreenGui")
 DUI.Name = "DUI_Master"
-DUI.Parent = CoreGui
+DUI.ResetOnSpawn = false
+DUI.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local DinoFrame = Instance.new("Frame", DUI)
 DinoFrame.Name = "DinoFrame"
@@ -248,12 +253,12 @@ ListFrame.Draggable = true
 ListFrame.Visible = false
 ListFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 ListFrame.Position = UDim2.new(0.2, 0, 0.1, 0)
-ListFrame.Size = UDim2.new(0, 400, 0, 350)
+ListFrame.Size = UDim2.new(0, 430, 0, 350)
 
 local ListTitle = Instance.new("TextLabel", ListFrame)
 ListTitle.Size = UDim2.new(1, -30, 0, 35)
 ListTitle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-ListTitle.Text = "   Danh Sách Vị Trí Saved"
+ListTitle.Text = "    Danh Sách Vị Trí Saved"
 ListTitle.TextColor3 = Color3.fromRGB(0, 255, 150)
 ListTitle.TextSize = 16
 ListTitle.Font = Enum.Font.SourceSansBold
@@ -275,7 +280,9 @@ ScrollContainer.BackgroundTransparency = 1
 local UIListLayout = Instance.new("UIListLayout", ScrollContainer)
 UIListLayout.Padding = UDim.new(0, 6)
 
-local function refreshSavedList()
+local refreshSavedList -- Forward declaration
+
+refreshSavedList = function()
     for _, child in pairs(ScrollContainer:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
@@ -284,16 +291,54 @@ local function refreshSavedList()
         ItemFrame.Size = UDim2.new(1, -10, 0, 40)
         ItemFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 
+        -- Nút Lên (▲)
+        local UpBtn = Instance.new("TextButton", ItemFrame)
+        UpBtn.Size = UDim2.new(0.06, 0, 0.8, 0)
+        UpBtn.Position = UDim2.new(0.01, 0, 0.1, 0)
+        UpBtn.Text = "▲"
+        UpBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        UpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        UpBtn.Font = Enum.Font.SourceSansBold
+        UpBtn.TextSize = 11
+        UpBtn.MouseButton1Click:Connect(function()
+            if index > 1 then
+                local temp = savedLocations[index]
+                savedLocations[index] = savedLocations[index - 1]
+                savedLocations[index - 1] = temp
+                saveData()
+                refreshSavedList()
+            end
+        end)
+
+        -- Nút Xuống (▼)
+        local DownBtn = Instance.new("TextButton", ItemFrame)
+        DownBtn.Size = UDim2.new(0.06, 0, 0.8, 0)
+        DownBtn.Position = UDim2.new(0.08, 0, 0.1, 0)
+        DownBtn.Text = "▼"
+        DownBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        DownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        DownBtn.Font = Enum.Font.SourceSansBold
+        DownBtn.TextSize = 11
+        DownBtn.MouseButton1Click:Connect(function()
+            if index < #savedLocations then
+                local temp = savedLocations[index]
+                savedLocations[index] = savedLocations[index + 1]
+                savedLocations[index + 1] = temp
+                saveData()
+                refreshSavedList()
+            end
+        end)
+
         local NameBox = Instance.new("TextBox", ItemFrame)
-        NameBox.Size = UDim2.new(0.30, 0, 0.8, 0)
-        NameBox.Position = UDim2.new(0.02, 0, 0.1, 0)
+        NameBox.Size = UDim2.new(0.24, 0, 0.8, 0)
+        NameBox.Position = UDim2.new(0.15, 0, 0.1, 0)
         NameBox.Text = data.name
         NameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
         NameBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
         NameBox.BorderSizePixel = 0
         NameBox.TextXAlignment = Enum.TextXAlignment.Left
         NameBox.Font = Enum.Font.SourceSansBold
-        NameBox.TextSize = 14
+        NameBox.TextSize = 12
 
         NameBox.FocusLost:Connect(function()
             if NameBox.Text ~= "" then
@@ -305,13 +350,13 @@ local function refreshSavedList()
         end)
 
         local OverwriteBtn = Instance.new("TextButton", ItemFrame)
-        OverwriteBtn.Size = UDim2.new(0.13, 0, 0.8, 0)
-        OverwriteBtn.Position = UDim2.new(0.33, 0, 0.1, 0)
+        OverwriteBtn.Size = UDim2.new(0.12, 0, 0.8, 0)
+        OverwriteBtn.Position = UDim2.new(0.40, 0, 0.1, 0)
         OverwriteBtn.Text = "Đè"
         OverwriteBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 0)
         OverwriteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         OverwriteBtn.Font = Enum.Font.SourceSansBold
-        OverwriteBtn.TextSize = 14
+        OverwriteBtn.TextSize = 12
         
         OverwriteBtn.MouseButton1Click:Connect(function()
             ConfirmText.Text = "Ghi đè tọa độ mới cho [" .. data.name .. "]?"
@@ -333,26 +378,26 @@ local function refreshSavedList()
         end)
 
         local TPBtn = Instance.new("TextButton", ItemFrame)
-        TPBtn.Size = UDim2.new(0.14, 0, 0.8, 0)
-        TPBtn.Position = UDim2.new(0.47, 0, 0.1, 0)
+        TPBtn.Size = UDim2.new(0.13, 0, 0.8, 0)
+        TPBtn.Position = UDim2.new(0.53, 0, 0.1, 0)
         TPBtn.Text = "TP"
         TPBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
         TPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         TPBtn.Font = Enum.Font.SourceSansBold
-        TPBtn.TextSize = 14
+        TPBtn.TextSize = 12
         TPBtn.MouseButton1Click:Connect(function() tpToPos(data.pos) end)
 
         local KeyBtn = Instance.new("TextButton", ItemFrame)
-        KeyBtn.Size = UDim2.new(0.23, 0, 0.8, 0)
-        KeyBtn.Position = UDim2.new(0.62, 0, 0.1, 0)
+        KeyBtn.Size = UDim2.new(0.21, 0, 0.8, 0)
+        KeyBtn.Position = UDim2.new(0.67, 0, 0.1, 0)
         KeyBtn.Text = data.key or "Gán Phím"
         KeyBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         KeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         KeyBtn.Font = Enum.Font.SourceSansBold
-        KeyBtn.TextSize = 13
+        KeyBtn.TextSize = 11
 
         KeyBtn.MouseButton1Click:Connect(function()
-            KeyBtn.Text = "Bấm Phím..."
+            KeyBtn.Text = "Bấm..."
             local conn
             conn = UserInputService.InputBegan:Connect(function(input, gpe)
                 if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -365,13 +410,13 @@ local function refreshSavedList()
         end)
 
         local DelBtn = Instance.new("TextButton", ItemFrame)
-        DelBtn.Size = UDim2.new(0.11, 0, 0.8, 0)
-        DelBtn.Position = UDim2.new(0.86, 0, 0.1, 0)
+        DelBtn.Size = UDim2.new(0.10, 0, 0.8, 0)
+        DelBtn.Position = UDim2.new(0.89, 0, 0.1, 0)
         DelBtn.Text = "Xóa"
         DelBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
         DelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         DelBtn.Font = Enum.Font.SourceSansBold
-        DelBtn.TextSize = 14
+        DelBtn.TextSize = 12
         DelBtn.MouseButton1Click:Connect(function()
             table.remove(savedLocations, index)
             saveData()
@@ -393,7 +438,7 @@ DeathFrame.Size = UDim2.new(0, 340, 0, 350)
 local DeathTitle = Instance.new("TextLabel", DeathFrame)
 DeathTitle.Size = UDim2.new(1, -30, 0, 35)
 DeathTitle.BackgroundColor3 = Color3.fromRGB(40, 20, 20)
-DeathTitle.Text = "   Nhật Ký Vị Trí Đã Chết"
+DeathTitle.Text = "    Nhật Ký Vị Trí Đã Chết"
 DeathTitle.TextColor3 = Color3.fromRGB(255, 100, 100)
 DeathTitle.TextSize = 16
 DeathTitle.Font = Enum.Font.SourceSansBold
@@ -504,7 +549,6 @@ local gatesFolder = Workspace:FindFirstChild("Map")
     and Workspace.Map.Static.Global:FindFirstChild("Gates")
 
 local function updateTargetCollisions(canCollideState)
-    -- Xử lý SanDiego
     if sanDiegoFolder then
         for _, obj in pairs(sanDiegoFolder:GetDescendants()) do
             if obj:IsA("BasePart") then
@@ -512,7 +556,6 @@ local function updateTargetCollisions(canCollideState)
             end
         end
     end
-    -- Xử lý Gates & Barrier
     if gatesFolder then
         for _, obj in pairs(gatesFolder:GetDescendants()) do
             if obj:IsA("BasePart") then
@@ -535,7 +578,6 @@ CarNoClipBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Tự động cập nhật nếu có vật dụng mới spawn trong SanDiego hoặc Gates khi đang bật NoClip
 if sanDiegoFolder then
     sanDiegoFolder.DescendantAdded:Connect(function(obj)
         if carNoClipEnabled and obj:IsA("BasePart") then
