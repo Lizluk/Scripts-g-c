@@ -28,6 +28,11 @@ local KillGlobalKey = Enum.KeyCode.Q
 local IsBindingGlobalKey = false
 local KeyDebounce = false
 
+-- Biến trạng thái bật/tắt ESP (Mặc định: Tắt sẵn)
+local ESPEnabled = false
+local IsBindingESPKey = false
+local ESPToggleKey = Enum.KeyCode.F10
+
 -- Biến toàn cục theo dõi chế độ gán phím
 local ActiveBindingItem = nil
 
@@ -79,7 +84,7 @@ TitleLabel.Font = Enum.Font.SourceSansBold
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = MainFrame
 
--- Minimize / Hide Button (Thay vì tắt hẳn, giờ bấm nút [-] hoặc phím tắt sẽ ẩn menu)
+-- Minimize / Hide Button
 local HideBtn = Instance.new("TextButton")
 HideBtn.Size = UDim2.new(0, 25, 0, 25)
 HideBtn.Position = UDim2.new(1, -60, 0, 5)
@@ -95,7 +100,7 @@ HideBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
 end)
 
--- Close Button (Giữ lại nút X nếu muốn ẩn hoàn toàn hoặc dùng để ẩn giao diện)
+-- Close Button
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 25, 0, 25)
 CloseBtn.Position = UDim2.new(1, -30, 0, 5)
@@ -112,7 +117,7 @@ CloseBtn.MouseButton1Click:Connect(function()
 end)
 
 ----------------------------------------------------------------
--- HỆ THỐNG TABS (4 TABS: Thêm Tab 4 - Settings)
+-- HỆ THỐNG TABS (4 TABS)
 ----------------------------------------------------------------
 local TabFrame = Instance.new("Frame")
 TabFrame.Size = UDim2.new(1, -20, 0, 30)
@@ -184,7 +189,6 @@ HubContainer.BackgroundTransparency = 1
 HubContainer.Visible = false
 HubContainer.Parent = MainFrame
 
--- Container cho Tab Cài đặt (Settings)
 local SettingsContainer = Instance.new("Frame")
 SettingsContainer.Size = UDim2.new(1, 0, 1, -70)
 SettingsContainer.Position = UDim2.new(0, 0, 0, 70)
@@ -1222,7 +1226,7 @@ AddHubBtn.MouseButton1Click:Connect(function()
 end)
 
 ----------------------------------------------------------------
--- TAB 4: SETTINGS (CÀI ĐẶT PHÍM TẮT ẨN/HIỆN GUI)
+-- TAB 4: SETTINGS (CÀI ĐẶT PHÍM TẮT ẨN/HIỆN GUI & ESP)
 ----------------------------------------------------------------
 local SettingsBoxFrame = Instance.new("Frame")
 SettingsBoxFrame.Size = UDim2.new(1, -20, 0, 80)
@@ -1264,11 +1268,53 @@ ToggleKeyBindBtn.TextSize = 13
 ToggleKeyBindBtn.Parent = SettingsBoxFrame
 Instance.new("UICorner", ToggleKeyBindBtn).CornerRadius = UDim.new(0, 5)
 
+-- Khung cài đặt phím tắt ESP trong Tab Settings
+local ESPBoxFrame = Instance.new("Frame")
+ESPBoxFrame.Size = UDim2.new(1, -20, 0, 80)
+ESPBoxFrame.Position = UDim2.new(0, 10, 0, 95)
+ESPBoxFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+ESPBoxFrame.Parent = SettingsContainer
+Instance.new("UICorner", ESPBoxFrame).CornerRadius = UDim.new(0, 6)
+
+local ESPLabelTitle = Instance.new("TextLabel")
+ESPLabelTitle.Size = UDim2.new(1, -20, 0, 30)
+ESPLabelTitle.Position = UDim2.new(0, 10, 0, 5)
+ESPLabelTitle.BackgroundTransparency = 1
+ESPLabelTitle.Text = "👁️ Cài đặt Phím Tắt ESP Tên:"
+ESPLabelTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+ESPLabelTitle.Font = Enum.Font.SourceSansBold
+ESPLabelTitle.TextSize = 14
+ESPLabelTitle.TextXAlignment = Enum.TextXAlignment.Left
+ESPLabelTitle.Parent = ESPBoxFrame
+
+local ESPSubDesc = Instance.new("TextLabel")
+ESPSubDesc.Size = UDim2.new(1, -20, 0, 20)
+ESPSubDesc.Position = UDim2.new(0, 10, 0, 30)
+ESPSubDesc.BackgroundTransparency = 1
+ESPSubDesc.Text = "Mặc định phím F10 và trạng thái tắt sẵn. Nhấn để đổi phím tắt ESP."
+ESPSubDesc.TextColor3 = Color3.fromRGB(160, 160, 160)
+ESPSubDesc.Font = Enum.Font.SourceSans
+ESPSubDesc.TextSize = 12
+ESPSubDesc.TextXAlignment = Enum.TextXAlignment.Left
+ESPSubDesc.Parent = ESPBoxFrame
+
+local ESPKeyBindBtn = Instance.new("TextButton")
+ESPKeyBindBtn.Size = UDim2.new(0, 180, 0, 30)
+ESPKeyBindBtn.Position = UDim2.new(0, 10, 0, 55)
+ESPKeyBindBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 180)
+ESPKeyBindBtn.Text = "Phím ESP: F10"
+ESPKeyBindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ESPKeyBindBtn.Font = Enum.Font.SourceSansBold
+ESPKeyBindBtn.TextSize = 13
+ESPKeyBindBtn.Parent = ESPBoxFrame
+Instance.new("UICorner", ESPKeyBindBtn).CornerRadius = UDim.new(0, 5)
+
 -- Hàm lưu cài đặt ra file JSON
 local function SaveSettingsToFile()
     if not writefile then return end
     local settingsData = {
-        ToggleGuiKeyName = ToggleGuiKey.Name
+        ToggleGuiKeyName = ToggleGuiKey.Name,
+        ESPToggleKeyName = ESPToggleKey.Name
     }
     pcall(function()
         writefile(SettingsSaveFileName, HttpService:JSONEncode(settingsData))
@@ -1281,10 +1327,14 @@ local function LoadSettingsFromFile()
     local success, result = pcall(function()
         return HttpService:JSONDecode(readfile(SettingsSaveFileName))
     end)
-    if success and type(result) == "table" and result.ToggleGuiKeyName then
-        if Enum.KeyCode[result.ToggleGuiKeyName] then
+    if success and type(result) == "table" then
+        if result.ToggleGuiKeyName and Enum.KeyCode[result.ToggleGuiKeyName] then
             ToggleGuiKey = Enum.KeyCode[result.ToggleGuiKeyName]
             ToggleKeyBindBtn.Text = "Phím Ẩn/Hiện: " .. ToggleGuiKey.Name
+        end
+        if result.ESPToggleKeyName and Enum.KeyCode[result.ESPToggleKeyName] then
+            ESPToggleKey = Enum.KeyCode[result.ESPToggleKeyName]
+            ESPKeyBindBtn.Text = "Phím ESP: " .. ESPToggleKey.Name
         end
     end
 end
@@ -1293,6 +1343,12 @@ ToggleKeyBindBtn.MouseButton1Click:Connect(function()
     IsBindingToggleGuiKey = true
     ToggleKeyBindBtn.Text = "Đang chờ nhấn phím..."
     ToggleKeyBindBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 30)
+end)
+
+ESPKeyBindBtn.MouseButton1Click:Connect(function()
+    IsBindingESPKey = true
+    ESPKeyBindBtn.Text = "Đang chờ nhấn phím..."
+    ESPKeyBindBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 30)
 end)
 
 ----------------------------------------------------------------
@@ -1318,9 +1374,25 @@ UserInputService.InputBegan:Connect(function(input, gpe)
             return
         end
 
+        -- Gán phím bật/tắt ESP
+        if IsBindingESPKey then
+            ESPToggleKey = input.KeyCode
+            ESPKeyBindBtn.Text = "Phím ESP: " .. input.KeyCode.Name
+            ESPKeyBindBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 180)
+            IsBindingESPKey = false
+            SaveSettingsToFile()
+            return
+        end
+
         -- Phím ẩn/hiện toàn bộ Menu GUI
         if input.KeyCode == ToggleGuiKey and not gpe then
             MainFrame.Visible = not MainFrame.Visible
+            return
+        end
+
+        -- Phím bật/tắt ESP (Mặc định F10)
+        if input.KeyCode == ESPToggleKey and not gpe then
+            ESPEnabled = not ESPEnabled
             return
         end
 
@@ -1388,7 +1460,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 ----------------------------------------------------------------
--- HỆ THỐNG ESP TÊN TRÊN ĐẦU
+-- HỆ THỐNG ESP TÊN TRÊN ĐẦU (MẶC ĐỊNH TẮT SẴN)
 ----------------------------------------------------------------
 local function createESP(player)
     if player == LocalPlayer then return end
@@ -1422,6 +1494,14 @@ local function createESP(player)
                 connection:Disconnect()
                 bb:Destroy()
                 return
+            end
+
+            -- Nếu ESP đang tắt thì ẩn nội dung hiển thị
+            if not ESPEnabled then
+                txt.Visible = false
+                return
+            else
+                txt.Visible = true
             end
 
             local myRoot = LocalPlayer.Character.HumanoidRootPart
