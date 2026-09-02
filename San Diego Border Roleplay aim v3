@@ -1,0 +1,983 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local targetParent = CoreGui
+pcall(function()
+    if not targetParent then
+        targetParent = LocalPlayer:WaitForChild("PlayerGui")
+    end
+end)
+
+local function findRemote(parent, name, isFunction)
+    if not parent then return nil end
+    local found = parent:FindFirstChild(name, true)
+    if found then return found end
+    
+    for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
+        if obj.Name == name and ((isFunction and obj:IsA("RemoteFunction")) or (not isFunction and obj:IsA("RemoteEvent"))) then
+            return obj
+        end
+    end
+    return nil
+end
+
+local detainRemote = findRemote(ReplicatedStorage, "Detain", true) or findRemote(ReplicatedStorage, "Handcuff", true)
+local jailRemote = findRemote(ReplicatedStorage, "Jail", true)
+
+local borderAuth = ReplicatedStorage:FindFirstChild("__remotes") and ReplicatedStorage.__remotes:FindFirstChild("BorderAuthorisationService")
+local grantEntryRemote = borderAuth and borderAuth:FindFirstChild("GrantEntry") or findRemote(ReplicatedStorage, "GrantEntry", true)
+
+local tryShootRemote = findRemote(ReplicatedStorage, "TryShoot", false)
+
+local targets = {} 
+local teammates = {} 
+
+local latchActive = false        
+local jailActive = false         
+local aimLockActive = false      
+local grantEntryActive = false   
+local isAimToggled = false
+local crosshairAimActive = false
+local espEnabled = true          
+
+local autoMilitaryTeamActive = false
+local autoCivilianTeamActive = false
+
+local currentViewMode = "KILL" 
+local closestPlayerName = "" 
+
+local crosshairMaxDistance = 1000  
+local actionMaxDistance = 15     
+local customSpamCount = 1         
+
+local searchFilterText = ""
+local startTime = os.time()
+local lastAttackTime = 0
+local attackCooldown = 0.05
+
+if targetParent:FindFirstChild("LizlukKillGUI") then
+    targetParent.LizlukKillGUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "LizlukKillGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = targetParent
+
+pcall(function()
+    if syn and syn.protect_gui then
+        syn.protect_gui(ScreenGui)
+    elseif protectgui then
+        protectgui(ScreenGui)
+    end
+end)
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 230, 0, 715)
+MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+-- ĐỒNG HỒ THỜI GIAN
+local TimeFrame = Instance.new("Frame")
+TimeFrame.Size = UDim2.new(1, 0, 0, 30)
+TimeFrame.Position = UDim2.new(0, 0, 1, 8)
+TimeFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+TimeFrame.BorderSizePixel = 0
+TimeFrame.Parent = MainFrame
+Instance.new("UICorner", TimeFrame).CornerRadius = UDim.new(0, 6)
+
+local PlaytimeLabel = Instance.new("TextLabel")
+PlaytimeLabel.Size = UDim2.new(1, 0, 1, 0)
+PlaytimeLabel.BackgroundTransparency = 1
+PlaytimeLabel.Text = "⏱️ TIME: 00:00:00"
+PlaytimeLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+PlaytimeLabel.Font = Enum.Font.SourceSansBold
+PlaytimeLabel.TextSize = 14
+PlaytimeLabel.Parent = TimeFrame
+
+-- TIÊU ĐỀ
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+Title.Text = "LIZLUK MENU [P / F4]"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 15
+Title.Parent = MainFrame
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
+
+-- TRẠNG THÁI LATCH ABILITY [B]
+local LatchStatusLabel = Instance.new("TextLabel")
+LatchStatusLabel.Size = UDim2.new(1, -10, 0, 22)
+LatchStatusLabel.Position = UDim2.new(0, 5, 0, 42)
+LatchStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+LatchStatusLabel.Text = "LATCH ABILITY: OFF [B]"
+LatchStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+LatchStatusLabel.Font = Enum.Font.SourceSansBold
+LatchStatusLabel.TextSize = 11
+LatchStatusLabel.Parent = MainFrame
+Instance.new("UICorner", LatchStatusLabel).CornerRadius = UDim.new(0, 4)
+
+-- TRẠNG THÁI JAIL ABILITY [H]
+local JailStatusLabel = Instance.new("TextLabel")
+JailStatusLabel.Size = UDim2.new(1, -10, 0, 22)
+JailStatusLabel.Position = UDim2.new(0, 5, 0, 67)
+JailStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+JailStatusLabel.Text = "AUTO JAIL: OFF [H]"
+JailStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+JailStatusLabel.Font = Enum.Font.SourceSansBold
+JailStatusLabel.TextSize = 11
+JailStatusLabel.Parent = MainFrame
+Instance.new("UICorner", JailStatusLabel).CornerRadius = UDim.new(0, 4)
+
+-- TRẠNG THÁI AIM LOCK [L]
+local AimStatusLabel = Instance.new("TextLabel")
+AimStatusLabel.Size = UDim2.new(1, -10, 0, 22)
+AimStatusLabel.Position = UDim2.new(0, 5, 0, 92)
+AimStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+AimStatusLabel.Text = "AIM TARGET: OFF [L]"
+AimStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+AimStatusLabel.Font = Enum.Font.SourceSansBold
+AimStatusLabel.TextSize = 11
+AimStatusLabel.Parent = MainFrame
+Instance.new("UICorner", AimStatusLabel).CornerRadius = UDim.new(0, 4)
+
+-- TRẠNG THÁI CROSSHAIR AIMBOT [K]
+local CrosshairStatusLabel = Instance.new("TextLabel")
+CrosshairStatusLabel.Size = UDim2.new(1, -10, 0, 22)
+CrosshairStatusLabel.Position = UDim2.new(0, 5, 0, 117)
+CrosshairStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+CrosshairStatusLabel.Text = "CROSSHAIR AIM: ON [K]"
+CrosshairStatusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+CrosshairStatusLabel.Font = Enum.Font.SourceSansBold
+CrosshairStatusLabel.TextSize = 11
+CrosshairStatusLabel.Parent = MainFrame
+Instance.new("UICorner", CrosshairStatusLabel).CornerRadius = UDim.new(0, 4)
+crosshairAimActive = true 
+
+-- TRẠNG THÁI GRANT ENTRY [J]
+local GrantStatusLabel = Instance.new("TextLabel")
+GrantStatusLabel.Size = UDim2.new(1, -10, 0, 22)
+GrantStatusLabel.Position = UDim2.new(0, 5, 0, 142)
+GrantStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+GrantStatusLabel.Text = "GRANT ENTRY: OFF [J]"
+GrantStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+GrantStatusLabel.Font = Enum.Font.SourceSansBold
+GrantStatusLabel.TextSize = 11
+GrantStatusLabel.Parent = MainFrame
+Instance.new("UICorner", GrantStatusLabel).CornerRadius = UDim.new(0, 4)
+
+-- TRẠNG THÁI AUTO MILITARY TEAM [F11]
+local MilTeamStatusLabel = Instance.new("TextLabel")
+MilTeamStatusLabel.Size = UDim2.new(1, -10, 0, 22)
+MilTeamStatusLabel.Position = UDim2.new(0, 5, 0, 167)
+MilTeamStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+MilTeamStatusLabel.Text = "AUTO MILITARY: OFF [F11]"
+MilTeamStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+MilTeamStatusLabel.Font = Enum.Font.SourceSansBold
+MilTeamStatusLabel.TextSize = 11
+MilTeamStatusLabel.Parent = MainFrame
+Instance.new("UICorner", MilTeamStatusLabel).CornerRadius = UDim.new(0, 4)
+
+-- TRẠNG THÁI AUTO CIVILIAN TEAM [F12]
+local CivTeamStatusLabel = Instance.new("TextLabel")
+CivTeamStatusLabel.Size = UDim2.new(1, -10, 0, 22)
+CivTeamStatusLabel.Position = UDim2.new(0, 5, 0, 192)
+CivTeamStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+CivTeamStatusLabel.Text = "AUTO CIVILIAN: OFF [F12]"
+CivTeamStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+CivTeamStatusLabel.Font = Enum.Font.SourceSansBold
+CivTeamStatusLabel.TextSize = 11
+CivTeamStatusLabel.Parent = MainFrame
+Instance.new("UICorner", CivTeamStatusLabel).CornerRadius = UDim.new(0, 4)
+
+-- Ô TÙY CHỈNH SỐ LƯỢNG SPAM LỆNH
+local SpamCountFrame = Instance.new("Frame")
+SpamCountFrame.Size = UDim2.new(1, -10, 0, 28)
+SpamCountFrame.Position = UDim2.new(0, 5, 0, 219)
+SpamCountFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+SpamCountFrame.BorderSizePixel = 0
+SpamCountFrame.Parent = MainFrame
+Instance.new("UICorner", SpamCountFrame).CornerRadius = UDim.new(0, 4)
+
+local SpamCountLabel = Instance.new("TextLabel")
+SpamCountLabel.Size = UDim2.new(0, 135, 1, 0)
+SpamCountLabel.Position = UDim2.new(0, 5, 0, 0)
+SpamCountLabel.BackgroundTransparency = 1
+SpamCountLabel.Text = "Spam Count (Số lệnh):"
+SpamCountLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+SpamCountLabel.Font = Enum.Font.SourceSansBold
+SpamCountLabel.TextSize = 11
+SpamCountLabel.TextXAlignment = Enum.TextXAlignment.Left
+SpamCountLabel.Parent = SpamCountFrame
+
+local SpamCountBox = Instance.new("TextBox")
+SpamCountBox.Size = UDim2.new(0, 60, 0, 20)
+SpamCountBox.Position = UDim2.new(1, -65, 0.5, -10)
+SpamCountBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+SpamCountBox.BorderSizePixel = 0
+SpamCountBox.Text = tostring(customSpamCount)
+SpamCountBox.TextColor3 = Color3.fromRGB(0, 255, 150)
+SpamCountBox.Font = Enum.Font.SourceSansBold
+SpamCountBox.TextSize = 12
+SpamCountBox.Parent = SpamCountFrame
+Instance.new("UICorner", SpamCountBox).CornerRadius = UDim.new(0, 4)
+
+SpamCountBox.FocusLost:Connect(function()
+    local num = tonumber(SpamCountBox.Text)
+    if num and num >= 1 then 
+        customSpamCount = math.floor(num) 
+    else 
+        SpamCountBox.Text = tostring(customSpamCount) 
+    end
+end)
+
+-- Ô HẠN MỨC KHOẢNG CÁCH CHO CROSSHAIR AIM [K]
+local DistCrossFrame = Instance.new("Frame")
+DistCrossFrame.Size = UDim2.new(1, -10, 0, 28)
+DistCrossFrame.Position = UDim2.new(0, 5, 0, 251)
+DistCrossFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+DistCrossFrame.BorderSizePixel = 0
+DistCrossFrame.Parent = MainFrame
+Instance.new("UICorner", DistCrossFrame).CornerRadius = UDim.new(0, 4)
+
+local DistCrossLabel = Instance.new("TextLabel")
+DistCrossLabel.Size = UDim2.new(0, 135, 1, 0)
+DistCrossLabel.Position = UDim2.new(0, 5, 0, 0)
+DistCrossLabel.BackgroundTransparency = 1
+DistCrossLabel.Text = "KC Crosshair Aim [K]:"
+DistCrossLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+DistCrossLabel.Font = Enum.Font.SourceSansBold
+DistCrossLabel.TextSize = 11
+DistCrossLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistCrossLabel.Parent = DistCrossFrame
+
+local DistCrossBox = Instance.new("TextBox")
+DistCrossBox.Size = UDim2.new(0, 60, 0, 20)
+DistCrossBox.Position = UDim2.new(1, -65, 0.5, -10)
+DistCrossBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+DistCrossBox.BorderSizePixel = 0
+DistCrossBox.Text = tostring(crosshairMaxDistance)
+DistCrossBox.TextColor3 = Color3.fromRGB(255, 215, 0)
+DistCrossBox.Font = Enum.Font.SourceSansBold
+DistCrossBox.TextSize = 12
+DistCrossBox.Parent = DistCrossFrame
+Instance.new("UICorner", DistCrossBox).CornerRadius = UDim.new(0, 4)
+
+DistCrossBox.FocusLost:Connect(function()
+    local num = tonumber(DistCrossBox.Text)
+    if num and num >= 0 then crosshairMaxDistance = num else DistCrossBox.Text = tostring(crosshairMaxDistance) end
+end)
+
+-- Ô HẠN MỨC KHOẢNG CÁCH CHO B, H, J
+local DistActionFrame = Instance.new("Frame")
+DistActionFrame.Size = UDim2.new(1, -10, 0, 28)
+DistActionFrame.Position = UDim2.new(0, 5, 0, 283)
+DistActionFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+DistActionFrame.BorderSizePixel = 0
+DistActionFrame.Parent = MainFrame
+Instance.new("UICorner", DistActionFrame).CornerRadius = UDim.new(0, 4)
+
+local DistActionLabel = Instance.new("TextLabel")
+DistActionLabel.Size = UDim2.new(0, 135, 1, 0)
+DistActionLabel.Position = UDim2.new(0, 5, 0, 0)
+DistActionLabel.BackgroundTransparency = 1
+DistActionLabel.Text = "KC Latch/Jail/Grant [B,H,J]:"
+DistActionLabel.TextColor3 = Color3.fromRGB(180, 100, 255)
+DistActionLabel.Font = Enum.Font.SourceSansBold
+DistActionLabel.TextSize = 11
+DistActionLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistActionLabel.Parent = DistActionFrame
+
+local DistActionBox = Instance.new("TextBox")
+DistActionBox.Size = UDim2.new(0, 60, 0, 20)
+DistActionBox.Position = UDim2.new(1, -65, 0.5, -10)
+DistActionBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+DistActionBox.BorderSizePixel = 0
+DistActionBox.Text = tostring(actionMaxDistance)
+DistActionBox.TextColor3 = Color3.fromRGB(180, 100, 255)
+DistActionBox.Font = Enum.Font.SourceSansBold
+DistActionBox.TextSize = 12
+DistActionBox.Parent = DistActionFrame
+Instance.new("UICorner", DistActionBox).CornerRadius = UDim.new(0, 4)
+
+DistActionBox.FocusLost:Connect(function()
+    local num = tonumber(DistActionBox.Text)
+    if num and num >= 0 then actionMaxDistance = num else DistActionBox.Text = tostring(actionMaxDistance) end
+end)
+
+-- Ô TÌM KIẾM
+local SearchBox = Instance.new("TextBox")
+SearchBox.Size = UDim2.new(1, -10, 0, 25)
+SearchBox.Position = UDim2.new(0, 5, 0, 316)
+SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+SearchBox.BorderSizePixel = 0
+SearchBox.Text = ""
+SearchBox.PlaceholderText = "🔍 Tìm tên người chơi..."
+SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+SearchBox.Font = Enum.Font.SourceSansBold
+SearchBox.TextSize = 12
+SearchBox.Parent = MainFrame
+Instance.new("UICorner", SearchBox).CornerRadius = UDim.new(0, 4)
+
+-- NÚT SELECT ALL
+local SelectAllBtn = Instance.new("TextButton")
+SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 346)
+SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
+SelectAllBtn.Text = "☑️ SELECT ALL TARGETS [T]"
+SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SelectAllBtn.Font = Enum.Font.SourceSansBold
+SelectAllBtn.TextSize = 12
+SelectAllBtn.Parent = MainFrame
+Instance.new("UICorner", SelectAllBtn).CornerRadius = UDim.new(0, 4)
+
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -382)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 378)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.BorderSizePixel = 0
+ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollingFrame.ScrollBarThickness = 4
+ScrollingFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ScrollingFrame
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end)
+
+SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    searchFilterText = string.lower(SearchBox.Text)
+end)
+
+task.spawn(function()
+    while true do
+        local elapsed = os.time() - startTime
+        local h = math.floor(elapsed / 3600)
+        local m = math.floor((elapsed % 3600) / 60)
+        local s = elapsed % 60
+        PlaytimeLabel.Text = string.format("⏱️ THỜI GIAN: %02d:%02d:%02d", h, m, s)
+        task.wait(1)
+    end
+end)
+
+local function getCharacter(player)
+    if not player then return nil end
+    local pName = player.Name
+    local akFolder = workspace:FindFirstChild("Akkinobetuaka")
+    if akFolder then
+        local foundChar = akFolder:FindFirstChild(pName)
+        if foundChar then return foundChar end
+    end
+    return player.Character or workspace:FindFirstChild(pName)
+end
+
+-- HỆ THỐNG KIỂM TRA TEAM CHÍNH XÁC TUYỆT ĐỐI
+local militaryTeamNames = {"police", "fbi", "bortac", "border patrol", "swat", "us army", "coast guard"}
+
+local function getPlayerTeamName(player)
+    if player.Team then
+        return string.lower(player.Team.Name)
+    end
+    local attrTeam = player:GetAttribute("Team")
+    if attrTeam then
+        return string.lower(tostring(attrTeam))
+    end
+    return ""
+end
+
+local function isPlayerInMilitaryTeam(player)
+    if not player then return false end
+    local tName = getPlayerTeamName(player)
+    for _, mName in ipairs(militaryTeamNames) do
+        if tName == mName or string.find(tName, mName, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+local function isPlayerInCivilianTeam(player)
+    if not player then return false end
+    local tName = getPlayerTeamName(player)
+    if string.find(tName, "civilian", 1, true) then
+        for _, mName in ipairs(militaryTeamNames) do
+            if string.find(tName, mName, 1, true) then
+                return false
+            end
+        end
+        return true
+    end
+    return false
+end
+
+-- HỆ THỐNG XỬ LÝ CẬP NHẬT TỰ ĐỘNG KHI ĐỔI TEAM (REALTIME CHECK)
+local function evaluatePlayerTeam(player)
+    if not player or player == LocalPlayer then return end
+    local pName = player.Name
+
+    if autoMilitaryTeamActive then
+        if isPlayerInMilitaryTeam(player) then
+            teammates[pName] = true
+            targets[pName] = nil
+        else
+            teammates[pName] = nil
+        end
+    elseif autoCivilianTeamActive then
+        if isPlayerInCivilianTeam(player) then
+            teammates[pName] = true
+            targets[pName] = nil
+        else
+            teammates[pName] = nil
+        end
+    end
+end
+
+-- GẮN SỰ KIỆN THEO DÕI ĐỔI TEAM CHO TỪNG PLAYER
+local function hookPlayerTeamChanges(player)
+    player:GetPropertyChangedSignal("Team"):Connect(function()
+        evaluatePlayerTeam(player)
+    end)
+    player:GetAttributeChangedSignal("Team"):Connect(function()
+        evaluatePlayerTeam(player)
+    end)
+end
+
+for _, p in pairs(Players:GetPlayers()) do
+    hookPlayerTeamChanges(p)
+end
+Players.PlayerAdded:Connect(hookPlayerTeamChanges)
+
+-- QUÉT TỰ ĐỘNG LIÊN TỤC MỖI FRAME ĐỂ ĐẢM BẢO KHÔNG BỊ SÓT
+RunService.Stepped:Connect(function()
+    if autoMilitaryTeamActive then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                if isPlayerInMilitaryTeam(p) then
+                    teammates[p.Name] = true
+                    targets[p.Name] = nil
+                else
+                    -- Nếu không còn ở military team và trước đó bị set là teammate do auto, thì gỡ ra
+                    if teammates[p.Name] and not autoCivilianTeamActive then
+                        -- chỉ gỡ nếu đang bật chế độ auto military mà họ đổi sang team khác
+                    end
+                end
+            end
+        end
+    end
+
+    if autoCivilianTeamActive then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                if isPlayerInCivilianTeam(p) then
+                    teammates[p.Name] = true
+                    targets[p.Name] = nil
+                end
+            end
+        end
+    end
+end)
+
+-- HỆ THỐNG ESP
+local espDrawings = {}
+
+local function removeEsp(pName)
+    if espDrawings[pName] then
+        for _, obj in pairs(espDrawings[pName]) do
+            pcall(function() obj:Remove() end)
+        end
+        espDrawings[pName] = nil
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if not espEnabled then 
+        for pName, _ in pairs(espDrawings) do removeEsp(pName) end
+        return 
+    end
+
+    local myChar = getCharacter(LocalPlayer)
+    local myRoot = myChar and (myChar:FindFirstChild("HumanoidRootPart") or myChar:FindFirstChild("UpperTorso") or myChar:FindFirstChild("Head"))
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local pName = player.Name
+            local char = getCharacter(player)
+            local rootPart = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Head"))
+            
+            local isTarget = targets[pName] == true
+            local isTeam = teammates[pName] == true
+
+            if (isTarget or isTeam) and char and rootPart then
+                if not espDrawings[pName] then
+                    local box = Drawing.new("Square")
+                    box.Visible = false
+                    box.Thickness = 2
+                    box.Filled = false
+
+                    local nameTag = Drawing.new("Text")
+                    nameTag.Visible = false
+                    nameTag.Size = 20
+                    nameTag.Center = true
+                    nameTag.Outline = true
+                    nameTag.Font = 2
+
+                    espDrawings[pName] = {Box = box, NameTag = nameTag}
+                end
+
+                local box = espDrawings[pName].Box
+                local nameTag = espDrawings[pName].NameTag
+                local vector, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+
+                if onScreen then
+                    local head = char:FindFirstChild("Head")
+                    local topVector = head and Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or vector
+                    local legVector = Camera:WorldToViewportPoint(rootPart.Position - Vector3.new(0, 3, 0))
+                    
+                    local height = math.abs(topVector.Y - legVector.Y)
+                    local width = height / 2
+
+                    box.Size = Vector2.new(width, height)
+                    box.Position = Vector2.new(vector.X - width / 2, topVector.Y)
+                    box.Visible = true
+
+                    local distanceStr = ""
+                    if myRoot then
+                        local distVal = math.floor((myRoot.Position - rootPart.Position).Magnitude)
+                        distanceStr = " [" .. distVal .. "m]"
+                    end
+
+                    if isTarget then
+                        box.Color = Color3.fromRGB(255, 0, 0)
+                        nameTag.Color = Color3.fromRGB(255, 255, 255)
+                        nameTag.Text = "🎯 " .. pName .. distanceStr .. " [TARGET]"
+                    elseif isTeam then
+                        box.Color = Color3.fromRGB(0, 150, 255)
+                        nameTag.Color = Color3.fromRGB(255, 255, 255)
+                        nameTag.Text = pName .. distanceStr .. " [TEAMMATE]"
+                    end
+
+                    nameTag.Position = Vector2.new(vector.X, topVector.Y - 24)
+                    nameTag.Visible = true
+                else
+                    box.Visible = false
+                    nameTag.Visible = false
+                end
+            else
+                removeEsp(pName)
+            end
+        end
+    end
+end)
+
+local function toggleSelectAll()
+    if currentViewMode ~= "KILL" then return end
+    local allP = Players:GetPlayers()
+    local count, selected = 0, 0
+    for _, p in pairs(allP) do
+        if p ~= LocalPlayer and not teammates[p.Name] then
+            count = count + 1
+            if targets[p.Name] then selected = selected + 1 end
+        end
+    end
+    if selected == count and count > 0 then
+        targets = {}
+        SelectAllBtn.Text = "☑️ SELECT ALL TARGETS [T]"
+        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
+    else
+        for _, p in pairs(allP) do
+            if p ~= LocalPlayer and not teammates[p.Name] then targets[p.Name] = true end
+        end
+        SelectAllBtn.Text = "☒ DESELECT ALL TARGETS [T]"
+        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+    end
+end
+
+SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
+
+local function getClosestToCrosshairTarget()
+    local myCharacter = getCharacter(LocalPlayer)
+    local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
+    if not myRoot then return nil, nil end
+
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local closestHead = nil
+    local closestChar = nil
+    local shortestDist = math.huge
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and not teammates[player.Name] then
+            local pChar = getCharacter(player)
+            local pHead = pChar and pChar:FindFirstChild("Head") 
+                or pChar and (pChar:FindFirstChild("HumanoidRootPart") or pChar:FindFirstChild("UpperTorso"))
+            
+            if pHead and pChar then
+                local worldDist = (myRoot.Position - pHead.Position).Magnitude
+                if worldDist <= crosshairMaxDistance then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(pHead.Position)
+                    if onScreen then
+                        local distToCenter = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+                        if distToCenter < shortestDist and distToCenter < 300 then
+                            shortestDist = distToCenter
+                            closestHead = pHead
+                            closestChar = pChar
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return closestHead, closestChar
+end
+
+local function performManualAttack()
+    local myCharacter = getCharacter(LocalPlayer)
+    local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
+
+    if myRoot then
+        if crosshairAimActive == true then
+            if tick() - lastAttackTime < attackCooldown then return end
+            local targetHead, targetChar = getClosestToCrosshairTarget()
+            if targetHead and targetChar and tryShootRemote then
+                pcall(function()
+                    local muzzlePos = myRoot.Position + Vector3.new(0, 2, 0)
+                    local dirUnit = (targetHead.Position - muzzlePos).Unit
+
+                    for i = 1, customSpamCount do
+                        local ohTable1 = {
+                            [1] = {
+                                ["MuzzleDirectionUnit"] = dirUnit,
+                                ["BulletImpactPosition"] = targetHead.Position,
+                                ["TargetInstance"] = targetHead,
+                                ["TargetCFrame"] = targetHead.CFrame,
+                                ["TargetSize"] = targetHead.Size,
+                                ["Normal"] = Vector3.new(0, 1, 0),
+                                ["MuzzlePosition"] = muzzlePos,
+                                ["TargetCharacter"] = targetChar
+                            }
+                        }
+                        tryShootRemote:FireServer(ohTable1)
+                    end
+                end)
+                lastAttackTime = tick()
+                return
+            end
+        end
+
+        for pName, isTargeted in pairs(targets) do
+            if isTargeted and not teammates[pName] then
+                local targetPlayer = Players:FindFirstChild(pName)
+                local targetDino = getCharacter(targetPlayer)
+                local targetRoot = targetDino and (targetDino:FindFirstChild("HumanoidRootPart") or targetDino:FindFirstChild("UpperTorso") or targetDino:FindFirstChild("Head"))
+                
+                if targetRoot and (myRoot.Position - targetRoot.Position).Magnitude <= actionMaxDistance then
+                    pcall(function()
+                        for i = 1, customSpamCount do
+                            if grantEntryActive and grantEntryRemote then
+                                grantEntryRemote:InvokeServer(targetPlayer)
+                            elseif jailActive and jailRemote then
+                                jailRemote:InvokeServer(targetPlayer)
+                            elseif latchActive and detainRemote then
+                                detainRemote:InvokeServer(targetPlayer)
+                            end
+                        end
+                    end)
+                    return
+                end
+            end
+        end
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if UserInputService:GetFocusedTextBox() then return end
+    
+    if crosshairAimActive and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+        performManualAttack()
+    end
+
+    if aimLockActive and isAimToggled then
+        local myCharacter = getCharacter(LocalPlayer)
+        local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
+        if not myRoot then return end
+
+        local closestHead = nil
+        local shortestDist = math.huge
+        for pName, isTargeted in pairs(targets) do
+            if isTargeted and not teammates[pName] then
+                local targetPlayer = Players:FindFirstChild(pName)
+                local targetDino = getCharacter(targetPlayer)
+                local targetHead = targetDino and targetDino:FindFirstChild("Head") 
+                if targetHead and targetDino then
+                    local dist = (myRoot.Position - targetHead.Position).Magnitude
+                    if dist <= actionMaxDistance and dist < shortestDist then
+                        shortestDist = dist
+                        closestHead = targetHead
+                    end
+                end
+            end
+        end
+
+        if closestHead then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, closestHead.Position)
+        end
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if UserInputService:GetFocusedTextBox() then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if not crosshairAimActive then
+            performManualAttack()
+        end
+    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if aimLockActive then
+            isAimToggled = not isAimToggled
+        end
+    end
+
+    if input.KeyCode == Enum.KeyCode.P then 
+        MainFrame.Visible = not MainFrame.Visible 
+    end
+
+    if input.KeyCode == Enum.KeyCode.F4 then
+        if not MainFrame.Visible then
+            MainFrame.Visible = true
+            currentViewMode = "TEAM"
+        else
+            currentViewMode = (currentViewMode == "KILL") and "TEAM" or "KILL"
+        end
+
+        if currentViewMode == "TEAM" then
+            Title.Text = "🤝 TEAMMATES LIST [F4]"
+            Title.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
+            SelectAllBtn.Visible = false
+        else
+            Title.Text = "LIZLUK MENU [P / F4]"
+            Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+            SelectAllBtn.Visible = true
+        end
+    end
+
+    if input.KeyCode == Enum.KeyCode.T then toggleSelectAll() end
+
+    if input.KeyCode == Enum.KeyCode.B then
+        latchActive = not latchActive
+        LatchStatusLabel.Text = latchActive and "LATCH ABILITY: ON [B]" or "LATCH ABILITY: OFF [B]"
+        LatchStatusLabel.TextColor3 = latchActive and Color3.fromRGB(180, 100, 255) or Color3.fromRGB(255, 70, 70)
+    end
+
+    if input.KeyCode == Enum.KeyCode.H then
+        jailActive = not jailActive
+        JailStatusLabel.Text = jailActive and "AUTO JAIL: ON [H]" or "AUTO JAIL: OFF [H]"
+        JailStatusLabel.TextColor3 = jailActive and Color3.fromRGB(255, 165, 0) or Color3.fromRGB(255, 70, 70)
+    end
+
+    if input.KeyCode == Enum.KeyCode.L then
+        aimLockActive = not aimLockActive
+        if not aimLockActive then
+            isAimToggled = false
+        end
+        AimStatusLabel.Text = aimLockActive and "AIM TARGET: ON [L]" or "AIM TARGET: OFF [L]"
+        AimStatusLabel.TextColor3 = aimLockActive and Color3.fromRGB(0, 220, 255) or Color3.fromRGB(255, 70, 70)
+    end
+
+    if input.KeyCode == Enum.KeyCode.K then
+        crosshairAimActive = not crosshairAimActive
+        CrosshairStatusLabel.Text = crosshairAimActive and "CROSSHAIR AIM: ON [K]" or "CROSSHAIR AIM: OFF [K]"
+        CrosshairStatusLabel.TextColor3 = crosshairAimActive and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(255, 70, 70)
+    end
+
+    if input.KeyCode == Enum.KeyCode.J then
+        grantEntryActive = not grantEntryActive
+        GrantStatusLabel.Text = grantEntryActive and "GRANT ENTRY: ON [J]" or "GRANT ENTRY: OFF [J]"
+        GrantStatusLabel.TextColor3 = grantEntryActive and Color3.fromRGB(50, 255, 130) or Color3.fromRGB(255, 70, 70)
+    end
+
+    -- F7: AUTO MILITARY
+    if input.KeyCode == Enum.KeyCode.F7 then
+        autoMilitaryTeamActive = not autoMilitaryTeamActive
+        MilTeamStatusLabel.Text = autoMilitaryTeamActive and "AUTO MILITARY: ON [F7]" or "AUTO MILITARY: OFF [F7]"
+        MilTeamStatusLabel.TextColor3 = autoMilitaryTeamActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(255, 70, 70)
+        
+        if autoMilitaryTeamActive then
+            autoCivilianTeamActive = false
+            CivTeamStatusLabel.Text = "AUTO CIVILIAN: OFF [F8]"
+            CivTeamStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+            
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and isPlayerInMilitaryTeam(p) then
+                    teammates[p.Name] = true
+                    targets[p.Name] = nil
+                end
+            end
+        else
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and isPlayerInMilitaryTeam(p) then
+                    teammates[p.Name] = nil
+                end
+            end
+        end
+    end
+
+    -- F8: AUTO CIVILIAN
+    if input.KeyCode == Enum.KeyCode.F8 then
+        autoCivilianTeamActive = not autoCivilianTeamActive
+        CivTeamStatusLabel.Text = autoCivilianTeamActive and "AUTO CIVILIAN: ON [F8]" or "AUTO CIVILIAN: OFF [F8]"
+        CivTeamStatusLabel.TextColor3 = autoCivilianTeamActive and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(255, 70, 70)
+        
+        if autoCivilianTeamActive then
+            autoMilitaryTeamActive = false
+            MilTeamStatusLabel.Text = "AUTO MILITARY: OFF [F7]"
+            MilTeamStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+            
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and isPlayerInCivilianTeam(p) then
+                    teammates[p.Name] = true
+                    targets[p.Name] = nil
+                end
+            end
+        else
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and isPlayerInCivilianTeam(p) then
+                    teammates[p.Name] = nil
+                end
+            end
+        end
+    end
+end)
+
+local buttons = {}
+
+local function buildButtons()
+    for _, child in pairs(ScrollingFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    buttons = {}
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local pName = player.Name
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, 0, 0, 28)
+            Btn.Font = Enum.Font.SourceSansBold
+            Btn.TextSize = 13
+            Btn.BorderSizePixel = 0
+            Btn.Parent = ScrollingFrame
+
+            Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
+
+            Btn.MouseButton1Click:Connect(function()
+                if currentViewMode == "KILL" then
+                    teammates[pName] = true
+                    targets[pName] = nil
+                else
+                    teammates[pName] = nil
+                end
+            end)
+
+            Btn.MouseButton2Click:Connect(function()
+                if currentViewMode == "KILL" then
+                    targets[pName] = not targets[pName] or nil
+                end
+            end)
+
+            buttons[pName] = {Button = Btn}
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(buildButtons)
+Players.PlayerRemoving:Connect(function(player)
+    targets[player.Name] = nil
+    teammates[player.Name] = nil
+    removeEsp(player.Name)
+    buildButtons()
+end)
+buildButtons()
+
+task.spawn(function()
+    while true do
+        local myCharacter = getCharacter(LocalPlayer)
+        local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
+        
+        local minDistance = math.huge
+        local tempClosest = ""
+
+        if myRoot then
+            for pName, btnData in pairs(buttons) do
+                local p = Players:FindFirstChild(pName)
+                local pChar = getCharacter(p)
+                local rootPart = pChar and (pChar:FindFirstChild("Head") or pChar:FindFirstChild("HumanoidRootPart") or pChar:FindFirstChild("UpperTorso"))
+                
+                if pChar and rootPart then
+                    local dist = (myRoot.Position - rootPart.Position).Magnitude
+                    if dist <= actionMaxDistance and dist < minDistance and not teammates[pName] then
+                        minDistance = dist
+                        tempClosest = pName
+                    end
+                    btnData.Button.LayoutOrder = targets[pName] and (math.floor(dist) - 100000) or math.floor(dist)
+                else
+                    btnData.Button.LayoutOrder = 999999
+                end
+            end
+        end
+        closestPlayerName = tempClosest
+
+        for pName, btnData in pairs(buttons) do
+            local Btn = btnData.Button
+            local isSearchMatch = (searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true))
+
+            if currentViewMode == "KILL" then
+                if not teammates[pName] and isSearchMatch then
+                    Btn.Visible = true
+                    if targets[pName] then
+                        Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                        Btn.Text = pName .. " [TARGET]"
+                        Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    elseif pName == closestPlayerName then
+                        Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
+                        Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
+                        Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
+                    else
+                        Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+                        Btn.Text = pName
+                        Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                    end
+                else
+                    Btn.Visible = false
+                end
+            elseif currentViewMode == "TEAM" then
+                if teammates[pName] and isSearchMatch then
+                    Btn.Visible = true
+                    Btn.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
+                    Btn.Text = "🤝 " .. pName .. " [TEAMMATE]"
+                    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                else
+                    Btn.Visible = false
+                end
+            end
+        end
+
+        task.wait(0.2)
+    end
+end)
+
+print("Lizluk Akkinobetuaka Realtime Team Sync Loaded Successfully!")
