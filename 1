@@ -6,18 +6,18 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Các Remote của game
-local damageRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CharactersDamageRemote")
-local stateAilmentRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("StateAilment")
-local activateAbilityRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("ActivateAbility")
-local drinkRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DrinkRemote")
-local foodRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Food")
-local portalRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Portal")
-local forageableRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CompleteForageableRemote")
+-- Dùng dạng an toàn tránh bị kẹt script (Infinite Yield) nếu sai tên thư mục
+local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
+local damageRemote = remotesFolder and remotesFolder:FindFirstChild("CharactersDamageRemote")
+local stateAilmentRemote = remotesFolder and remotesFolder:FindFirstChild("StateAilment")
+local activateAbilityRemote = remotesFolder and remotesFolder:FindFirstChild("ActivateAbility")
+local drinkRemote = remotesFolder and remotesFolder:FindFirstChild("DrinkRemote")
+local foodRemote = remotesFolder and remotesFolder:FindFirstChild("Food")
+local portalRemote = remotesFolder and remotesFolder:FindFirstChild("Portal")
+local forageableRemote = remotesFolder and remotesFolder:FindFirstChild("CompleteForageableRemote")
 
--- Các đường dẫn Object trong Workspace
-local charactersFolder = workspace:WaitForChild("Characters")
-local interactionsFolder = workspace:WaitForChild("Interactions")
+local charactersFolder = workspace:FindFirstChild("Characters")
+local interactionsFolder = workspace:FindFirstChild("Interactions")
 
 local targets = {} 
 local killAuraActive = true 
@@ -30,13 +30,9 @@ local closestPlayerName = ""
 local maxDetectDistance = 50 
 local searchFilterText = ""
 
--- Thời gian khởi chạy Script
 local startTime = os.time()
-
--- CFrame tương đối chuẩn của kỹ năng Grab
 local GRAB_OFFSET_CFRAME = CFrame.new(0, -0.613390088, -0.916453004, -0.907546103, 0.314130336, 0.278715283, 0.301701277, 0.026037652, 0.953046918, 0.292123765, 0.94902271, -0.118403859)
 
--- Tốc độ gửi Remote & Cooldown
 local attackCooldown = 1.4     
 local lastAttackTime = 0
 local passiveCooldown = 10     
@@ -56,7 +52,6 @@ ScreenGui.Name = "LizlukKillGUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
--- KHUNG MENU CHÍNH
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 220, 0, 650)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
@@ -70,7 +65,6 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 8)
 UICorner.Parent = MainFrame
 
--- KHUNG ĐỒNG HỒ TÁCH BIỆT
 local TimeFrame = Instance.new("Frame")
 TimeFrame.Size = UDim2.new(1, 0, 0, 30)
 TimeFrame.Position = UDim2.new(0, 0, 1, 8)
@@ -238,7 +232,6 @@ DistanceBox.FocusLost:Connect(function(enterPressed)
     end
 end)
 
--- Ô TÌM KIẾM TÊN (SEARCH BOX)
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
 SearchBox.Position = UDim2.new(0, 5, 0, 295)
@@ -257,7 +250,6 @@ local SearchCorner = Instance.new("UICorner")
 SearchCorner.CornerRadius = UDim.new(0, 4)
 SearchCorner.Parent = SearchBox
 
--- NÚT CHỌN / BỎ CHỌN TẤT CẢ (SELECT ALL BUTTON)
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
 SelectAllBtn.Position = UDim2.new(0, 5, 0, 325)
@@ -290,12 +282,10 @@ UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
 end)
 
--- Sự kiện thay đổi nội dung tìm kiếm
 SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     searchFilterText = string.lower(SearchBox.Text)
 end)
 
--- Vòng lặp đếm giờ chính xác 
 task.spawn(function()
     while true do
         local elapsed = os.time() - startTime
@@ -360,7 +350,6 @@ local function updateUtilityVisuals()
 end
 updateUtilityVisuals()
 
--- Logic Toggle chọn tất cả / Bỏ chọn tất cả
 local function toggleSelectAll()
     local allPlayers = Players:GetPlayers()
     local otherPlayersCount = 0
@@ -394,23 +383,23 @@ SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
 local function triggerPortal()
     pcall(function()
-        PortalBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 200)
-        portalRemote:InvokeServer("TundraPortalStart")
-        task.wait(0.2)
-        PortalBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        if portalRemote then
+            PortalBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 200)
+            portalRemote:InvokeServer("TundraPortalStart")
+            task.wait(0.2)
+            PortalBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        end
     end)
 end
 
--- Hàm thực thi đòn đánh Kill Aura khi nhấp chuột trái (đã cập nhật Remote mới)
 local function performKillAuraAttack()
     if not killAuraActive then return end
-    
     if tick() - lastAttackTime < attackCooldown then return end
     
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
-    if myRoot then
+    if myRoot and charactersFolder then
         for pName, isTargeted in pairs(targets) do
             if isTargeted then
                 local targetCharacter = charactersFolder:FindFirstChild(pName)
@@ -420,12 +409,10 @@ local function performKillAuraAttack()
                     local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
                     if currentDist <= maxDetectDistance then
                         pcall(function()
-                            local ohString1 = "Attack1"
-                            local ohString2 = "Bite"
-                            local ohString3 = pName 
-                            local ohString4 = "Hitbox-Head"
-
-                            ReplicatedStorage.Remote.Events.Combat:FireServer(ohString1, ohString2, ohString3, ohString4)
+                            local combatEvent = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("Events") and ReplicatedStorage.Remote.Events:FindFirstChild("Combat")
+                            if combatEvent then
+                                combatEvent:FireServer("Attack1", "Bite", pName, "Hitbox-Head")
+                            end
                         end)
                         lastAttackTime = tick()
                     end
@@ -470,13 +457,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
-----------------------------------------------------------------
--- 2. HỆ THỐNG ESP SIÊU NHẸ
-----------------------------------------------------------------
-
 local function applyESP(player, character)
     if not character or player == LocalPlayer then return end
-    
     local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 5)
     if not head then return end
 
@@ -504,11 +486,9 @@ end
 
 local function setupPlayerESP(player)
     if player == LocalPlayer then return end
-    
     player.CharacterAdded:Connect(function(char)
         applyESP(player, char)
     end)
-    
     if player.Character then
         applyESP(player, player.Character)
     end
@@ -518,56 +498,6 @@ for _, p in pairs(Players:GetPlayers()) do
     setupPlayerESP(p) 
 end
 Players.PlayerAdded:Connect(setupPlayerESP)
-
-task.spawn(function()
-    while true do
-        local myCharacter = LocalPlayer.Character
-        local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-
-        if myRoot then
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character then
-                    local head = player.Character:FindFirstChild("Head")
-                    if head then
-                        local espGui = head:FindFirstChild("PlayerESP")
-                        if not espGui then
-                            applyESP(player, player.Character)
-                        else
-                            espGui.MaxDistance = maxDetectDistance
-                            local txt = espGui:FindFirstChild("ESPText")
-                            if txt then
-                                local distance = math.floor((myRoot.Position - head.Position).Magnitude)
-                                
-                                if distance <= maxDetectDistance then
-                                    if targets[player.Name] then
-                                        if killAuraActive then
-                                            txt.Text = string.format("[🎯] %s\n[%d m]", player.Name, distance)
-                                            txt.TextColor3 = Color3.fromRGB(255, 50, 50)
-                                        else
-                                            txt.Text = string.format("[⏸️] %s\n[%d m]", player.Name, distance)
-                                            txt.TextColor3 = Color3.fromRGB(255, 200, 50)
-                                        end
-                                    elseif player.Name == closestPlayerName then
-                                        txt.Text = string.format("[⭐] %s\n[%d m]", player.Name, distance)
-                                        txt.TextColor3 = Color3.fromRGB(0, 255, 150)
-                                    else
-                                        txt.Text = string.format("%s\n[%d m]", player.Name, distance)
-                                        txt.TextColor3 = Color3.fromRGB(255, 255, 255)
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        task.wait(0.25)
-    end
-end)
-
-----------------------------------------------------------------
--- 3. VÒNG LẶP CHÍNH QUẢN LÝ GIAO DIỆN & TIỆN ÍCH
-----------------------------------------------------------------
 
 local buttons = {}
 
@@ -640,7 +570,6 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
-        -- Cập nhật trạng thái nút Select All dựa trên số lượng được chọn
         local totalOtherPlayers = 0
         local totalSelected = 0
         for pName, _ in pairs(buttons) do
@@ -660,8 +589,6 @@ task.spawn(function()
 
         for pName, btnData in pairs(buttons) do
             local Btn = btnData.Button
-            
-            -- Lọc hiển thị theo ô tìm kiếm SearchBox
             if searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true) then
                 Btn.Visible = true
             else
@@ -690,15 +617,19 @@ task.spawn(function()
 
         if autoDrinkActive then
             pcall(function()
-                local ohString1 = ""
-                game:GetService("ReplicatedStorage").Remote.Events.Drink:FireServer(ohString1)
+                local drinkEvent = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("Events") and ReplicatedStorage.Remote.Events:FindFirstChild("Drink")
+                if drinkEvent then
+                    drinkEvent:FireServer("")
+                end
             end)
         end
 
         if autoEatActive then
             pcall(function()
-                local ohNumber1 = 17.76608223002404
-                game:GetService("ReplicatedStorage").Remote.Events.Eat:FireServer(ohNumber1)
+                local eatEvent = ReplicatedStorage:FindFirstChild("Remote") and ReplicatedStorage.Remote:FindFirstChild("Events") and ReplicatedStorage.Remote.Events:FindFirstChild("Eat")
+                if eatEvent then
+                    eatEvent:FireServer(17.76608223002404)
+                end
             end)
         end
 
@@ -706,27 +637,20 @@ task.spawn(function()
     end
 end)
 
-----------------------------------------------------------------
--- 4. VÒNG LẶP SKILL BỊ ĐỘNG
-----------------------------------------------------------------
 task.spawn(function()
     while true do
-        if passiveSkillActive then
+        if passiveSkillActive and stateAilmentRemote then
             pcall(function()
-                local ohString1 = "Aggression"
-                stateAilmentRemote:FireServer(ohString1)
+                stateAilmentRemote:FireServer("Aggression")
             end)
         end
         task.wait(passiveCooldown)
     end
 end)
 
-----------------------------------------------------------------
--- 5. VÒNG LẶP AUTO GRAB
-----------------------------------------------------------------
 task.spawn(function()
     while true do
-        if autoGrabActive then
+        if autoGrabActive and activateAbilityRemote and charactersFolder then
             local myCharacter = LocalPlayer.Character
             local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
@@ -740,12 +664,7 @@ task.spawn(function()
                             local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
                             if currentDist <= maxDetectDistance then
                                 pcall(function()
-                                    local ohString1 = "Grab"
-                                    local ohTable2 = {
-                                        [1] = targetRoot,
-                                        [2] = GRAB_OFFSET_CFRAME
-                                    }
-                                    activateAbilityRemote:FireServer(ohString1, ohTable2)
+                                    activateAbilityRemote:FireServer("Grab", {targetRoot, GRAB_OFFSET_CFRAME})
                                 end)
                             end
                         end
@@ -757,15 +676,11 @@ task.spawn(function()
     end
 end)
 
-----------------------------------------------------------------
--- 6. VÒNG LẶP AUTO FORAGEABLE
-----------------------------------------------------------------
 task.spawn(function()
     while true do
-        if autoForageActive then
+        if autoForageActive and forageableRemote then
             pcall(function()
-                local ohNumber1 = 18
-                forageableRemote:InvokeServer(ohNumber1)
+                forageableRemote:InvokeServer(18)
             end)
         end
         task.wait(forageCooldown)
