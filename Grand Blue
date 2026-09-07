@@ -1,0 +1,219 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+-- Tạo ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "KillAuraGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = PlayerGui
+
+-- Tạo khung Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 230, 0, 185)
+mainFrame.Position = UDim2.new(0.5, -115, 0.4, -90)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.Parent = mainFrame
+
+-- Tiêu đề
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundTransparency = 1
+title.Text = "RikaOrimoto KillAura Pro"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 14
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+-- Nhãn ô số lần lặp
+local label1 = Instance.new("TextLabel")
+label1.Size = UDim2.new(0, 120, 0, 25)
+label1.Position = UDim2.new(0, 10, 0, 35)
+label1.BackgroundTransparency = 1
+label1.Text = "Số lần lặp (Loop):"
+label1.TextColor3 = Color3.fromRGB(200, 200, 200)
+label1.TextSize, label1.Font = 12, Enum.Font.Gotham
+label1.TextXAlignment = Enum.TextXAlignment.Left
+label1.Parent = mainFrame
+
+-- Ô nhập số lần lặp
+local countBox = Instance.new("TextBox")
+countBox.Size = UDim2.new(0, 80, 0, 25)
+countBox.Position = UDim2.new(0, 140, 0, 35)
+countBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+countBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+countBox.Text = "1"
+countBox.TextSize = 13
+countBox.Font = Enum.Font.GothamBold
+countBox.Parent = mainFrame
+Instance.new("UICorner", countBox).CornerRadius = UDim.new(0, 4)
+
+-- Nhãn ô tốc độ delay
+local label2 = Instance.new("TextLabel")
+label2.Size = UDim2.new(0, 120, 0, 25)
+label2.Position = UDim2.new(0, 10, 0, 65)
+label2.BackgroundTransparency = 1
+label2.Text = "Tốc độ (Delay s):"
+label2.TextColor3 = Color3.fromRGB(200, 200, 200)
+label2.TextSize, label2.Font = 12, Enum.Font.Gotham
+label2.TextXAlignment = Enum.TextXAlignment.Left
+label2.Parent = mainFrame
+
+-- Ô nhập tốc độ delay (mặc định 0.2s)
+local delayBox = Instance.new("TextBox")
+delayBox.Size = UDim2.new(0, 80, 0, 25)
+delayBox.Position = UDim2.new(0, 140, 0, 65)
+delayBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+delayBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+delayBox.Text = "0.2"
+delayBox.TextSize = 13
+delayBox.Font = Enum.Font.GothamBold
+delayBox.Parent = mainFrame
+Instance.new("UICorner", delayBox).CornerRadius = UDim.new(0, 4)
+
+-- Nút Bật/Tắt Giữ Chuột Trái
+local clickToggleBtn = Instance.new("TextButton")
+clickToggleBtn.Size = UDim2.new(0, 210, 0, 30)
+clickToggleBtn.Position = UDim2.new(0, 10, 0, 100)
+clickToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+clickToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+clickToggleBtn.Text = "Đè Chuột Trái: TẮT"
+clickToggleBtn.TextSize, clickToggleBtn.Font = 12, Enum.Font.GothamBold
+clickToggleBtn.Parent = mainFrame
+Instance.new("UICorner", clickToggleBtn).CornerRadius = UDim.new(0, 5)
+
+-- Nút Bật/Tắt Auto Phím K
+local autoKeyBtn = Instance.new("TextButton")
+autoKeyBtn.Size = UDim2.new(0, 210, 0, 30)
+autoKeyBtn.Position = UDim2.new(0, 10, 0, 138)
+autoKeyBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+autoKeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoKeyBtn.Text = "Auto Phím K: TẮT"
+autoKeyBtn.TextSize, autoKeyBtn.Font = 12, Enum.Font.GothamBold
+autoKeyBtn.Parent = mainFrame
+Instance.new("UICorner", autoKeyBtn).CornerRadius = UDim.new(0, 5)
+
+-- Hàm gửi lệnh tấn công chung
+local Entities = workspace:FindFirstChild("Entities")
+
+local function sendAttack()
+    if not Entities then return end
+    
+    local targetsTable = {}
+    local count = 0
+    
+    for _, entity in ipairs(Entities:GetChildren()) do
+        if entity:FindFirstChild("Humanoid") and entity.Name ~= Player.Name then
+            count = count + 1
+            targetsTable[count] = entity
+        end
+    end
+    
+    if count > 0 then
+        local loopCount = tonumber(countBox.Text) or 1
+        for i = 1, loopCount do
+            local ohTable1 = {
+                ["attackType"] = "LightAttack",
+                ["currentTime"] = tick(),
+                ["combo"] = 1,
+                ["id"] = tostring(math.random()) .. "/Client/RikaOrimoto_777",
+                ["targets"] = targetsTable,
+                ["flourishTimes"] = {},
+                ["style"] = "Sword",
+                ["TerrainDamage"] = true,
+                ["startTime"] = tick(),
+                ["stateTimers"] = {
+                    ["Microstun"] = 0, ["Swing"] = tick(), ["FreeCharge"] = 0,
+                    ["SwingCD"] = 0, ["Whifflag"] = 0, ["Charge"] = 0,
+                    ["Block"] = 0, ["Knock"] = 0, ["Endlag"] = 0,
+                    ["CantAttack"] = 0, ["Stun"] = 0, ["Dead"] = 0
+                }
+            }
+
+            local attackEvent = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("AttackPlayer")
+            if attackEvent then
+                attackEvent:FireServer(ohTable1)
+            end
+        end
+    end
+end
+
+-- 1. Xử lý Đè Giữ Chuột Trái liên tục
+local isHoldClickActive = false
+local isMouseDown = false
+
+clickToggleBtn.MouseButton1Click:Connect(function()
+    isHoldClickActive = not isHoldClickActive
+    if isHoldClickActive then
+        clickToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+        clickToggleBtn.Text = "Đè Chuột Trái: BẬT"
+    else
+        clickToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        clickToggleBtn.Text = "Đè Chuột Trái: TẮT"
+        isMouseDown = false
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed then
+        if input.KeyCode == Enum.KeyCode.K then
+            -- Bật/tắt phím K nhanh bằng bàn phím
+            autoKeyBtn.MouseButton1Click:Fire()
+        elseif isHoldClickActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isMouseDown = true
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isMouseDown = false
+    end
+end)
+
+-- Vòng lặp đè chuột trái (gọi liên tục theo delay khi đang giữ chuột)
+task.spawn(function()
+    while true do
+        if isHoldClickActive and isMouseDown then
+            sendAttack()
+            local delayTime = tonumber(delayBox.Text) or 0.2
+            task.wait(delayTime)
+        else
+            task.wait(0.05)
+        end
+    end
+end)
+
+-- 2. Xử lý Auto Phím K
+local isAutoKeyActive = false
+autoKeyBtn.MouseButton1Click:Connect(function()
+    isAutoKeyActive = not isAutoKeyActive
+    if isAutoKeyActive then
+        autoKeyBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+        autoKeyBtn.Text = "Auto Phím K: BẬT"
+    else
+        autoKeyBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        autoKeyBtn.Text = "Auto Phím K: TẮT"
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if isAutoKeyActive then
+            sendAttack()
+            local delayTime = tonumber(delayBox.Text) oder 0.2 -- (fix nhỏ cú pháp)
+            task.wait(delayTime)
+        else
+            task.wait(0.1)
+        end
+    end
+end)
