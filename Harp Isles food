@@ -1,0 +1,190 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+if playerGui:FindFirstChild("FoodFarmGUI") then
+    playerGui.FoodFarmGUI:Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FoodFarmGUI"
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 420)
+mainFrame.Position = UDim2.new(0, 50, 0, 50)
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 40)
+titleLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 16
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.Text = "Food Farm GUI (Nhấn F1 để Tắt Auto)"
+titleLabel.Parent = mainFrame
+
+local refreshBtn = Instance.new("TextButton")
+refreshBtn.Size = UDim2.new(0, 80, 0, 25)
+refreshBtn.Position = UDim2.new(1, -85, 0, 8)
+refreshBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+refreshBtn.TextSize = 12
+refreshBtn.Font = Enum.Font.SourceSansBold
+refreshBtn.Text = "Làm mới"
+refreshBtn.Parent = mainFrame
+
+local scrollingFrame = Instance.new("ScrollingFrame")
+scrollingFrame.Size = UDim2.new(1, -10, 1, -95)
+scrollingFrame.Position = UDim2.new(0, 5, 0, 45)
+scrollingFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollingFrame.Parent = mainFrame
+
+local uiListLayout = Instance.new("UIListLayout")
+uiListLayout.Parent = scrollingFrame
+uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+uiListLayout.Padding = UDim.new(0, 5)
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, 0, 0, 35)
+statusLabel.Position = UDim2.new(0, 0, 1, -40)
+statusLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+statusLabel.TextSize = 13
+statusLabel.Font = Enum.Font.SourceSans
+statusLabel.Text = "Trạng thái: Đang tìm thư mục Food..."
+statusLabel.Parent = mainFrame
+
+local activeLoopConnection = nil
+local selectedFoodName = nil
+
+local function stopAuto()
+    if activeLoopConnection then
+        task.cancel(activeLoopConnection)
+        activeLoopConnection = nil
+        statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        statusLabel.Text = "Trạng thái: Đã tắt Auto (F1)"
+    end
+end
+
+-- Lắng nghe phím F1 để tắt Auto
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.F1 then
+        stopAuto()
+    end
+end)
+
+local function findFoodFolder()
+    if Workspace:FindFirstChild("VFX") and Workspace.VFX:FindFirstChild("Food") then
+        return Workspace.VFX.Food
+    end
+    
+    for _, descendant in ipairs(Workspace:GetDescendants()) do
+        if descendant:IsA("Folder") and descendant.Name == "Food" then
+            return descendant
+        end
+    end
+    return nil
+end
+
+local function updateList()
+    for _, child in ipairs(scrollingFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    local foodFolder = findFoodFolder()
+    if not foodFolder then
+        statusLabel.Text = "Lỗi: Không tìm thấy thư mục Food!"
+        return
+    end
+
+    statusLabel.Text = "Đang quét từ: " .. foodFolder:GetFullName()
+
+    local foodGroups = {}
+    local totalFound = 0
+
+    for _, item in ipairs(foodFolder:GetChildren()) do
+        totalFound = totalFound + 1
+        local name = item.Name
+
+        if not foodGroups[name] then
+            foodGroups[name] = {}
+        end
+        table.insert(foodGroups[name], item)
+    end
+
+    if totalFound == 0 then
+        statusLabel.Text = "Thư mục Food trống!"
+        return
+    end
+
+    local count = 0
+    for name, items in pairs(foodGroups) do
+        count = count + 1
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -10, 0, 32)
+        btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.TextSize = 14
+        btn.Font = Enum.Font.SourceSansBold
+        btn.Text = "🍽️ " .. name .. " (Số lượng: " .. #items .. ")"
+        btn.Parent = scrollingFrame
+
+        btn.MouseButton1Click:Connect(function()
+            selectedFoodName = name
+            stopAuto() -- Dừng vòng lặp cũ nếu đang chạy
+
+            statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+            statusLabel.Text = "Đang Auto ăn: " .. name
+            
+            activeLoopConnection = task.spawn(function()
+                while true do
+                    local currentFolder = findFoodFolder()
+                    local targetItem = nil
+                    
+                    if currentFolder then
+                        for _, obj in ipairs(currentFolder:GetChildren()) do
+                            if obj.Name == selectedFoodName then
+                                local hienTai = obj:GetAttribute("Hiện tai")
+                                if hienTai == nil or hienTai > 0 then
+                                    targetItem = obj
+                                    break
+                                end
+                            end
+                        end
+                    end
+
+                    if targetItem then
+                        local indexVal = targetItem:GetAttribute("INDEX_") or 12.502347599016502
+                        pcall(function()
+                            ReplicatedStorage.Remote.Events.Eat:FireServer(indexVal)
+                        end)
+                    else
+                        statusLabel.Text = "Hết " .. selectedFoodName .. ", đang chờ hồi lại..."
+                    end
+                    task.wait(0.3)
+                end
+            end)
+        end)
+    end
+
+    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, count * 37)
+end
+
+refreshBtn.MouseButton1Click:Connect(function()
+    stopAuto()
+    updateList()
+end)
+
+updateList()
