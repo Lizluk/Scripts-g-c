@@ -1,0 +1,52 @@
+local Lighting = game:GetService("Lighting")
+
+-- 1. Bật toàn bộ hiệu ứng ánh sáng cao cấp
+Lighting.GlobalShadows = true
+Lighting.OutdoorAmbient = Color3.fromRGB(120, 120, 120)
+Lighting.Brightness = 2.5
+Lighting.ExposureCompensation = 0.2
+
+-- 2. Xóa bỏ hoàn toàn sương mù (No Fog)
+Lighting.FogEnd = 999999
+Lighting.FogStart = 0
+
+-- 3. Thêm các bộ lọc hiệu ứng ánh sáng (PostProcessing)
+local function addEffect(className, properties)
+    local effect = Lighting:FindFirstChildOfClass(className)
+    if not effect then
+        effect = Instance.new(className)
+        effect.Parent = Lighting
+    end
+    for prop, val in pairs(properties) do
+        effect[prop] = val
+    end
+end
+
+addEffect("Atmosphere", {
+    Density = 0,
+    Offset = 0,
+    Color = Color3.fromRGB(200, 200, 200),
+    Decay = Color3.fromRGB(100, 100, 100),
+    Glare = 0,
+    Haze = 0
+})
+
+addEffect("Bloom", {
+    Intensity = 0.4,
+    Size = 24,
+    Threshold = 1.5
+})
+
+addEffect("ColorCorrection", {
+    Brightness = 0.05,
+    Contrast = 0.2,
+    Saturation = 0.15,
+    TintColor = Color3.fromRGB(255, 255, 255)
+})
+
+addEffect("SunRays", {
+    Intensity = 0.25,
+    Spread = 0.85
+})
+
+print("Lizluk Full Lighting & No Fog Loaded Successfully!")
