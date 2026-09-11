@@ -50,13 +50,11 @@ local customSkillCooldown = 0.8
 local customSkills = {} 
 local SAVE_FILE_NAME = "LizlukCustomSkills.json"
 
--- HÀM LƯU DỮ LIỆU VÀO FILE
 local function saveSkillsToFile()
     if not writefile then return end
     pcall(function()
         local exportData = {}
         for _, skill in ipairs(customSkills) do
-            -- Lưu dạng thô các thông tin cơ bản
             table.insert(exportData, {
                 Name = skill.Name,
                 CodeText = skill.CodeText or "",
@@ -67,7 +65,6 @@ local function saveSkillsToFile()
     end)
 end
 
--- HÀM TẢI DỮ LIỆU TỪ FILE KHI KHỞI ĐỘNG
 local function loadSkillsFromFile()
     if not readfile or not isfile then return end
     pcall(function()
@@ -145,7 +142,6 @@ MainFrame.Parent = ScreenGui
 
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 
--- ĐỒNG HỒ THỜI GIAN
 local TimeFrame = Instance.new("Frame")
 TimeFrame.Size = UDim2.new(1, 0, 0, 30)
 TimeFrame.Position = UDim2.new(0, 0, 1, 8)
@@ -163,7 +159,6 @@ PlaytimeLabel.Font = Enum.Font.SourceSansBold
 PlaytimeLabel.TextSize = 14
 PlaytimeLabel.Parent = TimeFrame
 
--- TIÊU ĐỀ
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
@@ -174,7 +169,6 @@ Title.TextSize = 15
 Title.Parent = MainFrame
 Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
 
--- TRẠNG THÁI STAMINA & ATTRIBUTES
 local StaminaStatusLabel = Instance.new("TextLabel")
 StaminaStatusLabel.Size = UDim2.new(1, -10, 0, 22)
 StaminaStatusLabel.Position = UDim2.new(0, 5, 0, 42)
@@ -186,7 +180,6 @@ StaminaStatusLabel.TextSize = 11
 StaminaStatusLabel.Parent = MainFrame
 Instance.new("UICorner", StaminaStatusLabel).CornerRadius = UDim.new(0, 4)
 
--- TRẠNG THÁI AIM LOCK [L]
 local AimStatusLabel = Instance.new("TextLabel")
 AimStatusLabel.Size = UDim2.new(1, -10, 0, 22)
 AimStatusLabel.Position = UDim2.new(0, 5, 0, 67)
@@ -198,7 +191,6 @@ AimStatusLabel.TextSize = 11
 AimStatusLabel.Parent = MainFrame
 Instance.new("UICorner", AimStatusLabel).CornerRadius = UDim.new(0, 4)
 
--- TRẠNG THÁI SKILL F3
 local SkillF3StatusLabel = Instance.new("TextLabel")
 SkillF3StatusLabel.Size = UDim2.new(1, -10, 0, 22)
 SkillF3StatusLabel.Position = UDim2.new(0, 5, 0, 92)
@@ -210,7 +202,6 @@ SkillF3StatusLabel.TextSize = 11
 SkillF3StatusLabel.Parent = MainFrame
 Instance.new("UICorner", SkillF3StatusLabel).CornerRadius = UDim.new(0, 4)
 
--- Ô TÙY CHỈNH KHOẢNG CÁCH SKILL F3
 local DistSkillFrame = Instance.new("Frame")
 DistSkillFrame.Size = UDim2.new(1, -10, 0, 28)
 DistSkillFrame.Position = UDim2.new(0, 5, 0, 119)
@@ -247,7 +238,6 @@ DistSkillBox.FocusLost:Connect(function()
     if num and num >= 0 then skillF3Distance = num else DistSkillBox.Text = tostring(skillF3Distance) end
 end)
 
--- TRẠNG THÁI CROSSHAIR AIMBOT [K]
 local CrosshairStatusLabel = Instance.new("TextLabel")
 CrosshairStatusLabel.Size = UDim2.new(1, -10, 0, 22)
 CrosshairStatusLabel.Position = UDim2.new(0, 5, 0, 152)
@@ -260,7 +250,6 @@ CrosshairStatusLabel.Parent = MainFrame
 Instance.new("UICorner", CrosshairStatusLabel).CornerRadius = UDim.new(0, 4)
 crosshairAimActive = true 
 
--- Ô HẠN MỨC KHOẢNG CÁCH CHO CROSSHAIR AIM [K]
 local DistCrossFrame = Instance.new("Frame")
 DistCrossFrame.Size = UDim2.new(1, -10, 0, 28)
 DistCrossFrame.Position = UDim2.new(0, 5, 0, 179)
@@ -297,7 +286,6 @@ DistCrossBox.FocusLost:Connect(function()
     if num and num >= 0 then crosshairMaxDistance = num else DistCrossBox.Text = tostring(crosshairMaxDistance) end
 end)
 
--- NÚT MỞ BẢNG QUẢN LÝ CUSTOM SKILL
 local OpenSkillManagerBtn = Instance.new("TextButton")
 OpenSkillManagerBtn.Size = UDim2.new(1, -10, 0, 28)
 OpenSkillManagerBtn.Position = UDim2.new(0, 5, 0, 212)
@@ -309,7 +297,6 @@ OpenSkillManagerBtn.TextSize = 12
 OpenSkillManagerBtn.Parent = MainFrame
 Instance.new("UICorner", OpenSkillManagerBtn).CornerRadius = UDim.new(0, 4)
 
--- Ô TÌM KIẾM PLAYER
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
 SearchBox.Position = UDim2.new(0, 5, 0, 246)
@@ -323,7 +310,6 @@ SearchBox.TextSize = 12
 SearchBox.Parent = MainFrame
 Instance.new("UICorner", SearchBox).CornerRadius = UDim.new(0, 4)
 
--- NÚT SELECT ALL [Y]
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
 SelectAllBtn.Position = UDim2.new(0, 5, 0, 276)
@@ -357,10 +343,10 @@ SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     searchFilterText = string.lower(SearchBox.Text)
 end)
 
--- BẢNG QUẢN LÝ CUSTOM SKILL
+-- BẢNG QUẢN LÝ SKILL (ĐÃ THÊM Ô ĐẶT TÊN)
 local SkillManagerFrame = Instance.new("Frame")
-SkillManagerFrame.Size = UDim2.new(0, 320, 0, 460)
-SkillManagerFrame.Position = UDim2.new(0.5, -160, 0.5, -230)
+SkillManagerFrame.Size = UDim2.new(0, 320, 0, 480)
+SkillManagerFrame.Position = UDim2.new(0.5, -160, 0.5, -240)
 SkillManagerFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
 SkillManagerFrame.BorderSizePixel = 0
 SkillManagerFrame.Visible = false
@@ -372,7 +358,7 @@ Instance.new("UICorner", SkillManagerFrame).CornerRadius = UDim.new(0, 8)
 local SMTitle = Instance.new("TextLabel")
 SMTitle.Size = UDim2.new(1, 0, 0, 35)
 SMTitle.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-SMTitle.Text = "DÁN MÃ SKILL & LƯU TỰ ĐỘNG"
+SMTitle.Text = "ĐẶT TÊN & LƯU SKILL TỰ ĐỘNG"
 SMTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 SMTitle.Font = Enum.Font.SourceSansBold
 SMTitle.TextSize = 14
@@ -397,9 +383,9 @@ OpenSkillManagerBtn.MouseButton1Click:Connect(function()
     SkillManagerFrame.Visible = not SkillManagerFrame.Visible
 end)
 
--- Ô TÙY CHỈNH TỐC ĐỘ GỌI SKILL (COOLDOWN)
+-- Ô TÙY CHỈNH COOLDOWN
 local CooldownFrame = Instance.new("Frame")
-CooldownFrame.Size = UDim2.new(1, -10, 0, 30)
+CooldownFrame.Size = UDim2.new(1, -10, 0, 28)
 CooldownFrame.Position = UDim2.new(0, 5, 0, 40)
 CooldownFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
 CooldownFrame.BorderSizePixel = 0
@@ -418,8 +404,8 @@ CooldownLabel.TextXAlignment = Enum.TextXAlignment.Left
 CooldownLabel.Parent = CooldownFrame
 
 local CooldownBox = Instance.new("TextBox")
-CooldownBox.Size = UDim2.new(0, 70, 0, 22)
-CooldownBox.Position = UDim2.new(1, -75, 0.5, -11)
+CooldownBox.Size = UDim2.new(0, 70, 0, 20)
+CooldownBox.Position = UDim2.new(1, -75, 0.5, -10)
 CooldownBox.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
 CooldownBox.BorderSizePixel = 0
 CooldownBox.Text = tostring(customSkillCooldown)
@@ -438,10 +424,24 @@ CooldownBox.FocusLost:Connect(function()
     end
 end)
 
--- Ô NHẬP HOẶC DÁN CODE SKILL
+-- Ô NHẬP TÊN SKILL (NEW)
+local SkillNameBox = Instance.new("TextBox")
+SkillNameBox.Size = UDim2.new(1, -10, 0, 28)
+SkillNameBox.Position = UDim2.new(0, 5, 0, 72)
+SkillNameBox.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+SkillNameBox.BorderSizePixel = 0
+SkillNameBox.Text = ""
+SkillNameBox.PlaceholderText = "Nhập tên skill (vd: Skill Dam Ao)..."
+SkillNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+SkillNameBox.Font = Enum.Font.SourceSansBold
+SkillNameBox.TextSize = 12
+SkillNameBox.Parent = SkillManagerFrame
+Instance.new("UICorner", SkillNameBox).CornerRadius = UDim.new(0, 4)
+
+-- Ô DÁN CODE SKILL
 local AddSkillBox = Instance.new("TextBox")
 AddSkillBox.Size = UDim2.new(1, -10, 0, 45)
-AddSkillBox.Position = UDim2.new(0, 5, 0, 76)
+AddSkillBox.Position = UDim2.new(0, 5, 0, 104)
 AddSkillBox.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
 AddSkillBox.BorderSizePixel = 0
 AddSkillBox.Text = ""
@@ -456,9 +456,9 @@ Instance.new("UICorner", AddSkillBox).CornerRadius = UDim.new(0, 4)
 
 local AddSkillBtn = Instance.new("TextButton")
 AddSkillBtn.Size = UDim2.new(1, -10, 0, 30)
-AddSkillBtn.Position = UDim2.new(0, 5, 0, 126)
+AddSkillBtn.Position = UDim2.new(0, 5, 0, 154)
 AddSkillBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 90)
-AddSkillBtn.Text = "+ THÊM SKILL TỪ ĐOẠN CODE ĐÃ DÁN"
+AddSkillBtn.Text = "+ THÊM VÀ LƯU SKILL MỚI"
 AddSkillBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 AddSkillBtn.Font = Enum.Font.SourceSansBold
 AddSkillBtn.TextSize = 11
@@ -466,8 +466,8 @@ AddSkillBtn.Parent = SkillManagerFrame
 Instance.new("UICorner", AddSkillBtn).CornerRadius = UDim.new(0, 4)
 
 local SMSideScrolling = Instance.new("ScrollingFrame")
-SMSideScrolling.Size = UDim2.new(1, -10, 1, -170)
-SMSideScrolling.Position = UDim2.new(0, 5, 0, 162)
+SMSideScrolling.Size = UDim2.new(1, -10, 1, -195)
+SMSideScrolling.Position = UDim2.new(0, 5, 0, 190)
 SMSideScrolling.BackgroundTransparency = 1
 SMSideScrolling.BorderSizePixel = 0
 SMSideScrolling.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -542,14 +542,18 @@ local function refreshCustomSkillUI()
     end
 end
 
--- THÊM SKILL MỚI VÀ GHI NGAY VÀO FILE
+-- THÊM SKILL KÈM TÊN TỰ ĐẶT
 AddSkillBtn.MouseButton1Click:Connect(function()
     local rawText = AddSkillBox.Text
     if rawText == "" then return end
 
+    local customName = SkillNameBox.Text
+    if customName == "" then
+        customName = "Custom Skill " .. (#customSkills + 1)
+    end
+
     local parsedInstance = workspace
     local parsedCFrame = CFrame.new(0, 0, 0)
-    local skillName = "Custom Skill " .. (#customSkills + 1)
 
     pcall(function()
         local func = loadstring([[
@@ -566,7 +570,7 @@ AddSkillBtn.MouseButton1Click:Connect(function()
     end)
 
     table.insert(customSkills, {
-        Name = skillName,
+        Name = customName,
         CodeText = rawText,
         InstanceObj = parsedInstance,
         CFrameVal = parsedCFrame,
@@ -574,6 +578,7 @@ AddSkillBtn.MouseButton1Click:Connect(function()
     })
 
     AddSkillBox.Text = ""
+    SkillNameBox.Text = ""
     refreshCustomSkillUI()
     saveSkillsToFile()
 end)
@@ -602,7 +607,6 @@ local function getCharacter(player)
     return player.Character or workspace:FindFirstChild(pName)
 end
 
--- STAMINA & ATTRIBUTES LOOP
 task.spawn(function()
     while true do
         pcall(function()
@@ -627,7 +631,6 @@ task.spawn(function()
     end
 end)
 
--- ESP
 local espDrawings = {}
 
 local function removeEsp(pName)
@@ -813,7 +816,6 @@ local function performManualAttack()
     end
 end
 
--- AUTO SKILL F3 & CUSTOM SKILLS CHECK KHOẢNG CÁCH PLAYER
 local function performAutoSkillF3Attack()
     local myCharacter = getCharacter(LocalPlayer)
     local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
@@ -1100,4 +1102,4 @@ task.spawn(function()
     end
 end)
 
-print("Lizluk Auto-Save Skills Loaded Successfully!")
+print("Lizluk Named & Auto-Save Skills Loaded Successfully!")
