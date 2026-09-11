@@ -3,6 +3,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -44,12 +45,76 @@ local closestPlayerName = ""
 
 local crosshairMaxDistance = 1000  
 local skillF3Distance = 10 
+local customSkillCooldown = 0.8
 
 local customSkills = {} 
+local SAVE_FILE_NAME = "LizlukCustomSkills.json"
+
+-- HÀM LƯU DỮ LIỆU VÀO FILE
+local function saveSkillsToFile()
+    if not writefile then return end
+    pcall(function()
+        local exportData = {}
+        for _, skill in ipairs(customSkills) do
+            -- Lưu dạng thô các thông tin cơ bản
+            table.insert(exportData, {
+                Name = skill.Name,
+                CodeText = skill.CodeText or "",
+                Enabled = skill.Enabled
+            })
+        end
+        writefile(SAVE_FILE_NAME, HttpService:JSONEncode(exportData))
+    end)
+end
+
+-- HÀM TẢI DỮ LIỆU TỪ FILE KHI KHỞI ĐỘNG
+local function loadSkillsFromFile()
+    if not readfile or not isfile then return end
+    pcall(function()
+        if isfile(SAVE_FILE_NAME) then
+            local rawData = readfile(SAVE_FILE_NAME)
+            local decoded = HttpService:JSONDecode(rawData)
+            if type(decoded) == "table" then
+                for _, data in ipairs(decoded) do
+                    local parsedInstance = workspace
+                    local parsedCFrame = CFrame.new(0, 0, 0)
+                    local rawText = data.CodeText or ""
+
+                    if rawText ~= "" then
+                        pcall(function()
+                            local func = loadstring([[
+                                local workspace = game:GetService("Workspace")
+                                local ohInstance1, ohCFrame2
+                                ]] .. rawText .. [[
+                                return ohInstance1, ohCFrame2
+                            ]])
+                            if func then
+                                local inst, cf = func()
+                                if inst then parsedInstance = inst end
+                                if cf then parsedCFrame = cf end
+                            end
+                        end)
+                    end
+
+                    table.insert(customSkills, {
+                        Name = data.Name or ("Custom Skill " .. (#customSkills + 1)),
+                        CodeText = rawText,
+                        InstanceObj = parsedInstance,
+                        CFrameVal = parsedCFrame,
+                        Enabled = data.Enabled ~= false
+                    })
+                end
+            end
+        end
+    end)
+end
+
+loadSkillsFromFile()
 
 local searchFilterText = ""
 local startTime = os.time()
 local lastAttackTime = 0
+local lastCustomSkillTime = 0
 local attackCooldown = 0.05
 
 if targetParent:FindFirstChild("LizlukKillGUI") then
@@ -294,8 +359,8 @@ end)
 
 -- BẢNG QUẢN LÝ CUSTOM SKILL
 local SkillManagerFrame = Instance.new("Frame")
-SkillManagerFrame.Size = UDim2.new(0, 320, 0, 420)
-SkillManagerFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+SkillManagerFrame.Size = UDim2.new(0, 320, 0, 460)
+SkillManagerFrame.Position = UDim2.new(0.5, -160, 0.5, -230)
 SkillManagerFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
 SkillManagerFrame.BorderSizePixel = 0
 SkillManagerFrame.Visible = false
@@ -307,7 +372,7 @@ Instance.new("UICorner", SkillManagerFrame).CornerRadius = UDim.new(0, 8)
 local SMTitle = Instance.new("TextLabel")
 SMTitle.Size = UDim2.new(1, 0, 0, 35)
 SMTitle.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-SMTitle.Text = "DÁN MÃ SKILL ĐỂ THÊM VÀO"
+SMTitle.Text = "DÁN MÃ SKILL & LƯU TỰ ĐỘNG"
 SMTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 SMTitle.Font = Enum.Font.SourceSansBold
 SMTitle.TextSize = 14
@@ -332,10 +397,51 @@ OpenSkillManagerBtn.MouseButton1Click:Connect(function()
     SkillManagerFrame.Visible = not SkillManagerFrame.Visible
 end)
 
+-- Ô TÙY CHỈNH TỐC ĐỘ GỌI SKILL (COOLDOWN)
+local CooldownFrame = Instance.new("Frame")
+CooldownFrame.Size = UDim2.new(1, -10, 0, 30)
+CooldownFrame.Position = UDim2.new(0, 5, 0, 40)
+CooldownFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+CooldownFrame.BorderSizePixel = 0
+CooldownFrame.Parent = SkillManagerFrame
+Instance.new("UICorner", CooldownFrame).CornerRadius = UDim.new(0, 4)
+
+local CooldownLabel = Instance.new("TextLabel")
+CooldownLabel.Size = UDim2.new(0, 180, 1, 0)
+CooldownLabel.Position = UDim2.new(0, 8, 0, 0)
+CooldownLabel.BackgroundTransparency = 1
+CooldownLabel.Text = "⏱️ Thời gian giãn cách (s):"
+CooldownLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+CooldownLabel.Font = Enum.Font.SourceSansBold
+CooldownLabel.TextSize = 12
+CooldownLabel.TextXAlignment = Enum.TextXAlignment.Left
+CooldownLabel.Parent = CooldownFrame
+
+local CooldownBox = Instance.new("TextBox")
+CooldownBox.Size = UDim2.new(0, 70, 0, 22)
+CooldownBox.Position = UDim2.new(1, -75, 0.5, -11)
+CooldownBox.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+CooldownBox.BorderSizePixel = 0
+CooldownBox.Text = tostring(customSkillCooldown)
+CooldownBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+CooldownBox.Font = Enum.Font.SourceSansBold
+CooldownBox.TextSize = 12
+CooldownBox.Parent = CooldownFrame
+Instance.new("UICorner", CooldownBox).CornerRadius = UDim.new(0, 4)
+
+CooldownBox.FocusLost:Connect(function()
+    local num = tonumber(CooldownBox.Text)
+    if num and num >= 0 then
+        customSkillCooldown = num
+    else
+        CooldownBox.Text = tostring(customSkillCooldown)
+    end
+end)
+
 -- Ô NHẬP HOẶC DÁN CODE SKILL
 local AddSkillBox = Instance.new("TextBox")
 AddSkillBox.Size = UDim2.new(1, -10, 0, 45)
-AddSkillBox.Position = UDim2.new(0, 5, 0, 42)
+AddSkillBox.Position = UDim2.new(0, 5, 0, 76)
 AddSkillBox.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
 AddSkillBox.BorderSizePixel = 0
 AddSkillBox.Text = ""
@@ -350,7 +456,7 @@ Instance.new("UICorner", AddSkillBox).CornerRadius = UDim.new(0, 4)
 
 local AddSkillBtn = Instance.new("TextButton")
 AddSkillBtn.Size = UDim2.new(1, -10, 0, 30)
-AddSkillBtn.Position = UDim2.new(0, 5, 0, 92)
+AddSkillBtn.Position = UDim2.new(0, 5, 0, 126)
 AddSkillBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 90)
 AddSkillBtn.Text = "+ THÊM SKILL TỪ ĐOẠN CODE ĐÃ DÁN"
 AddSkillBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -360,8 +466,8 @@ AddSkillBtn.Parent = SkillManagerFrame
 Instance.new("UICorner", AddSkillBtn).CornerRadius = UDim.new(0, 4)
 
 local SMSideScrolling = Instance.new("ScrollingFrame")
-SMSideScrolling.Size = UDim2.new(1, -10, 1, -135)
-SMSideScrolling.Position = UDim2.new(0, 5, 0, 130)
+SMSideScrolling.Size = UDim2.new(1, -10, 1, -170)
+SMSideScrolling.Position = UDim2.new(0, 5, 0, 162)
 SMSideScrolling.BackgroundTransparency = 1
 SMSideScrolling.BorderSizePixel = 0
 SMSideScrolling.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -403,6 +509,7 @@ local function refreshCustomSkillUI()
         ToggleBtn.MouseButton1Click:Connect(function()
             skillData.Enabled = not skillData.Enabled
             refreshCustomSkillUI()
+            saveSkillsToFile()
         end)
 
         local NameLbl = Instance.new("TextLabel")
@@ -430,11 +537,12 @@ local function refreshCustomSkillUI()
         DelBtn.MouseButton1Click:Connect(function()
             table.remove(customSkills, i)
             refreshCustomSkillUI()
+            saveSkillsToFile()
         end)
     end
 end
 
--- DÙNG LOADSTRING AN TOÀN ĐỂ TRÍCH XUẤT CHÍNH XÁC INSTANCE VÀ CFRAME TỪ CODE Ô DÁN
+-- THÊM SKILL MỚI VÀ GHI NGAY VÀO FILE
 AddSkillBtn.MouseButton1Click:Connect(function()
     local rawText = AddSkillBox.Text
     if rawText == "" then return end
@@ -459,6 +567,7 @@ AddSkillBtn.MouseButton1Click:Connect(function()
 
     table.insert(customSkills, {
         Name = skillName,
+        CodeText = rawText,
         InstanceObj = parsedInstance,
         CFrameVal = parsedCFrame,
         Enabled = true
@@ -466,7 +575,10 @@ AddSkillBtn.MouseButton1Click:Connect(function()
 
     AddSkillBox.Text = ""
     refreshCustomSkillUI()
+    saveSkillsToFile()
 end)
+
+refreshCustomSkillUI()
 
 task.spawn(function()
     while true do
@@ -701,15 +813,14 @@ local function performManualAttack()
     end
 end
 
--- AUTO SKILL F3 & CUSTOM SKILLS CHECK KHOẢNG CÁCH PLAYER (< skillF3Distance)
+-- AUTO SKILL F3 & CUSTOM SKILLS CHECK KHOẢNG CÁCH PLAYER
 local function performAutoSkillF3Attack()
     local myCharacter = getCharacter(LocalPlayer)
     local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
 
     if not myRoot then return end
-    if tick() - lastAttackTime < attackCooldown then return end
-
-    if tryShootRemote then
+    
+    if autoSkillF3Active and tick() - lastAttackTime >= attackCooldown and tryShootRemote then
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and not teammates[player.Name] then
                 local pChar = getCharacter(player)
@@ -745,25 +856,29 @@ local function performAutoSkillF3Attack()
         end
     end
 
-    if tAbilityEvent then
-        for _, skillData in ipairs(customSkills) do
-            if skillData.Enabled then
-                local foundClosePlayer = false
-                for _, player in pairs(Players:GetPlayers()) do
-                    if player ~= LocalPlayer and not teammates[player.Name] then
-                        local pChar = getCharacter(player)
-                        local pRoot = pChar and (pChar:FindFirstChild("HumanoidRootPart") or pChar:FindFirstChild("Head"))
-                        if pRoot and (myRoot.Position - pRoot.Position).Magnitude <= skillF3Distance then
-                            foundClosePlayer = true
-                            break
+    if tAbilityEvent and #customSkills > 0 then
+        if tick() - lastCustomSkillTime >= customSkillCooldown then
+            for _, skillData in ipairs(customSkills) do
+                if skillData.Enabled then
+                    local foundClosePlayer = false
+                    for _, player in pairs(Players:GetPlayers()) do
+                        if player ~= LocalPlayer and not teammates[player.Name] then
+                            local pChar = getCharacter(player)
+                            local pRoot = pChar and (pChar:FindFirstChild("HumanoidRootPart") or pChar:FindFirstChild("Head"))
+                            if pRoot and (myRoot.Position - pRoot.Position).Magnitude <= skillF3Distance then
+                                foundClosePlayer = true
+                                break
+                            end
                         end
                     end
-                end
 
-                if foundClosePlayer then
-                    pcall(function()
-                        tAbilityEvent:FireServer(skillData.InstanceObj, skillData.CFrameVal)
-                    end)
+                    if foundClosePlayer then
+                        pcall(function()
+                            tAbilityEvent:FireServer(skillData.InstanceObj, skillData.CFrameVal)
+                        end)
+                        lastCustomSkillTime = tick()
+                        break
+                    end
                 end
             end
         end
@@ -985,4 +1100,4 @@ task.spawn(function()
     end
 end)
 
-print("Lizluk Fixed Custom Skills Loaded Successfully!")
+print("Lizluk Auto-Save Skills Loaded Successfully!")
