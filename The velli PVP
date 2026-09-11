@@ -1,0 +1,988 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local targetParent = CoreGui
+pcall(function()
+    if not targetParent then
+        targetParent = LocalPlayer:WaitForChild("PlayerGui")
+    end
+end)
+
+local function findRemote(parent, name, isFunction)
+    if not parent then return nil end
+    local found = parent:FindFirstChild(name, true)
+    if found then return found end
+    
+    for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
+        if obj.Name == name and ((isFunction and obj:IsA("RemoteFunction")) or (not isFunction and obj:IsA("RemoteEvent"))) then
+            return obj
+        end
+    end
+    return nil
+end
+
+local tryShootRemote = findRemote(ReplicatedStorage, "TryShoot", false)
+local tAbilityEvent = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("TAbilityEvent") or findRemote(ReplicatedStorage, "TAbilityEvent", false)
+
+local targets = {} 
+local teammates = {} 
+
+local aimLockActive = false     
+local crosshairAimActive = false
+local isAimToggled = false
+local espEnabled = true         
+local autoSkillF3Active = false 
+
+local currentViewMode = "KILL" 
+local closestPlayerName = "" 
+
+local crosshairMaxDistance = 1000  
+local skillF3Distance = 10 
+
+local customSkills = {} 
+
+local searchFilterText = ""
+local startTime = os.time()
+local lastAttackTime = 0
+local attackCooldown = 0.05
+
+if targetParent:FindFirstChild("LizlukKillGUI") then
+    targetParent.LizlukKillGUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "LizlukKillGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = targetParent
+
+pcall(function()
+    if syn and syn.protect_gui then
+        syn.protect_gui(ScreenGui)
+    elseif protectgui then
+        protectgui(ScreenGui)
+    end
+end)
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 230, 0, 700)
+MainFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+-- ĐỒNG HỒ THỜI GIAN
+local TimeFrame = Instance.new("Frame")
+TimeFrame.Size = UDim2.new(1, 0, 0, 30)
+TimeFrame.Position = UDim2.new(0, 0, 1, 8)
+TimeFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+TimeFrame.BorderSizePixel = 0
+TimeFrame.Parent = MainFrame
+Instance.new("UICorner", TimeFrame).CornerRadius = UDim.new(0, 6)
+
+local PlaytimeLabel = Instance.new("TextLabel")
+PlaytimeLabel.Size = UDim2.new(1, 0, 1, 0)
+PlaytimeLabel.BackgroundTransparency = 1
+PlaytimeLabel.Text = "⏱️ TIME: 00:00:00"
+PlaytimeLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+PlaytimeLabel.Font = Enum.Font.SourceSansBold
+PlaytimeLabel.TextSize = 14
+PlaytimeLabel.Parent = TimeFrame
+
+-- TIÊU ĐỀ
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+Title.Text = "LIZLUK MENU [P / F4]"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 15
+Title.Parent = MainFrame
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
+
+-- TRẠNG THÁI STAMINA & ATTRIBUTES
+local StaminaStatusLabel = Instance.new("TextLabel")
+StaminaStatusLabel.Size = UDim2.new(1, -10, 0, 22)
+StaminaStatusLabel.Position = UDim2.new(0, 5, 0, 42)
+StaminaStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+StaminaStatusLabel.Text = "STAMINA/ATTR: ACTIVE (ON)"
+StaminaStatusLabel.TextColor3 = Color3.fromRGB(50, 255, 130)
+StaminaStatusLabel.Font = Enum.Font.SourceSansBold
+StaminaStatusLabel.TextSize = 11
+StaminaStatusLabel.Parent = MainFrame
+Instance.new("UICorner", StaminaStatusLabel).CornerRadius = UDim.new(0, 4)
+
+-- TRẠNG THÁI AIM LOCK [L]
+local AimStatusLabel = Instance.new("TextLabel")
+AimStatusLabel.Size = UDim2.new(1, -10, 0, 22)
+AimStatusLabel.Position = UDim2.new(0, 5, 0, 67)
+AimStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+AimStatusLabel.Text = "AIM TARGET: OFF [L]"
+AimStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+AimStatusLabel.Font = Enum.Font.SourceSansBold
+AimStatusLabel.TextSize = 11
+AimStatusLabel.Parent = MainFrame
+Instance.new("UICorner", AimStatusLabel).CornerRadius = UDim.new(0, 4)
+
+-- TRẠNG THÁI SKILL F3
+local SkillF3StatusLabel = Instance.new("TextLabel")
+SkillF3StatusLabel.Size = UDim2.new(1, -10, 0, 22)
+SkillF3StatusLabel.Position = UDim2.new(0, 5, 0, 92)
+SkillF3StatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+SkillF3StatusLabel.Text = "SKILL AUTO: OFF [F3]"
+SkillF3StatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+SkillF3StatusLabel.Font = Enum.Font.SourceSansBold
+SkillF3StatusLabel.TextSize = 11
+SkillF3StatusLabel.Parent = MainFrame
+Instance.new("UICorner", SkillF3StatusLabel).CornerRadius = UDim.new(0, 4)
+
+-- Ô TÙY CHỈNH KHOẢNG CÁCH SKILL F3
+local DistSkillFrame = Instance.new("Frame")
+DistSkillFrame.Size = UDim2.new(1, -10, 0, 28)
+DistSkillFrame.Position = UDim2.new(0, 5, 0, 119)
+DistSkillFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+DistSkillFrame.BorderSizePixel = 0
+DistSkillFrame.Parent = MainFrame
+Instance.new("UICorner", DistSkillFrame).CornerRadius = UDim.new(0, 4)
+
+local DistSkillLabel = Instance.new("TextLabel")
+DistSkillLabel.Size = UDim2.new(0, 135, 1, 0)
+DistSkillLabel.Position = UDim2.new(0, 5, 0, 0)
+DistSkillLabel.BackgroundTransparency = 1
+DistSkillLabel.Text = "KC Skill Auto [F3]:"
+DistSkillLabel.TextColor3 = Color3.fromRGB(50, 255, 130)
+DistSkillLabel.Font = Enum.Font.SourceSansBold
+DistSkillLabel.TextSize = 11
+DistSkillLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistSkillLabel.Parent = DistSkillFrame
+
+local DistSkillBox = Instance.new("TextBox")
+DistSkillBox.Size = UDim2.new(0, 60, 0, 20)
+DistSkillBox.Position = UDim2.new(1, -65, 0.5, -10)
+DistSkillBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+DistSkillBox.BorderSizePixel = 0
+DistSkillBox.Text = tostring(skillF3Distance)
+DistSkillBox.TextColor3 = Color3.fromRGB(50, 255, 130)
+DistSkillBox.Font = Enum.Font.SourceSansBold
+DistSkillBox.TextSize = 12
+DistSkillBox.Parent = DistSkillFrame
+Instance.new("UICorner", DistSkillBox).CornerRadius = UDim.new(0, 4)
+
+DistSkillBox.FocusLost:Connect(function()
+    local num = tonumber(DistSkillBox.Text)
+    if num and num >= 0 then skillF3Distance = num else DistSkillBox.Text = tostring(skillF3Distance) end
+end)
+
+-- TRẠNG THÁI CROSSHAIR AIMBOT [K]
+local CrosshairStatusLabel = Instance.new("TextLabel")
+CrosshairStatusLabel.Size = UDim2.new(1, -10, 0, 22)
+CrosshairStatusLabel.Position = UDim2.new(0, 5, 0, 152)
+CrosshairStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+CrosshairStatusLabel.Text = "CROSSHAIR AIM: ON [K]"
+CrosshairStatusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+CrosshairStatusLabel.Font = Enum.Font.SourceSansBold
+CrosshairStatusLabel.TextSize = 11
+CrosshairStatusLabel.Parent = MainFrame
+Instance.new("UICorner", CrosshairStatusLabel).CornerRadius = UDim.new(0, 4)
+crosshairAimActive = true 
+
+-- Ô HẠN MỨC KHOẢNG CÁCH CHO CROSSHAIR AIM [K]
+local DistCrossFrame = Instance.new("Frame")
+DistCrossFrame.Size = UDim2.new(1, -10, 0, 28)
+DistCrossFrame.Position = UDim2.new(0, 5, 0, 179)
+DistCrossFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+DistCrossFrame.BorderSizePixel = 0
+DistCrossFrame.Parent = MainFrame
+Instance.new("UICorner", DistCrossFrame).CornerRadius = UDim.new(0, 4)
+
+local DistCrossLabel = Instance.new("TextLabel")
+DistCrossLabel.Size = UDim2.new(0, 135, 1, 0)
+DistCrossLabel.Position = UDim2.new(0, 5, 0, 0)
+DistCrossLabel.BackgroundTransparency = 1
+DistCrossLabel.Text = "KC Crosshair Aim [K]:"
+DistCrossLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+DistCrossLabel.Font = Enum.Font.SourceSansBold
+DistCrossLabel.TextSize = 11
+DistCrossLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistCrossLabel.Parent = DistCrossFrame
+
+local DistCrossBox = Instance.new("TextBox")
+DistCrossBox.Size = UDim2.new(0, 60, 0, 20)
+DistCrossBox.Position = UDim2.new(1, -65, 0.5, -10)
+DistCrossBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+DistCrossBox.BorderSizePixel = 0
+DistCrossBox.Text = tostring(crosshairMaxDistance)
+DistCrossBox.TextColor3 = Color3.fromRGB(255, 215, 0)
+DistCrossBox.Font = Enum.Font.SourceSansBold
+DistCrossBox.TextSize = 12
+DistCrossBox.Parent = DistCrossFrame
+Instance.new("UICorner", DistCrossBox).CornerRadius = UDim.new(0, 4)
+
+DistCrossBox.FocusLost:Connect(function()
+    local num = tonumber(DistCrossBox.Text)
+    if num and num >= 0 then crosshairMaxDistance = num else DistCrossBox.Text = tostring(crosshairMaxDistance) end
+end)
+
+-- NÚT MỞ BẢNG QUẢN LÝ CUSTOM SKILL
+local OpenSkillManagerBtn = Instance.new("TextButton")
+OpenSkillManagerBtn.Size = UDim2.new(1, -10, 0, 28)
+OpenSkillManagerBtn.Position = UDim2.new(0, 5, 0, 212)
+OpenSkillManagerBtn.BackgroundColor3 = Color3.fromRGB(100, 50, 150)
+OpenSkillManagerBtn.Text = "⚡ QUẢN LÝ CUSTOM SKILLS"
+OpenSkillManagerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+OpenSkillManagerBtn.Font = Enum.Font.SourceSansBold
+OpenSkillManagerBtn.TextSize = 12
+OpenSkillManagerBtn.Parent = MainFrame
+Instance.new("UICorner", OpenSkillManagerBtn).CornerRadius = UDim.new(0, 4)
+
+-- Ô TÌM KIẾM PLAYER
+local SearchBox = Instance.new("TextBox")
+SearchBox.Size = UDim2.new(1, -10, 0, 25)
+SearchBox.Position = UDim2.new(0, 5, 0, 246)
+SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+SearchBox.BorderSizePixel = 0
+SearchBox.Text = ""
+SearchBox.PlaceholderText = "🔍 Tìm tên người chơi..."
+SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+SearchBox.Font = Enum.Font.SourceSansBold
+SearchBox.TextSize = 12
+SearchBox.Parent = MainFrame
+Instance.new("UICorner", SearchBox).CornerRadius = UDim.new(0, 4)
+
+-- NÚT SELECT ALL [Y]
+local SelectAllBtn = Instance.new("TextButton")
+SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 276)
+SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
+SelectAllBtn.Text = "☑️ SELECT ALL TARGETS [Y]"
+SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SelectAllBtn.Font = Enum.Font.SourceSansBold
+SelectAllBtn.TextSize = 12
+SelectAllBtn.Parent = MainFrame
+Instance.new("UICorner", SelectAllBtn).CornerRadius = UDim.new(0, 4)
+
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -313)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 308)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.BorderSizePixel = 0
+ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollingFrame.ScrollBarThickness = 4
+ScrollingFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ScrollingFrame
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end)
+
+SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    searchFilterText = string.lower(SearchBox.Text)
+end)
+
+-- BẢNG QUẢN LÝ CUSTOM SKILL
+local SkillManagerFrame = Instance.new("Frame")
+SkillManagerFrame.Size = UDim2.new(0, 320, 0, 420)
+SkillManagerFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+SkillManagerFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+SkillManagerFrame.BorderSizePixel = 0
+SkillManagerFrame.Visible = false
+SkillManagerFrame.Active = true
+SkillManagerFrame.Draggable = true
+SkillManagerFrame.Parent = ScreenGui
+Instance.new("UICorner", SkillManagerFrame).CornerRadius = UDim.new(0, 8)
+
+local SMTitle = Instance.new("TextLabel")
+SMTitle.Size = UDim2.new(1, 0, 0, 35)
+SMTitle.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+SMTitle.Text = "DÁN MÃ SKILL ĐỂ THÊM VÀO"
+SMTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+SMTitle.Font = Enum.Font.SourceSansBold
+SMTitle.TextSize = 14
+SMTitle.Parent = SkillManagerFrame
+Instance.new("UICorner", SMTitle).CornerRadius = UDim.new(0, 8)
+
+local CloseSMBtn = Instance.new("TextButton")
+CloseSMBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseSMBtn.Position = UDim2.new(1, -35, 0, 2)
+CloseSMBtn.BackgroundTransparency = 1
+CloseSMBtn.Text = "X"
+CloseSMBtn.TextColor3 = Color3.fromRGB(255, 70, 70)
+CloseSMBtn.Font = Enum.Font.SourceSansBold
+CloseSMBtn.TextSize = 16
+CloseSMBtn.Parent = SkillManagerFrame
+
+CloseSMBtn.MouseButton1Click:Connect(function()
+    SkillManagerFrame.Visible = false
+end)
+
+OpenSkillManagerBtn.MouseButton1Click:Connect(function()
+    SkillManagerFrame.Visible = not SkillManagerFrame.Visible
+end)
+
+-- Ô NHẬP HOẶC DÁN CODE SKILL
+local AddSkillBox = Instance.new("TextBox")
+AddSkillBox.Size = UDim2.new(1, -10, 0, 45)
+AddSkillBox.Position = UDim2.new(0, 5, 0, 42)
+AddSkillBox.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+AddSkillBox.BorderSizePixel = 0
+AddSkillBox.Text = ""
+AddSkillBox.PlaceholderText = "Dán đoạn code skill vào đây..."
+AddSkillBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+AddSkillBox.Font = Enum.Font.SourceSansBold
+AddSkillBox.TextSize = 11
+AddSkillBox.ClearTextOnFocus = false
+AddSkillBox.MultiLine = true
+AddSkillBox.Parent = SkillManagerFrame
+Instance.new("UICorner", AddSkillBox).CornerRadius = UDim.new(0, 4)
+
+local AddSkillBtn = Instance.new("TextButton")
+AddSkillBtn.Size = UDim2.new(1, -10, 0, 30)
+AddSkillBtn.Position = UDim2.new(0, 5, 0, 92)
+AddSkillBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 90)
+AddSkillBtn.Text = "+ THÊM SKILL TỪ ĐOẠN CODE ĐÃ DÁN"
+AddSkillBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AddSkillBtn.Font = Enum.Font.SourceSansBold
+AddSkillBtn.TextSize = 11
+AddSkillBtn.Parent = SkillManagerFrame
+Instance.new("UICorner", AddSkillBtn).CornerRadius = UDim.new(0, 4)
+
+local SMSideScrolling = Instance.new("ScrollingFrame")
+SMSideScrolling.Size = UDim2.new(1, -10, 1, -135)
+SMSideScrolling.Position = UDim2.new(0, 5, 0, 130)
+SMSideScrolling.BackgroundTransparency = 1
+SMSideScrolling.BorderSizePixel = 0
+SMSideScrolling.CanvasSize = UDim2.new(0, 0, 0, 0)
+SMSideScrolling.ScrollBarThickness = 4
+SMSideScrolling.Parent = SkillManagerFrame
+
+local SMListLayout = Instance.new("UIListLayout")
+SMListLayout.Parent = SMSideScrolling
+SMListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+SMListLayout.Padding = UDim.new(0, 5)
+
+SMListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    SMSideScrolling.CanvasSize = UDim2.new(0, 0, 0, SMListLayout.AbsoluteContentSize.Y)
+end)
+
+local function refreshCustomSkillUI()
+    for _, child in pairs(SMSideScrolling:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+
+    for i, skillData in ipairs(customSkills) do
+        local ItemFrame = Instance.new("Frame")
+        ItemFrame.Size = UDim2.new(1, 0, 0, 35)
+        ItemFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+        ItemFrame.BorderSizePixel = 0
+        ItemFrame.Parent = SMSideScrolling
+        Instance.new("UICorner", ItemFrame).CornerRadius = UDim.new(0, 4)
+
+        local ToggleBtn = Instance.new("TextButton")
+        ToggleBtn.Size = UDim2.new(0, 60, 1, 0)
+        ToggleBtn.BackgroundColor3 = skillData.Enabled and Color3.fromRGB(50, 180, 90) or Color3.fromRGB(180, 50, 50)
+        ToggleBtn.Text = skillData.Enabled and "ON" or "OFF"
+        ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        ToggleBtn.Font = Enum.Font.SourceSansBold
+        ToggleBtn.TextSize = 12
+        ToggleBtn.Parent = ItemFrame
+        Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 4)
+
+        ToggleBtn.MouseButton1Click:Connect(function()
+            skillData.Enabled = not skillData.Enabled
+            refreshCustomSkillUI()
+        end)
+
+        local NameLbl = Instance.new("TextLabel")
+        NameLbl.Size = UDim2.new(1, -100, 1, 0)
+        NameLbl.Position = UDim2.new(0, 65, 0, 0)
+        NameLbl.BackgroundTransparency = 1
+        NameLbl.Text = " " .. skillData.Name
+        NameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+        NameLbl.Font = Enum.Font.SourceSansBold
+        NameLbl.TextSize = 12
+        NameLbl.TextXAlignment = Enum.TextXAlignment.Left
+        NameLbl.Parent = ItemFrame
+
+        local DelBtn = Instance.new("TextButton")
+        DelBtn.Size = UDim2.new(0, 30, 0, 30)
+        DelBtn.Position = UDim2.new(1, -32, 0.5, -15)
+        DelBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        DelBtn.Text = "🗑️"
+        DelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        DelBtn.Font = Enum.Font.SourceSansBold
+        DelBtn.TextSize = 12
+        DelBtn.Parent = ItemFrame
+        Instance.new("UICorner", DelBtn).CornerRadius = UDim.new(0, 4)
+
+        DelBtn.MouseButton1Click:Connect(function()
+            table.remove(customSkills, i)
+            refreshCustomSkillUI()
+        end)
+    end
+end
+
+-- DÙNG LOADSTRING AN TOÀN ĐỂ TRÍCH XUẤT CHÍNH XÁC INSTANCE VÀ CFRAME TỪ CODE Ô DÁN
+AddSkillBtn.MouseButton1Click:Connect(function()
+    local rawText = AddSkillBox.Text
+    if rawText == "" then return end
+
+    local parsedInstance = workspace
+    local parsedCFrame = CFrame.new(0, 0, 0)
+    local skillName = "Custom Skill " .. (#customSkills + 1)
+
+    pcall(function()
+        local func = loadstring([[
+            local workspace = game:GetService("Workspace")
+            local ohInstance1, ohCFrame2
+            ]] .. rawText .. [[
+            return ohInstance1, ohCFrame2
+        ]])
+        if func then
+            local inst, cf = func()
+            if inst then parsedInstance = inst end
+            if cf then parsedCFrame = cf end
+        end
+    end)
+
+    table.insert(customSkills, {
+        Name = skillName,
+        InstanceObj = parsedInstance,
+        CFrameVal = parsedCFrame,
+        Enabled = true
+    })
+
+    AddSkillBox.Text = ""
+    refreshCustomSkillUI()
+end)
+
+task.spawn(function()
+    while true do
+        local elapsed = os.time() - startTime
+        local h = math.floor(elapsed / 3600)
+        local m = math.floor((elapsed % 3600) / 60)
+        local s = elapsed % 60
+        PlaytimeLabel.Text = string.format("⏱️ THỜI GIAN: %02d:%02d:%02d", h, m, s)
+        task.wait(1)
+    end
+end)
+
+local function getCharacter(player)
+    if not player then return nil end
+    local pName = player.Name
+    local akFolder = workspace:FindFirstChild("Akkinobetuaka")
+    if akFolder then
+        local foundChar = akFolder:FindFirstChild(pName)
+        if foundChar then return foundChar end
+    end
+    return player.Character or workspace:FindFirstChild(pName)
+end
+
+-- STAMINA & ATTRIBUTES LOOP
+task.spawn(function()
+    while true do
+        pcall(function()
+            local char = getCharacter(LocalPlayer)
+            if char then
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    pcall(function() humanoid.Health = humanoid.MaxHealth end)
+                end
+            end
+            if LocalPlayer and LocalPlayer:FindFirstChild("Attributes") then
+                for _, attr in pairs(LocalPlayer.Attributes:GetChildren()) do
+                    if string.find(string.lower(attr.Name), "stamina") or string.find(string.lower(attr.Name), "hunger") then
+                        if attr:IsA("NumberValue") or attr:IsA("IntValue") then
+                            attr.Value = 1000
+                        end
+                    end
+                end
+            end
+        end)
+        task.wait(0.5)
+    end
+end)
+
+-- ESP
+local espDrawings = {}
+
+local function removeEsp(pName)
+    if espDrawings[pName] then
+        for _, obj in pairs(espDrawings[pName]) do
+            pcall(function() obj:Remove() end)
+        end
+        espDrawings[pName] = nil
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if not espEnabled then 
+        for pName, _ in pairs(espDrawings) do removeEsp(pName) end
+        return 
+    end
+
+    local myChar = getCharacter(LocalPlayer)
+    local myRoot = myChar and (myChar:FindFirstChild("HumanoidRootPart") or myChar:FindFirstChild("UpperTorso") or myChar:FindFirstChild("Head"))
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local pName = player.Name
+            local char = getCharacter(player)
+            local rootPart = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Head"))
+            
+            local isTarget = targets[pName] == true
+            local isTeam = teammates[pName] == true
+
+            if (isTarget or isTeam) and char and rootPart then
+                if not espDrawings[pName] then
+                    local box = Drawing.new("Square")
+                    box.Visible = false
+                    box.Thickness = 2
+                    box.Filled = false
+
+                    local nameTag = Drawing.new("Text")
+                    nameTag.Visible = false
+                    nameTag.Size = 20
+                    nameTag.Center = true
+                    nameTag.Outline = true
+                    nameTag.Font = 2
+
+                    espDrawings[pName] = {Box = box, NameTag = nameTag}
+                end
+
+                local box = espDrawings[pName].Box
+                local nameTag = espDrawings[pName].NameTag
+                local vector, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+
+                if onScreen then
+                    local head = char:FindFirstChild("Head")
+                    local topVector = head and Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or vector
+                    local legVector = Camera:WorldToViewportPoint(rootPart.Position - Vector3.new(0, 3, 0))
+                    
+                    local height = math.abs(topVector.Y - legVector.Y)
+                    local width = height / 2
+
+                    box.Size = Vector2.new(width, height)
+                    box.Position = Vector2.new(vector.X - width / 2, topVector.Y)
+                    box.Visible = true
+
+                    local distanceStr = ""
+                    if myRoot then
+                        local distVal = math.floor((myRoot.Position - rootPart.Position).Magnitude)
+                        distanceStr = " [" .. distVal .. "m]"
+                    end
+
+                    if isTarget then
+                        box.Color = Color3.fromRGB(255, 0, 0)
+                        nameTag.Color = Color3.fromRGB(255, 255, 255)
+                        nameTag.Text = "🎯 " .. pName .. distanceStr .. " [TARGET]"
+                    elseif isTeam then
+                        box.Color = Color3.fromRGB(0, 150, 255)
+                        nameTag.Color = Color3.fromRGB(255, 255, 255)
+                        nameTag.Text = pName .. distanceStr .. " [TEAMMATE]"
+                    end
+
+                    nameTag.Position = Vector2.new(vector.X, topVector.Y - 24)
+                    nameTag.Visible = true
+                else
+                    box.Visible = false
+                    nameTag.Visible = false
+                end
+            else
+                removeEsp(pName)
+            end
+        end
+    end
+end)
+
+local function toggleSelectAll()
+    if currentViewMode ~= "KILL" then return end
+    local allP = Players:GetPlayers()
+    local count, selected = 0, 0
+    for _, p in pairs(allP) do
+        if p ~= LocalPlayer and not teammates[p.Name] then
+            count = count + 1
+            if targets[p.Name] then selected = selected + 1 end
+        end
+    end
+    if selected == count and count > 0 then
+        targets = {}
+        SelectAllBtn.Text = "☑️ SELECT ALL TARGETS [Y]"
+        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
+    else
+        for _, p in pairs(allP) do
+            if p ~= LocalPlayer and not teammates[p.Name] then targets[p.Name] = true end
+        end
+        SelectAllBtn.Text = "☒ DESELECT ALL TARGETS [Y]"
+        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+    end
+end
+
+SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
+
+local function getClosestToCrosshairTarget()
+    local myCharacter = getCharacter(LocalPlayer)
+    local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
+    if not myRoot then return nil, nil end
+
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local closestHead = nil
+    local closestChar = nil
+    local shortestDist = math.huge
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and not teammates[player.Name] then
+            local pChar = getCharacter(player)
+            local pHead = pChar and pChar:FindFirstChild("Head") 
+                or pChar and (pChar:FindFirstChild("HumanoidRootPart") or pChar:FindFirstChild("UpperTorso"))
+            
+            if pHead and pChar then
+                local worldDist = (myRoot.Position - pHead.Position).Magnitude
+                if worldDist <= crosshairMaxDistance then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(pHead.Position)
+                    if onScreen then
+                        local distToCenter = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+                        if distToCenter < shortestDist and distToCenter < 300 then
+                            shortestDist = distToCenter
+                            closestHead = pHead
+                            closestChar = pChar
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return closestHead, closestChar
+end
+
+local function performManualAttack()
+    local myCharacter = getCharacter(LocalPlayer)
+    local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
+
+    if myRoot then
+        if crosshairAimActive == true then
+            if tick() - lastAttackTime < attackCooldown then return end
+            local targetHead, targetChar = getClosestToCrosshairTarget()
+            if targetHead and targetChar and tryShootRemote then
+                pcall(function()
+                    local muzzlePos = myRoot.Position + Vector3.new(0, 2, 0)
+                    local dirUnit = (targetHead.Position - muzzlePos).Unit
+
+                    local ohTable1 = {
+                        [1] = {
+                            ["MuzzleDirectionUnit"] = dirUnit,
+                            ["BulletImpactPosition"] = targetHead.Position,
+                            ["TargetInstance"] = targetHead,
+                            ["TargetCFrame"] = targetHead.CFrame,
+                            ["TargetSize"] = targetHead.Size,
+                            ["Normal"] = Vector3.new(0, 1, 0),
+                            ["MuzzlePosition"] = muzzlePos,
+                            ["TargetCharacter"] = targetChar
+                        }
+                    }
+                    tryShootRemote:FireServer(ohTable1)
+                end)
+                lastAttackTime = tick()
+                return
+            end
+        end
+    end
+end
+
+-- AUTO SKILL F3 & CUSTOM SKILLS CHECK KHOẢNG CÁCH PLAYER (< skillF3Distance)
+local function performAutoSkillF3Attack()
+    local myCharacter = getCharacter(LocalPlayer)
+    local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
+
+    if not myRoot then return end
+    if tick() - lastAttackTime < attackCooldown then return end
+
+    if tryShootRemote then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and not teammates[player.Name] then
+                local pChar = getCharacter(player)
+                local pHead = pChar and pChar:FindFirstChild("Head") 
+                    or pChar and (pChar:FindFirstChild("HumanoidRootPart") or pChar:FindFirstChild("UpperTorso"))
+                
+                if pHead and pChar then
+                    local dist = (myRoot.Position - pHead.Position).Magnitude
+                    if dist <= skillF3Distance then
+                        pcall(function()
+                            local muzzlePos = myRoot.Position + Vector3.new(0, 2, 0)
+                            local dirUnit = (pHead.Position - muzzlePos).Unit
+
+                            local ohTable1 = {
+                                [1] = {
+                                    ["MuzzleDirectionUnit"] = dirUnit,
+                                    ["BulletImpactPosition"] = pHead.Position,
+                                    ["TargetInstance"] = pHead,
+                                    ["TargetCFrame"] = pHead.CFrame,
+                                    ["TargetSize"] = pHead.Size,
+                                    ["Normal"] = Vector3.new(0, 1, 0),
+                                    ["MuzzlePosition"] = muzzlePos,
+                                    ["TargetCharacter"] = pChar
+                                }
+                            }
+                            tryShootRemote:FireServer(ohTable1)
+                        end)
+                        lastAttackTime = tick()
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    if tAbilityEvent then
+        for _, skillData in ipairs(customSkills) do
+            if skillData.Enabled then
+                local foundClosePlayer = false
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and not teammates[player.Name] then
+                        local pChar = getCharacter(player)
+                        local pRoot = pChar and (pChar:FindFirstChild("HumanoidRootPart") or pChar:FindFirstChild("Head"))
+                        if pRoot and (myRoot.Position - pRoot.Position).Magnitude <= skillF3Distance then
+                            foundClosePlayer = true
+                            break
+                        end
+                    end
+                end
+
+                if foundClosePlayer then
+                    pcall(function()
+                        tAbilityEvent:FireServer(skillData.InstanceObj, skillData.CFrameVal)
+                    end)
+                end
+            end
+        end
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if UserInputService:GetFocusedTextBox() then return end
+    
+    if crosshairAimActive and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+        performManualAttack()
+    end
+
+    if autoSkillF3Active then
+        performAutoSkillF3Attack()
+    end
+
+    if aimLockActive and isAimToggled then
+        local myCharacter = getCharacter(LocalPlayer)
+        local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
+        if not myRoot then return end
+
+        local closestHead = nil
+        local shortestDist = math.huge
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and not teammates[player.Name] then
+                local targetDino = getCharacter(player)
+                local targetHead = targetDino and targetDino:FindFirstChild("Head") 
+                if targetHead and targetDino then
+                    local dist = (myRoot.Position - targetHead.Position).Magnitude
+                    if dist <= crosshairMaxDistance and dist < shortestDist then
+                        shortestDist = dist
+                        closestHead = targetHead
+                    end
+                end
+            end
+        end
+
+        if closestHead then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, closestHead.Position)
+        end
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if UserInputService:GetFocusedTextBox() then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if not crosshairAimActive then
+            performManualAttack()
+        end
+    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if aimLockActive then
+            isAimToggled = not isAimToggled
+            AimStatusLabel.Text = isAimToggled and "AIM TARGET: ACTIVE (ON) [L]" or "AIM TARGET: ON [L]"
+        end
+    end
+
+    if input.KeyCode == Enum.KeyCode.P then 
+        MainFrame.Visible = not MainFrame.Visible 
+    end
+
+    if input.KeyCode == Enum.KeyCode.F4 then
+        if not MainFrame.Visible then
+            MainFrame.Visible = true
+            currentViewMode = "TEAM"
+        else
+            currentViewMode = (currentViewMode == "KILL") and "TEAM" or "KILL"
+        end
+
+        if currentViewMode == "TEAM" then
+            Title.Text = "🤝 TEAMMATES LIST [F4]"
+            Title.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
+            SelectAllBtn.Visible = false
+        else
+            Title.Text = "LIZLUK MENU [P / F4]"
+            Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+            SelectAllBtn.Visible = true
+        end
+    end
+
+    if input.KeyCode == Enum.KeyCode.Y then toggleSelectAll() end
+
+    if input.KeyCode == Enum.KeyCode.F3 then
+        autoSkillF3Active = not autoSkillF3Active
+        SkillF3StatusLabel.Text = autoSkillF3Active and "SKILL AUTO: ON [F3]" or "SKILL AUTO: OFF [F3]"
+        SkillF3StatusLabel.TextColor3 = autoSkillF3Active and Color3.fromRGB(50, 255, 130) or Color3.fromRGB(255, 70, 70)
+    end
+
+    if input.KeyCode == Enum.KeyCode.L then
+        aimLockActive = not aimLockActive
+        if not aimLockActive then
+            isAimToggled = false
+        end
+        AimStatusLabel.Text = aimLockActive and "AIM TARGET: ON [L]" or "AIM TARGET: OFF [L]"
+        AimStatusLabel.TextColor3 = aimLockActive and Color3.fromRGB(0, 220, 255) or Color3.fromRGB(255, 70, 70)
+    end
+
+    if input.KeyCode == Enum.KeyCode.K then
+        crosshairAimActive = not crosshairAimActive
+        CrosshairStatusLabel.Text = crosshairAimActive and "CROSSHAIR AIM: ON [K]" or "CROSSHAIR AIM: OFF [K]"
+        CrosshairStatusLabel.TextColor3 = crosshairAimActive and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(255, 70, 70)
+    end
+end)
+
+local buttons = {}
+
+local function buildButtons()
+    for _, child in pairs(ScrollingFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    buttons = {}
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local pName = player.Name
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, 0, 0, 28)
+            Btn.Font = Enum.Font.SourceSansBold
+            Btn.TextSize = 13
+            Btn.BorderSizePixel = 0
+            Btn.Parent = ScrollingFrame
+
+            Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
+
+            Btn.MouseButton1Click:Connect(function()
+                if currentViewMode == "KILL" then
+                    teammates[pName] = true
+                    targets[pName] = nil
+                else
+                    teammates[pName] = nil
+                end
+            end)
+
+            Btn.MouseButton2Click:Connect(function()
+                if currentViewMode == "KILL" then
+                    targets[pName] = not targets[pName] or nil
+                end
+            end)
+
+            buttons[pName] = {Button = Btn}
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(buildButtons)
+Players.PlayerRemoving:Connect(function(player)
+    targets[player.Name] = nil
+    teammates[player.Name] = nil
+    removeEsp(player.Name)
+    buildButtons()
+end)
+buildButtons()
+
+task.spawn(function()
+    while true do
+        local myCharacter = getCharacter(LocalPlayer)
+        local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
+        
+        local minDistance = math.huge
+        local tempClosest = ""
+
+        if myRoot then
+            for pName, btnData in pairs(buttons) do
+                local p = Players:FindFirstChild(pName)
+                local pChar = getCharacter(p)
+                local rootPart = pChar and (pChar:FindFirstChild("Head") or pChar:FindFirstChild("HumanoidRootPart") or pChar:FindFirstChild("UpperTorso"))
+                
+                if pChar and rootPart then
+                    local dist = (myRoot.Position - rootPart.Position).Magnitude
+                    if dist <= crosshairMaxDistance and dist < minDistance and not teammates[pName] then
+                        minDistance = dist
+                        tempClosest = pName
+                    end
+                    btnData.Button.LayoutOrder = targets[pName] and (math.floor(dist) - 100000) or math.floor(dist)
+                else
+                    btnData.Button.LayoutOrder = 999999
+                end
+            end
+        end
+        closestPlayerName = tempClosest
+
+        for pName, btnData in pairs(buttons) do
+            local Btn = btnData.Button
+            local isSearchMatch = (searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true))
+
+            if currentViewMode == "KILL" then
+                if not teammates[pName] and isSearchMatch then
+                    Btn.Visible = true
+                    if targets[pName] then
+                        Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                        Btn.Text = pName .. " [TARGET]"
+                        Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    elseif pName == closestPlayerName then
+                        Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
+                        Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
+                        Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
+                    else
+                        Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+                        Btn.Text = pName
+                        Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                    end
+                else
+                    Btn.Visible = false
+                end
+            elseif currentViewMode == "TEAM" then
+                if teammates[pName] and isSearchMatch then
+                    Btn.Visible = true
+                    Btn.BackgroundColor3 = Color3.fromRGB(0, 100, 150)
+                    Btn.Text = "🤝 " .. pName .. " [TEAMMATE]"
+                    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                else
+                    Btn.Visible = false
+                end
+            end
+        end
+
+        task.wait(0.2)
+    end
+end)
+
+print("Lizluk Fixed Custom Skills Loaded Successfully!")
