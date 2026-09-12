@@ -173,8 +173,8 @@ local StaminaStatusLabel = Instance.new("TextLabel")
 StaminaStatusLabel.Size = UDim2.new(1, -10, 0, 22)
 StaminaStatusLabel.Position = UDim2.new(0, 5, 0, 42)
 StaminaStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-StaminaStatusLabel.Text = "STAMINA/ATTR: ACTIVE (ON)"
-StaminaStatusLabel.TextColor3 = Color3.fromRGB(50, 255, 130)
+StaminaStatusLabel.Text = "STAMINA: CUT & FREEZE"
+StaminaStatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 StaminaStatusLabel.Font = Enum.Font.SourceSansBold
 StaminaStatusLabel.TextSize = 11
 StaminaStatusLabel.Parent = MainFrame
@@ -343,7 +343,6 @@ SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     searchFilterText = string.lower(SearchBox.Text)
 end)
 
--- BẢNG QUẢN LÝ SKILL (ĐÃ THÊM Ô ĐẶT TÊN)
 local SkillManagerFrame = Instance.new("Frame")
 SkillManagerFrame.Size = UDim2.new(0, 320, 0, 480)
 SkillManagerFrame.Position = UDim2.new(0.5, -160, 0.5, -240)
@@ -383,7 +382,6 @@ OpenSkillManagerBtn.MouseButton1Click:Connect(function()
     SkillManagerFrame.Visible = not SkillManagerFrame.Visible
 end)
 
--- Ô TÙY CHỈNH COOLDOWN
 local CooldownFrame = Instance.new("Frame")
 CooldownFrame.Size = UDim2.new(1, -10, 0, 28)
 CooldownFrame.Position = UDim2.new(0, 5, 0, 40)
@@ -424,7 +422,6 @@ CooldownBox.FocusLost:Connect(function()
     end
 end)
 
--- Ô NHẬP TÊN SKILL (NEW)
 local SkillNameBox = Instance.new("TextBox")
 SkillNameBox.Size = UDim2.new(1, -10, 0, 28)
 SkillNameBox.Position = UDim2.new(0, 5, 0, 72)
@@ -438,7 +435,6 @@ SkillNameBox.TextSize = 12
 SkillNameBox.Parent = SkillManagerFrame
 Instance.new("UICorner", SkillNameBox).CornerRadius = UDim.new(0, 4)
 
--- Ô DÁN CODE SKILL
 local AddSkillBox = Instance.new("TextBox")
 AddSkillBox.Size = UDim2.new(1, -10, 0, 45)
 AddSkillBox.Position = UDim2.new(0, 5, 0, 104)
@@ -542,7 +538,6 @@ local function refreshCustomSkillUI()
     end
 end
 
--- THÊM SKILL KÈM TÊN TỰ ĐẶT
 AddSkillBtn.MouseButton1Click:Connect(function()
     local rawText = AddSkillBox.Text
     if rawText == "" then return end
@@ -607,27 +602,28 @@ local function getCharacter(player)
     return player.Character or workspace:FindFirstChild(pName)
 end
 
+-- Cắt và giữ nguyên Stamina thông minh theo đúng thư mục Values.Stamina trong game
 task.spawn(function()
+    local lastStaminaVal = nil
+    
     while true do
         pcall(function()
             local char = getCharacter(LocalPlayer)
             if char then
-                local humanoid = char:FindFirstChildOfClass("Humanoid")
-                if humanoid then
-                    pcall(function() humanoid.Health = humanoid.MaxHealth end)
-                end
-            end
-            if LocalPlayer and LocalPlayer:FindFirstChild("Attributes") then
-                for _, attr in pairs(LocalPlayer.Attributes:GetChildren()) do
-                    if string.find(string.lower(attr.Name), "stamina") or string.find(string.lower(attr.Name), "hunger") then
-                        if attr:IsA("NumberValue") or attr:IsA("IntValue") then
-                            attr.Value = 1000
+                local valuesFolder = char:FindFirstChild("Values")
+                if valuesFolder then
+                    local staminaObj = valuesFolder:FindFirstChild("Stamina")
+                    if staminaObj and (staminaObj:IsA("NumberValue") or staminaObj:IsA("IntValue")) then
+                        if lastStaminaVal and staminaObj.Value < lastStaminaVal then
+                            staminaObj.Value = lastStaminaVal 
+                        else
+                            lastStaminaVal = staminaObj.Value 
                         end
                     end
                 end
             end
         end)
-        task.wait(0.5)
+        task.wait(0.05)
     end
 end)
 
@@ -1102,4 +1098,4 @@ task.spawn(function()
     end
 end)
 
-print("Lizluk Named & Auto-Save Skills Loaded Successfully!")
+print("Lizluk Full Script with Smart Stamina Cut Loaded Successfully!")
