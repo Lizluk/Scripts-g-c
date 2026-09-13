@@ -644,7 +644,7 @@ function AddRemoteToList(name, rawCode, mode, val, distance, savedMouseClick, sa
         Name = (name ~= "" and name) or "Remote #" .. (#RemotesList + 1),
         Code = rawCode,
         Mode = mode or 1,
-        Value = tonumber(val) or (mode == 1 and 0.1 or 10),
+        Value = tonumber(val) or (mode == 1 and 0.1 or 1),
         Distance = tonumber(distance) or 50,
         UseMouseClick = (savedMouseClick == true),
         Key = savedKeyName and Enum.KeyCode[savedKeyName] or nil,
@@ -1217,7 +1217,6 @@ local function AddTargetRemoteToList(name, rawCode, sampleName, mode, val, isAct
     end
     UpdateItemModeUI()
 
-    -- Nút gán phím riêng cho lệnh Multi-Kill
     local KeyBtn = Instance.new("TextButton")
     KeyBtn.Size = UDim2.new(0, 55, 0, 28)
     KeyBtn.Position = UDim2.new(0, 190, 0, 8)
@@ -1716,7 +1715,6 @@ UserInputService.InputBegan:Connect(function(input, gpe)
             end
         end
 
-        -- Gán phím cho tab Remote Exec
         if ActiveBindingItem then
             ActiveBindingItem.Key = input.KeyCode
             ActiveBindingItem.KeyBtn.Text = input.KeyCode.Name
@@ -1726,7 +1724,6 @@ UserInputService.InputBegan:Connect(function(input, gpe)
             return
         end
 
-        -- Gán phím cho tab Multi-Kill
         if ActiveTargetBindingItem then
             ActiveTargetBindingItem.Key = input.KeyCode
             ActiveTargetBindingItem.KeyBtn.Text = input.KeyCode.Name
@@ -1744,14 +1741,12 @@ UserInputService.InputBegan:Connect(function(input, gpe)
             return
         end
 
-        -- Kích hoạt phím cho tab Remote Exec
         for _, item in ipairs(RemotesList) do
             if item.Key and input.KeyCode == item.Key and not gpe then
                 item:ToggleOrExecute()
             end
         end
 
-        -- Kích hoạt phím cho tab Multi-Kill (Bật/Tắt trạng thái vòng lặp lệnh)
         for _, item in ipairs(TargetRemotesList) do
             if item.Key and input.KeyCode == item.Key and not gpe then
                 item:ToggleOrExecute()
@@ -1776,7 +1771,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 ----------------------------------------------------------------
--- HỆ THỐNG ESP TÊN & KHOẢNG CÁCH[cite: 1]
+-- HỆ THỐNG ESP TÊN & KHOẢNG CÁCH (ĐÃ SỬA ĐỂ QUÉT CẢ MODEL/BOSS)[cite: 1]
 ----------------------------------------------------------------
 local function applyCustomESP(targetModel)
     if not targetModel:IsA("Model") then return end
@@ -1879,16 +1874,26 @@ local function InitESPWatcher()
     Players.PlayerAdded:Connect(applyStandardESP)
 
     task.spawn(function()
-        while task.wait(1) do
-            local pathStr = PathBox.Text
-            local parentObj = GetObjectsFromPath(pathStr)
-            if parentObj and parentObj ~= Players then
-                for _, obj in ipairs(parentObj:GetChildren()) do
-                    if obj:IsA("Model") then
+        while task.wait(0.5) do
+            pcall(function()
+                -- Quét tất cả các Model hiển thị trực tiếp trong Workspace (Boss, Quái, v.v.)
+                for _, obj in ipairs(workspace:GetChildren()) do
+                    if obj:IsA("Model") and obj ~= LocalPlayer.Character then
                         applyCustomESP(obj)
                     end
                 end
-            end
+
+                -- Quét theo đường dẫn cấu hình
+                local pathStr = PathBox.Text
+                local parentObj = GetObjectsFromPath(pathStr)
+                if parentObj and parentObj ~= Players then
+                    for _, obj in ipairs(parentObj:GetChildren()) do
+                        if obj:IsA("Model") then
+                            applyCustomESP(obj)
+                        end
+                    end
+                end
+            end)
         end
     end)
 end
