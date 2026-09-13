@@ -1776,7 +1776,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 ----------------------------------------------------------------
--- HỆ THỐNG ESP TÊN & KHOẢNG CÁCH (CHỈ CHO PLAYER)
+-- HỆ THỐNG ESP TÊN & KHOẢNG CÁCH[cite: 1]
 ----------------------------------------------------------------
 local function applyCustomESP(targetModel)
     if not targetModel:IsA("Model") then return end
@@ -1877,6 +1877,20 @@ local function InitESPWatcher()
 
     for _, p in pairs(Players:GetPlayers()) do applyStandardESP(p) end
     Players.PlayerAdded:Connect(applyStandardESP)
+
+    task.spawn(function()
+        while task.wait(1) do
+            local pathStr = PathBox.Text
+            local parentObj = GetObjectsFromPath(pathStr)
+            if parentObj and parentObj ~= Players then
+                for _, obj in ipairs(parentObj:GetChildren()) do
+                    if obj:IsA("Model") then
+                        applyCustomESP(obj)
+                    end
+                end
+            end
+        end
+    end)
 end
 
 InitESPWatcher()
