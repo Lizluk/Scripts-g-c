@@ -1,0 +1,2190 @@
+-- Remote Executor & Smart Multi-Target Kill & Script Hub System (Fixed Multi-Kill Keybind)
+-- Tương thích với các Executor phổ biến (Delta, Hydrogen, Wave, Codex, v.v.)
+
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlaceId = game.PlaceId
+
+local SelectedPlayers = {}
+local SaveFileName = "RemoteExec_Place_" .. tostring(PlaceId) .. ".json"
+local TargetSaveFileName = "TargetExec_Place_" .. tostring(PlaceId) .. ".json"
+local ScriptHubSaveFileName = "Global_ScriptHub_Master.json"
+local SettingsSaveFileName = "Global_Settings_Master.json"
+
+local ToggleGuiKey = Enum.KeyCode.RightShift
+local IsBindingToggleGuiKey = false
+
+local KillGlobalKey = Enum.KeyCode.Q
+local IsBindingGlobalKey = false
+
+local ESPEnabled = false
+local IsBindingESPKey = false
+local ESPToggleKey = Enum.KeyCode.F10
+
+local ActiveBindingItem = nil
+local ActiveTargetBindingItem = nil
+
+local TargetParent = LocalPlayer:WaitForChild("PlayerGui")
+pcall(function()
+    if gethui then
+        TargetParent = gethui()
+    elseif CoreGui then
+        TargetParent = CoreGui
+    end
+end)
+
+if TargetParent:FindFirstChild("RemoteExecutorGUI") then
+    TargetParent.RemoteExecutorGUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "RemoteExecutorGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = TargetParent
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 680, 0, 460)
+MainFrame.Position = UDim2.new(0.5, -340, 0.5, -230)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -70, 0, 35)
+TitleLabel.Position = UDim2.new(0, 10, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "⚡ Remote Executor & Script Hub System (Place: " .. PlaceId .. ")"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 14
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = MainFrame
+
+local HideBtn = Instance.new("TextButton")
+HideBtn.Size = UDim2.new(0, 25, 0, 25)
+HideBtn.Position = UDim2.new(1, -60, 0, 5)
+HideBtn.BackgroundColor3 = Color3.fromRGB(180, 140, 40)
+HideBtn.Text = "-"
+HideBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+HideBtn.Font = Enum.Font.SourceSansBold
+HideBtn.TextSize = 16
+HideBtn.Parent = MainFrame
+Instance.new("UICorner", HideBtn).CornerRadius = UDim.new(0, 5)
+
+HideBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+end)
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 25, 0, 25)
+CloseBtn.Position = UDim2.new(1, -30, 0, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.TextSize = 14
+CloseBtn.Parent = MainFrame
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 5)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+end)
+
+local TabFrame = Instance.new("Frame")
+TabFrame.Size = UDim2.new(1, -20, 0, 30)
+TabFrame.Position = UDim2.new(0, 10, 0, 35)
+TabFrame.BackgroundTransparency = 1
+TabFrame.Parent = MainFrame
+
+local Tab1Btn = Instance.new("TextButton")
+Tab1Btn.Size = UDim2.new(0, 160, 1, 0)
+Tab1Btn.Position = UDim2.new(0, 0, 0, 0)
+Tab1Btn.BackgroundColor3 = Color3.fromRGB(45, 80, 140)
+Tab1Btn.Text = "⚡ Remote Exec"
+Tab1Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Tab1Btn.Font = Enum.Font.SourceSansBold
+Tab1Btn.TextSize = 13
+Tab1Btn.Parent = TabFrame
+Instance.new("UICorner", Tab1Btn).CornerRadius = UDim.new(0, 5)
+
+local Tab2Btn = Instance.new("TextButton")
+Tab2Btn.Size = UDim2.new(0, 160, 1, 0)
+Tab2Btn.Position = UDim2.new(0, 165, 0, 0)
+Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+Tab2Btn.Text = "⚔️ Multi-Kill"
+Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+Tab2Btn.Font = Enum.Font.SourceSansBold
+Tab2Btn.TextSize = 13
+Tab2Btn.Parent = TabFrame
+Instance.new("UICorner", Tab2Btn).CornerRadius = UDim.new(0, 5)
+
+local Tab3Btn = Instance.new("TextButton")
+Tab3Btn.Size = UDim2.new(0, 160, 1, 0)
+Tab3Btn.Position = UDim2.new(0, 330, 0, 0)
+Tab3Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+Tab3Btn.Text = "📜 Script Hub"
+Tab3Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+Tab3Btn.Font = Enum.Font.SourceSansBold
+Tab3Btn.TextSize = 13
+Tab3Btn.Parent = TabFrame
+Instance.new("UICorner", Tab3Btn).CornerRadius = UDim.new(0, 5)
+
+local Tab4Btn = Instance.new("TextButton")
+Tab4Btn.Size = UDim2.new(0, 160, 1, 0)
+Tab4Btn.Position = UDim2.new(0, 495, 0, 0)
+Tab4Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+Tab4Btn.Text = "⚙️ Settings"
+Tab4Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+Tab4Btn.Font = Enum.Font.SourceSansBold
+Tab4Btn.TextSize = 13
+Tab4Btn.Parent = TabFrame
+Instance.new("UICorner", Tab4Btn).CornerRadius = UDim.new(0, 5)
+
+local ExecContainer = Instance.new("Frame")
+ExecContainer.Size = UDim2.new(1, 0, 1, -70)
+ExecContainer.Position = UDim2.new(0, 0, 0, 70)
+ExecContainer.BackgroundTransparency = 1
+ExecContainer.Parent = MainFrame
+
+local KillContainer = Instance.new("Frame")
+KillContainer.Size = UDim2.new(1, 0, 1, -70)
+KillContainer.Position = UDim2.new(0, 0, 0, 70)
+KillContainer.BackgroundTransparency = 1
+KillContainer.Visible = false
+KillContainer.Parent = MainFrame
+
+local HubContainer = Instance.new("Frame")
+HubContainer.Size = UDim2.new(1, 0, 1, -70)
+HubContainer.Position = UDim2.new(0, 0, 0, 70)
+HubContainer.BackgroundTransparency = 1
+HubContainer.Visible = false
+HubContainer.Parent = MainFrame
+
+local SettingsContainer = Instance.new("Frame")
+SettingsContainer.Size = UDim2.new(1, 0, 1, -70)
+SettingsContainer.Position = UDim2.new(0, 0, 0, 70)
+SettingsContainer.BackgroundTransparency = 1
+SettingsContainer.Visible = false
+SettingsContainer.Parent = MainFrame
+
+Tab1Btn.MouseButton1Click:Connect(function()
+    ExecContainer.Visible = true; KillContainer.Visible = false; HubContainer.Visible = false; SettingsContainer.Visible = false
+    Tab1Btn.BackgroundColor3 = Color3.fromRGB(45, 80, 140); Tab1Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab3Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab3Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab4Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab4Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+end)
+
+Tab2Btn.MouseButton1Click:Connect(function()
+    ExecContainer.Visible = false; KillContainer.Visible = true; HubContainer.Visible = false; SettingsContainer.Visible = false
+    Tab2Btn.BackgroundColor3 = Color3.fromRGB(140, 45, 80); Tab2Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Tab1Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab1Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab3Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab3Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab4Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab4Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+end)
+
+Tab3Btn.MouseButton1Click:Connect(function()
+    ExecContainer.Visible = false; KillContainer.Visible = false; HubContainer.Visible = true; SettingsContainer.Visible = false
+    Tab3Btn.BackgroundColor3 = Color3.fromRGB(80, 45, 140); Tab3Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Tab1Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab1Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab4Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab4Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+end)
+
+Tab4Btn.MouseButton1Click:Connect(function()
+    ExecContainer.Visible = false; KillContainer.Visible = false; HubContainer.Visible = false; SettingsContainer.Visible = true
+    Tab4Btn.BackgroundColor3 = Color3.fromRGB(100, 100, 50); Tab4Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Tab1Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab1Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab2Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Tab3Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50); Tab3Btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+end)
+
+----------------------------------------------------------------
+-- TAB 1: REMOTE EXECUTOR
+----------------------------------------------------------------
+local ExecLeftFrame = Instance.new("Frame")
+ExecLeftFrame.Size = UDim2.new(0, 190, 1, -10)
+ExecLeftFrame.Position = UDim2.new(0, 10, 0, 0)
+ExecLeftFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+ExecLeftFrame.Parent = ExecContainer
+Instance.new("UICorner", ExecLeftFrame).CornerRadius = UDim.new(0, 6)
+
+local PathBox = Instance.new("TextBox")
+PathBox.Size = UDim2.new(1, -10, 0, 26)
+PathBox.Position = UDim2.new(0, 5, 0, 5)
+PathBox.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+PathBox.TextColor3 = Color3.fromRGB(255, 255, 150)
+PathBox.PlaceholderText = "Đường dẫn (VD: workspace.Players)"
+PathBox.Text = "workspace.Players"
+PathBox.Font = Enum.Font.SourceSansBold
+PathBox.TextSize = 11
+PathBox.Parent = ExecLeftFrame
+Instance.new("UICorner", PathBox).CornerRadius = UDim.new(0, 4)
+
+local ExecSelectAllBtn = Instance.new("TextButton")
+ExecSelectAllBtn.Size = UDim2.new(0, 85, 0, 22)
+ExecSelectAllBtn.Position = UDim2.new(0, 5, 0, 35)
+ExecSelectAllBtn.BackgroundColor3 = Color3.fromRGB(40, 80, 140)
+ExecSelectAllBtn.Text = "Chọn tất (T)"
+ExecSelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ExecSelectAllBtn.Font = Enum.Font.SourceSansBold
+ExecSelectAllBtn.TextSize = 11
+ExecSelectAllBtn.Parent = ExecLeftFrame
+Instance.new("UICorner", ExecSelectAllBtn).CornerRadius = UDim.new(0, 4)
+
+local ExecClearAllBtn = Instance.new("TextButton")
+ExecClearAllBtn.Size = UDim2.new(0, 85, 0, 22)
+ExecClearAllBtn.Position = UDim2.new(0, 95, 0, 35)
+ExecClearAllBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 40)
+ExecClearAllBtn.Text = "Bỏ chọn hết"
+ExecClearAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ExecClearAllBtn.Font = Enum.Font.SourceSansBold
+ExecClearAllBtn.TextSize = 11
+ExecClearAllBtn.Parent = ExecLeftFrame
+Instance.new("UICorner", ExecClearAllBtn).CornerRadius = UDim.new(0, 4)
+
+local ExecPlrScroll = Instance.new("ScrollingFrame")
+ExecPlrScroll.Size = UDim2.new(1, -10, 1, -65)
+ExecPlrScroll.Position = UDim2.new(0, 5, 0, 60)
+ExecPlrScroll.BackgroundTransparency = 1
+ExecPlrScroll.ScrollBarThickness = 4
+ExecPlrScroll.Parent = ExecLeftFrame
+
+local ExecPlrListLayout = Instance.new("UIListLayout")
+ExecPlrListLayout.Parent = ExecPlrScroll
+ExecPlrListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ExecPlrListLayout.Padding = UDim.new(0, 4)
+
+ExecPlrListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ExecPlrScroll.CanvasSize = UDim2.new(0, 0, 0, ExecPlrListLayout.AbsoluteContentSize.Y + 5)
+end)
+
+local ExecRightFrame = Instance.new("Frame")
+ExecRightFrame.Size = UDim2.new(1, -210, 1, -10)
+ExecRightFrame.Position = UDim2.new(0, 210, 0, 0)
+ExecRightFrame.BackgroundTransparency = 1
+ExecRightFrame.Parent = ExecContainer
+
+local CodeInput = Instance.new("TextBox")
+CodeInput.Size = UDim2.new(1, 0, 0, 75)
+CodeInput.Position = UDim2.new(0, 0, 0, 0)
+CodeInput.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+CodeInput.TextColor3 = Color3.fromRGB(200, 255, 200)
+CodeInput.PlaceholderText = "-- Dán đoạn code Remote thông thường có chữ Name vào đây..."
+CodeInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+CodeInput.Text = ""
+CodeInput.TextSize = 13
+CodeInput.Font = Enum.Font.Code
+CodeInput.TextXAlignment = Enum.TextXAlignment.Left
+CodeInput.TextYAlignment = Enum.TextYAlignment.Top
+CodeInput.ClearTextOnFocus = false
+CodeInput.MultiLine = true
+CodeInput.Parent = ExecRightFrame
+Instance.new("UICorner", CodeInput).CornerRadius = UDim.new(0, 6)
+
+local NameBox = Instance.new("TextBox")
+NameBox.Size = UDim2.new(0, 100, 0, 28)
+NameBox.Position = UDim2.new(0, 0, 0, 82)
+NameBox.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+NameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+NameBox.PlaceholderText = "Tên Remote..."
+NameBox.Text = ""
+NameBox.Font = Enum.Font.SourceSans
+NameBox.TextSize = 13
+NameBox.Parent = ExecRightFrame
+Instance.new("UICorner", NameBox).CornerRadius = UDim.new(0, 5)
+
+local DistanceBox = Instance.new("TextBox")
+DistanceBox.Size = UDim2.new(0, 65, 0, 28)
+DistanceBox.Position = UDim2.new(0, 105, 0, 82)
+DistanceBox.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+DistanceBox.TextColor3 = Color3.fromRGB(255, 200, 100)
+DistanceBox.PlaceholderText = "Khoảng cách"
+DistanceBox.Text = "50"
+DistanceBox.Font = Enum.Font.SourceSansBold
+DistanceBox.TextSize = 12
+DistanceBox.Parent = ExecRightFrame
+Instance.new("UICorner", DistanceBox).CornerRadius = UDim.new(0, 5)
+
+local CurrentMode = 1
+local ModeBtn = Instance.new("TextButton")
+ModeBtn.Size = UDim2.new(0, 100, 0, 28)
+ModeBtn.Position = UDim2.new(0, 175, 0, 82)
+ModeBtn.BackgroundColor3 = Color3.fromRGB(45, 80, 140)
+ModeBtn.Text = "Delay (Giây)"
+ModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ModeBtn.Font = Enum.Font.SourceSansBold
+ModeBtn.TextSize = 12
+ModeBtn.Parent = ExecRightFrame
+Instance.new("UICorner", ModeBtn).CornerRadius = UDim.new(0, 5)
+
+ModeBtn.MouseButton1Click:Connect(function()
+    if CurrentMode == 1 then
+        CurrentMode = 2
+        ModeBtn.Text = "Spam (Lần)"
+        ModeBtn.BackgroundColor3 = Color3.fromRGB(140, 45, 80)
+    else
+        CurrentMode = 1
+        ModeBtn.Text = "Delay (Giây)"
+        ModeBtn.BackgroundColor3 = Color3.fromRGB(45, 80, 140)
+    end
+end)
+
+local ValueBox = Instance.new("TextBox")
+ValueBox.Size = UDim2.new(0, 45, 0, 28)
+ValueBox.Position = UDim2.new(0, 280, 0, 82)
+ValueBox.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+ValueBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+ValueBox.PlaceholderText = "Val"
+ValueBox.Text = "0.1"
+ValueBox.Font = Enum.Font.SourceSans
+ValueBox.TextSize = 13
+ValueBox.Parent = ExecRightFrame
+Instance.new("UICorner", ValueBox).CornerRadius = UDim.new(0, 5)
+
+local AddBtn = Instance.new("TextButton")
+AddBtn.Size = UDim2.new(0, 120, 0, 28)
+AddBtn.Position = UDim2.new(0, 330, 0, 82)
+AddBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 80)
+AddBtn.Text = "+ Thêm Remote"
+AddBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AddBtn.Font = Enum.Font.SourceSansBold
+AddBtn.TextSize = 13
+AddBtn.Parent = ExecRightFrame
+Instance.new("UICorner", AddBtn).CornerRadius = UDim.new(0, 5)
+
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(1, 0, 0, 235)
+ScrollFrame.Position = UDim2.new(0, 0, 0, 116)
+ScrollFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.ScrollBarThickness = 6
+ScrollFrame.Parent = ExecRightFrame
+Instance.new("UICorner", ScrollFrame).CornerRadius = UDim.new(0, 6)
+
+local UIList = Instance.new("UIListLayout")
+UIList.Parent = ScrollFrame
+UIList.SortOrder = Enum.SortOrder.LayoutOrder
+UIList.Padding = UDim.new(0, 6)
+
+UIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIList.AbsoluteContentSize.Y + 10)
+end)
+
+local function GetObjectsFromPath(pathStr)
+    if pathStr == "workspace.Players" or pathStr == "Players" then
+        return Players
+    end
+    local obj = game
+    local parts = string.split(pathStr, ".")
+    for _, part in ipairs(parts) do
+        if part ~= "" and obj then
+            pcall(function()
+                if obj == game and game:GetService(part) then
+                    obj = game:GetService(part)
+                else
+                    obj = obj:FindFirstChild(part)
+                end
+            end)
+        end
+    end
+    return obj
+end
+
+local ExecSelectedPlayers = {}
+local playerButtonCache = {}
+
+local function UpdateExecPlayerList()
+    local pathStr = PathBox.Text
+    local parentObj = GetObjectsFromPath(pathStr)
+    if not parentObj then return end
+
+    local childrenList = (parentObj == Players or parentObj:IsA("Players")) and Players:GetPlayers() or parentObj:GetChildren()
+    local myRoot = LocalPlayer.Character and (LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or LocalPlayer.Character:FindFirstChild("RootPart"))
+    local unsortedList = {}
+    local maxDistLimit = tonumber(DistanceBox.Text) or 50
+
+    for _, child in ipairs(childrenList) do
+        if child ~= LocalPlayer then
+            local targetChar = child:IsA("Player") and child.Character or (child:IsA("Model") and child)
+            local targetHead = targetChar and (targetChar:FindFirstChild("Head") or targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("RootPart") or targetChar:FindFirstChildWhichIsA("BasePart"))
+            local dist = 999999
+
+            if myRoot and targetHead then
+                dist = math.floor((targetHead.Position - myRoot.Position).Magnitude)
+            end
+
+            table.insert(unsortedList, {
+                Object = child,
+                Name = child.Name,
+                Distance = dist
+            })
+        end
+    end
+
+    table.sort(unsortedList, function(a, b)
+        local inRangeA = (a.Distance <= maxDistLimit) and 1 or 0
+        local inRangeB = (b.Distance <= maxDistLimit) and 1 or 0
+        if inRangeA ~= inRangeB then return inRangeA > inRangeB end
+        return a.Distance < b.Distance
+    end)
+
+    local currentNamesKey = ""
+    for _, data in ipairs(unsortedList) do
+        currentNamesKey = currentNamesKey .. data.Name .. ","
+    end
+
+    if ExecPlrScroll:GetAttribute("CachedKeys") ~= currentNamesKey then
+        ExecPlrScroll:SetAttribute("CachedKeys", currentNamesKey)
+        for _, child in ipairs(ExecPlrScroll:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+        playerButtonCache = {}
+
+        for index, data in ipairs(unsortedList) do
+            local nameToCheck = data.Name
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, -5, 0, 25)
+            Btn.Font = Enum.Font.SourceSansBold
+            Btn.TextSize = 11
+            Btn.LayoutOrder = index
+            Btn.Parent = ExecPlrScroll
+            Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
+
+            local function RefreshBtnStyle()
+                if ExecSelectedPlayers[nameToCheck] then
+                    Btn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+                    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                else
+                    Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+                    Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                end
+            end
+            RefreshBtnStyle()
+
+            Btn.MouseButton1Click:Connect(function()
+                ExecSelectedPlayers[nameToCheck] = not ExecSelectedPlayers[nameToCheck] and true or nil
+                RefreshBtnStyle()
+            end)
+
+            playerButtonCache[nameToCheck] = Btn
+        end
+    end
+
+    for index, data in ipairs(unsortedList) do
+        local nameToCheck = data.Name
+        local Btn = playerButtonCache[nameToCheck]
+        if Btn then
+            Btn.LayoutOrder = index
+            if data.Distance <= maxDistLimit and data.Distance ~= 999999 then
+                Btn.Text = string.format("🌟 [Gần bạn] %s [%dm]", nameToCheck, data.Distance)
+            elseif data.Distance ~= 999999 then
+                Btn.Text = string.format("%s [%dm]", nameToCheck, data.Distance)
+            else
+                Btn.Text = string.format("%s [N/A]", nameToCheck)
+            end
+        end
+    end
+end
+
+PathBox.FocusLost:Connect(UpdateExecPlayerList)
+DistanceBox.FocusLost:Connect(UpdateExecPlayerList)
+
+task.spawn(function()
+    while true do
+        pcall(function()
+            if ExecContainer.Visible then UpdateExecPlayerList() end
+        end)
+        task.wait(0.3)
+    end
+end)
+
+ExecSelectAllBtn.MouseButton1Click:Connect(function()
+    local pathStr = PathBox.Text
+    local parentObj = GetObjectsFromPath(pathStr)
+    if parentObj then
+        local childrenList = (parentObj == Players or parentObj:IsA("Players")) and Players:GetPlayers() or parentObj:GetChildren()
+        for _, child in ipairs(childrenList) do
+            if child ~= LocalPlayer then ExecSelectedPlayers[child.Name] = true end
+        end
+        UpdateExecPlayerList()
+    end
+end)
+
+ExecClearAllBtn.MouseButton1Click:Connect(function()
+    ExecSelectedPlayers = {}
+    UpdateExecPlayerList()
+end)
+
+Players.PlayerAdded:Connect(UpdateExecPlayerList)
+Players.PlayerRemoving:Connect(function(plr)
+    ExecSelectedPlayers[plr.Name] = nil
+    UpdateExecPlayerList()
+end)
+UpdateExecPlayerList()
+
+local RemotesList = {}
+
+local function SaveDataToFile()
+    if not writefile then return end
+    local exportTable = {}
+    for _, item in ipairs(RemotesList) do
+        table.insert(exportTable, {
+            Name = item.Name,
+            Code = item.Code,
+            Mode = item.Mode,
+            Value = item.Value,
+            Distance = item.Distance,
+            UseMouseClick = item.UseMouseClick,
+            KeyName = item.Key and item.Key.Name or nil
+        })
+    end
+    pcall(function()
+        writefile(SaveFileName, HttpService:JSONEncode(exportTable))
+    end)
+end
+
+local function ExecuteSmartRemote(itemData)
+    local targetNamesToRun = {}
+    local maxDist = tonumber(itemData.Distance) or 50
+    local myRoot = LocalPlayer.Character and (LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or LocalPlayer.Character:FindFirstChild("RootPart"))
+
+    if myRoot then
+        local pathStr = PathBox.Text
+        local parentObj = GetObjectsFromPath(pathStr)
+        if parentObj then
+            local childrenList = (parentObj == Players or parentObj:IsA("Players")) and Players:GetPlayers() or parentObj:GetChildren()
+            for _, child in ipairs(childrenList) do
+                if child ~= LocalPlayer and ExecSelectedPlayers[child.Name] then
+                    local targetChar = child:IsA("Player") and child.Character or (child:IsA("Model") and child)
+                    local targetHead = targetChar and (targetChar:FindFirstChild("Head") or targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("RootPart") or targetChar:FindFirstChildWhichIsA("BasePart"))
+                    if targetHead then
+                        local dist = (targetHead.Position - myRoot.Position).Magnitude
+                        if dist <= maxDist then
+                            table.insert(targetNamesToRun, { Name = child.Name, Distance = dist })
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    table.sort(targetNamesToRun, function(a, b) return a.Distance < b.Distance end)
+    if #targetNamesToRun == 0 then return end
+
+    local nearestTarget = targetNamesToRun[1].Name
+    local codeToRun = itemData.Code
+    codeToRun = string.gsub(codeToRun, '"Name"', '"' .. nearestTarget .. '"')
+    codeToRun = string.gsub(codeToRun, "'Name'", "'" .. nearestTarget .. "'")
+    codeToRun = string.gsub(codeToRun, "Name", nearestTarget)
+
+    local func, err = loadstring(codeToRun)
+    if func then task.spawn(function() pcall(func) end) end
+end
+
+local function OpenEditPopup(itemData, onSaveCallback)
+    if ScreenGui:FindFirstChild("EditPopupOverlay") then
+        ScreenGui.EditPopupOverlay:Destroy()
+    end
+
+    local Overlay = Instance.new("Frame")
+    Overlay.Name = "EditPopupOverlay"
+    Overlay.Size = UDim2.new(1, 0, 1, 0)
+    Overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    Overlay.BackgroundTransparency = 0.5
+    Overlay.ZIndex = 10
+    Overlay.Parent = ScreenGui
+
+    local PopupFrame = Instance.new("Frame")
+    PopupFrame.Size = UDim2.new(0, 450, 0, 320)
+    PopupFrame.Position = UDim2.new(0.5, -225, 0.5, -160)
+    PopupFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    PopupFrame.ZIndex = 11
+    PopupFrame.Parent = Overlay
+    Instance.new("UICorner", PopupFrame).CornerRadius = UDim.new(0, 8)
+
+    local PopupTitle = Instance.new("TextLabel")
+    PopupTitle.Size = UDim2.new(1, 0, 0, 35)
+    PopupTitle.Position = UDim2.new(0, 10, 0, 0)
+    PopupTitle.BackgroundTransparency = 1
+    PopupTitle.Text = "✏️ Chỉnh sửa Lệnh: " .. itemData.Name
+    PopupTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    PopupTitle.Font = Enum.Font.SourceSansBold
+    PopupTitle.TextSize = 14
+    PopupTitle.TextXAlignment = Enum.TextXAlignment.Left
+    PopupTitle.ZIndex = 12
+    PopupTitle.Parent = PopupFrame
+
+    local EditCodeBox = Instance.new("TextBox")
+    EditCodeBox.Size = UDim2.new(1, -20, 0, 120)
+    EditCodeBox.Position = UDim2.new(0, 10, 0, 40)
+    EditCodeBox.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+    EditCodeBox.TextColor3 = Color3.fromRGB(200, 255, 200)
+    EditCodeBox.Text = itemData.Code
+    EditCodeBox.TextSize = 12
+    EditCodeBox.Font = Enum.Font.Code
+    EditCodeBox.TextXAlignment = Enum.TextXAlignment.Left
+    EditCodeBox.TextYAlignment = Enum.TextYAlignment.Top
+    EditCodeBox.ClearTextOnFocus = false
+    EditCodeBox.MultiLine = true
+    EditCodeBox.ZIndex = 12
+    EditCodeBox.Parent = PopupFrame
+    Instance.new("UICorner", EditCodeBox).CornerRadius = UDim.new(0, 5)
+
+    local EditNameBox = Instance.new("TextBox")
+    EditNameBox.Size = UDim2.new(0, 200, 0, 30)
+    EditNameBox.Position = UDim2.new(0, 10, 0, 170)
+    EditNameBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    EditNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    EditNameBox.Text = itemData.Name
+    EditNameBox.PlaceholderText = "Tên lệnh..."
+    EditNameBox.Font = Enum.Font.SourceSans
+    EditNameBox.TextSize = 13
+    EditNameBox.ZIndex = 12
+    EditNameBox.Parent = PopupFrame
+    Instance.new("UICorner", EditNameBox).CornerRadius = UDim.new(0, 5)
+
+    local EditDistBox = Instance.new("TextBox")
+    EditDistBox.Size = UDim2.new(0, 210, 0, 30)
+    EditDistBox.Position = UDim2.new(0, 220, 0, 170)
+    EditDistBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    EditDistBox.TextColor3 = Color3.fromRGB(255, 200, 100)
+    EditDistBox.Text = tostring(itemData.Distance)
+    EditDistBox.PlaceholderText = "Khoảng cách..."
+    EditDistBox.Font = Enum.Font.SourceSansBold
+    EditDistBox.TextSize = 12
+    EditDistBox.ZIndex = 12
+    EditDistBox.Parent = PopupFrame
+    Instance.new("UICorner", EditDistBox).CornerRadius = UDim.new(0, 5)
+
+    local EditValBox = Instance.new("TextBox")
+    EditValBox.Size = UDim2.new(0, 200, 0, 30)
+    EditValBox.Position = UDim2.new(0, 10, 0, 210)
+    EditValBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    EditValBox.TextColor3 = Color3.fromRGB(255, 255, 150)
+    EditValBox.Text = tostring(itemData.Value)
+    EditValBox.PlaceholderText = "Giá trị Delay/Spam..."
+    EditValBox.Font = Enum.Font.SourceSans
+    EditValBox.TextSize = 13
+    EditValBox.ZIndex = 12
+    EditValBox.Parent = PopupFrame
+    Instance.new("UICorner", EditValBox).CornerRadius = UDim.new(0, 5)
+
+    local SaveEditBtn = Instance.new("TextButton")
+    SaveEditBtn.Size = UDim2.new(0, 210, 0, 35)
+    SaveEditBtn.Position = UDim2.new(0, 220, 0, 210)
+    SaveEditBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 80)
+    SaveEditBtn.Text = "💾 Lưu Thay Đổi"
+    SaveEditBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SaveEditBtn.Font = Enum.Font.SourceSansBold
+    SaveEditBtn.TextSize = 13
+    SaveEditBtn.ZIndex = 12
+    SaveEditBtn.Parent = PopupFrame
+    Instance.new("UICorner", SaveEditBtn).CornerRadius = UDim.new(0, 5)
+
+    local CancelEditBtn = Instance.new("TextButton")
+    CancelEditBtn.Size = UDim2.new(1, -20, 0, 30)
+    CancelEditBtn.Position = UDim2.new(0, 10, 0, 265)
+    CancelEditBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    CancelEditBtn.Text = "Hủy bỏ"
+    CancelEditBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CancelEditBtn.Font = Enum.Font.SourceSansBold
+    CancelEditBtn.TextSize = 13
+    CancelEditBtn.ZIndex = 12
+    CancelEditBtn.Parent = PopupFrame
+    Instance.new("UICorner", CancelEditBtn).CornerRadius = UDim.new(0, 5)
+
+    SaveEditBtn.MouseButton1Click:Connect(function()
+        itemData.Name = (EditNameBox.Text ~= "" and EditNameBox.Text) or itemData.Name
+        itemData.Code = EditCodeBox.Text
+        itemData.Distance = tonumber(EditDistBox.Text) or itemData.Distance
+        itemData.Value = tonumber(EditValBox.Text) or itemData.Value
+        if onSaveCallback then onSaveCallback() end
+        Overlay:Destroy()
+    end)
+
+    CancelEditBtn.MouseButton1Click:Connect(function()
+        Overlay:Destroy()
+    end)
+end
+
+function AddRemoteToList(name, rawCode, mode, val, distance, savedMouseClick, savedKeyName)
+    if rawCode == "" then return end
+
+    local itemData = {
+        Name = (name ~= "" and name) or "Remote #" .. (#RemotesList + 1),
+        Code = rawCode,
+        Mode = mode or 1,
+        Value = tonumber(val) or (mode == 1 and 0.1 or 10),
+        Distance = tonumber(distance) or 50,
+        UseMouseClick = (savedMouseClick == true),
+        Key = savedKeyName and Enum.KeyCode[savedKeyName] or nil,
+        IsActive = false,
+        Thread = nil
+    }
+
+    local ItemFrame = Instance.new("Frame")
+    ItemFrame.Size = UDim2.new(1, -10, 0, 45)
+    ItemFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
+    ItemFrame.Parent = ScrollFrame
+    Instance.new("UICorner", ItemFrame).CornerRadius = UDim.new(0, 6)
+    itemData.GuiFrame = ItemFrame
+
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Size = UDim2.new(0, 80, 0, 35)
+    NameLabel.Position = UDim2.new(0, 8, 0, 5)
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.Text = itemData.Name
+    NameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NameLabel.Font = Enum.Font.SourceSansBold
+    NameLabel.TextSize = 13
+    NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    NameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    NameLabel.Parent = ItemFrame
+
+    local SwitchModeBtn = Instance.new("TextButton")
+    SwitchModeBtn.Size = UDim2.new(0, 50, 0, 28)
+    SwitchModeBtn.Position = UDim2.new(0, 90, 0, 8)
+    SwitchModeBtn.Font = Enum.Font.SourceSansBold
+    SwitchModeBtn.TextSize = 11
+    SwitchModeBtn.Parent = ItemFrame
+    Instance.new("UICorner", SwitchModeBtn).CornerRadius = UDim.new(0, 4)
+
+    local ItemValBox = Instance.new("TextBox")
+    ItemValBox.Size = UDim2.new(0, 35, 0, 28)
+    ItemValBox.Position = UDim2.new(0, 143, 0, 8)
+    ItemValBox.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    ItemValBox.TextColor3 = Color3.fromRGB(255, 255, 150)
+    ItemValBox.Text = tostring(itemData.Value)
+    ItemValBox.Font = Enum.Font.SourceSansBold
+    ItemValBox.TextSize = 12
+    ItemValBox.Parent = ItemFrame
+    Instance.new("UICorner", ItemValBox).CornerRadius = UDim.new(0, 4)
+
+    local function UpdateItemModeUI()
+        if itemData.Mode == 1 then
+            SwitchModeBtn.BackgroundColor3 = Color3.fromRGB(45, 80, 140)
+            SwitchModeBtn.Text = "⏱️ Dl"
+        else
+            SwitchModeBtn.BackgroundColor3 = Color3.fromRGB(140, 45, 80)
+            SwitchModeBtn.Text = "💥 Sp"
+        end
+    end
+    UpdateItemModeUI()
+
+    SwitchModeBtn.MouseButton1Click:Connect(function()
+        itemData.Mode = (itemData.Mode == 1 and 2 or 1)
+        UpdateItemModeUI()
+        if itemData.IsActive then itemData:RestartLogic() end
+        SaveDataToFile()
+    end)
+
+    ItemValBox.FocusLost:Connect(function()
+        local n = tonumber(ItemValBox.Text)
+        if n and n > 0 then itemData.Value = n else ItemValBox.Text = tostring(itemData.Value) end
+        if itemData.IsActive then itemData:RestartLogic() end
+        SaveDataToFile()
+    end)
+
+    local KeyBtn = Instance.new("TextButton")
+    KeyBtn.Size = UDim2.new(0, 50, 0, 28)
+    KeyBtn.Position = UDim2.new(0, 181, 0, 8)
+    KeyBtn.BackgroundColor3 = itemData.Key and Color3.fromRGB(50, 120, 180) or Color3.fromRGB(45, 45, 55)
+    KeyBtn.Text = itemData.Key and itemData.Key.Name or "Phím"
+    KeyBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    KeyBtn.Font = Enum.Font.SourceSans
+    KeyBtn.TextSize = 11
+    KeyBtn.Parent = ItemFrame
+    Instance.new("UICorner", KeyBtn).CornerRadius = UDim.new(0, 4)
+    itemData.KeyBtn = KeyBtn
+
+    KeyBtn.MouseButton1Click:Connect(function()
+        if ActiveBindingItem == itemData then
+            ActiveBindingItem = nil
+            KeyBtn.Text = itemData.Key and itemData.Key.Name or "Phím"
+            KeyBtn.BackgroundColor3 = itemData.Key and Color3.fromRGB(50, 120, 180) or Color3.fromRGB(45, 45, 55)
+        else
+            ActiveBindingItem = itemData
+            KeyBtn.Text = "Nhấn..."
+            KeyBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
+        end
+    end)
+
+    local MouseBtn = Instance.new("TextButton")
+    MouseBtn.Size = UDim2.new(0, 55, 0, 28)
+    MouseBtn.Position = UDim2.new(0, 234, 0, 8)
+    MouseBtn.Font = Enum.Font.SourceSansBold
+    MouseBtn.TextSize = 10
+    MouseBtn.Parent = ItemFrame
+    Instance.new("UICorner", MouseBtn).CornerRadius = UDim.new(0, 4)
+
+    local function UpdateMouseBtnUI()
+        if itemData.UseMouseClick then
+            MouseBtn.BackgroundColor3 = Color3.fromRGB(180, 110, 20)
+            MouseBtn.Text = "🖱️ ON"
+        else
+            MouseBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            MouseBtn.Text = "🖱️ OFF"
+        end
+    end
+    UpdateMouseBtnUI()
+
+    MouseBtn.MouseButton1Click:Connect(function()
+        itemData.UseMouseClick = not itemData.UseMouseClick
+        UpdateMouseBtnUI()
+        if itemData.IsActive then itemData:RestartLogic() end
+        SaveDataToFile()
+    end)
+
+    local EditBtn = Instance.new("TextButton")
+    EditBtn.Size = UDim2.new(0, 35, 0, 28)
+    EditBtn.Position = UDim2.new(0, 292, 0, 8)
+    EditBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 180)
+    EditBtn.Text = "Sửa"
+    EditBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    EditBtn.Font = Enum.Font.SourceSansBold
+    EditBtn.TextSize = 11
+    EditBtn.Parent = ItemFrame
+    Instance.new("UICorner", EditBtn).CornerRadius = UDim.new(0, 4)
+
+    EditBtn.MouseButton1Click:Connect(function()
+        OpenEditPopup(itemData, function()
+            NameLabel.Text = itemData.Name
+            SaveDataToFile()
+        end)
+    end)
+
+    local RunBtn = Instance.new("TextButton")
+    RunBtn.Size = UDim2.new(0, 50, 0, 28)
+    RunBtn.Position = UDim2.new(0, 330, 0, 8)
+    RunBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    RunBtn.Text = "TẮT"
+    RunBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    RunBtn.Font = Enum.Font.SourceSansBold
+    RunBtn.TextSize = 11
+    RunBtn.Parent = ItemFrame
+    Instance.new("UICorner", RunBtn).CornerRadius = UDim.new(0, 4)
+
+    local UpBtn = Instance.new("TextButton")
+    UpBtn.Size = UDim2.new(0, 22, 0, 13)
+    UpBtn.Position = UDim2.new(0, 383, 0, 8)
+    UpBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    UpBtn.Text = "▲"
+    UpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    UpBtn.Font = Enum.Font.SourceSansBold
+    UpBtn.TextSize = 9
+    UpBtn.Parent = ItemFrame
+    Instance.new("UICorner", UpBtn).CornerRadius = UDim.new(0, 3)
+
+    local DownBtn = Instance.new("TextButton")
+    DownBtn.Size = UDim2.new(0, 22, 0, 13)
+    DownBtn.Position = UDim2.new(0, 383, 0, 23)
+    DownBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    DownBtn.Text = "▼"
+    DownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DownBtn.Font = Enum.Font.SourceSansBold
+    DownBtn.TextSize = 9
+    DownBtn.Parent = ItemFrame
+    Instance.new("UICorner", DownBtn).CornerRadius = UDim.new(0, 3)
+
+    local function RefreshExecLayout()
+        for idx, obj in ipairs(RemotesList) do
+            if obj.GuiFrame then
+                obj.GuiFrame.LayoutOrder = idx
+            end
+        end
+    end
+
+    UpBtn.MouseButton1Click:Connect(function()
+        for i, v in ipairs(RemotesList) do
+            if v == itemData and i > 1 then
+                RemotesList[i], RemotesList[i - 1] = RemotesList[i - 1], RemotesList[i]
+                break
+            end
+        end
+        RefreshExecLayout()
+        SaveDataToFile()
+    end)
+
+    DownBtn.MouseButton1Click:Connect(function()
+        for i, v in ipairs(RemotesList) do
+            if v == itemData and i < #RemotesList then
+                RemotesList[i], RemotesList[i + 1] = RemotesList[i + 1], RemotesList[i]
+                break
+            end
+        end
+        RefreshExecLayout()
+        SaveDataToFile()
+    end)
+
+    local DelBtn = Instance.new("TextButton")
+    DelBtn.Size = UDim2.new(0, 35, 0, 28)
+    DelBtn.Position = UDim2.new(1, -40, 0, 8)
+    DelBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    DelBtn.Text = "Xóa"
+    DelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DelBtn.Font = Enum.Font.SourceSansBold
+    DelBtn.TextSize = 11
+    DelBtn.Parent = ItemFrame
+
+    local function UpdateBtnState()
+        if itemData.IsActive then
+            RunBtn.BackgroundColor3 = Color3.fromRGB(220, 40, 40)
+            RunBtn.Text = "BẬT"
+        else
+            RunBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+            RunBtn.Text = "TẮT"
+        end
+    end
+
+    function itemData:RestartLogic()
+        if self.Thread then task.cancel(self.Thread); self.Thread = nil end
+        if self.IsActive and not self.UseMouseClick then
+            if self.Mode == 1 then
+                self.Thread = task.spawn(function()
+                    while self.IsActive and not self.UseMouseClick do
+                        pcall(function() ExecuteSmartRemote(self) end)
+                        task.wait(self.Value)
+                    end
+                end)
+            elseif self.Mode == 2 then
+                local count = math.clamp(math.floor(self.Value), 1, 500)
+                for i = 1, count do task.spawn(function() pcall(function() ExecuteSmartRemote(self) end) end) end
+            end
+        end
+    end
+
+    function itemData:ToggleOrExecute()
+        self.IsActive = not self.IsActive
+        UpdateBtnState()
+        self:RestartLogic()
+    end
+
+    RunBtn.MouseButton1Click:Connect(function() itemData:ToggleOrExecute() end)
+
+    DelBtn.MouseButton1Click:Connect(function()
+        if itemData.Thread then task.cancel(itemData.Thread) end
+        for idx, elem in ipairs(RemotesList) do
+            if elem == itemData then table.remove(RemotesList, idx); break end
+        end
+        ItemFrame:Destroy()
+        RefreshExecLayout()
+        SaveDataToFile()
+    end)
+
+    table.insert(RemotesList, itemData)
+    RefreshExecLayout()
+end
+
+local function LoadDataFromFile()
+    if not isfile or not isfile(SaveFileName) or not readfile then return end
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(readfile(SaveFileName))
+    end)
+    if success and type(result) == "table" then
+        for _, savedData in ipairs(result) do
+            AddRemoteToList(savedData.Name, savedData.Code, savedData.Mode, savedData.Value, savedData.Distance, savedData.UseMouseClick, savedData.KeyName)
+        end
+    end
+end
+
+AddBtn.MouseButton1Click:Connect(function()
+    AddRemoteToList(NameBox.Text, CodeInput.Text, CurrentMode, ValueBox.Text, DistanceBox.Text, false, nil)
+    SaveDataToFile()
+    CodeInput.Text = ""
+    NameBox.Text = ""
+end)
+
+----------------------------------------------------------------
+-- TAB 2: MULTI-TARGET KILL SYSTEM
+----------------------------------------------------------------
+local PlayerListFrame = Instance.new("Frame")
+PlayerListFrame.Size = UDim2.new(0, 190, 1, -10)
+PlayerListFrame.Position = UDim2.new(0, 10, 0, 0)
+PlayerListFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+PlayerListFrame.Parent = KillContainer
+Instance.new("UICorner", PlayerListFrame).CornerRadius = UDim.new(0, 6)
+
+local PlrTitle = Instance.new("TextLabel")
+PlrTitle.Size = UDim2.new(1, 0, 0, 25)
+PlrTitle.BackgroundTransparency = 1
+PlrTitle.Text = "🎯 Chọn Mục Tiêu (Nhiều)"
+PlrTitle.TextColor3 = Color3.fromRGB(200, 200, 255)
+PlrTitle.Font = Enum.Font.SourceSansBold
+PlrTitle.TextSize = 13
+PlrTitle.Parent = PlayerListFrame
+
+local SelectAllBtn = Instance.new("TextButton")
+SelectAllBtn.Size = UDim2.new(0, 85, 0, 22)
+SelectAllBtn.Position = UDim2.new(0, 8, 0, 25)
+SelectAllBtn.BackgroundColor3 = Color3.fromRGB(40, 80, 140)
+SelectAllBtn.Text = "Chọn tất cả"
+SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SelectAllBtn.Font = Enum.Font.SourceSansBold
+SelectAllBtn.TextSize = 11
+SelectAllBtn.Parent = PlayerListFrame
+Instance.new("UICorner", SelectAllBtn).CornerRadius = UDim.new(0, 4)
+
+local ClearAllBtn = Instance.new("TextButton")
+ClearAllBtn.Size = UDim2.new(0, 85, 0, 22)
+ClearAllBtn.Position = UDim2.new(0, 97, 0, 25)
+ClearAllBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 40)
+ClearAllBtn.Text = "Bỏ chọn hết"
+ClearAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ClearAllBtn.Font = Enum.Font.SourceSansBold
+ClearAllBtn.TextSize = 11
+ClearAllBtn.Parent = PlayerListFrame
+Instance.new("UICorner", ClearAllBtn).CornerRadius = UDim.new(0, 4)
+
+local PlrScroll = Instance.new("ScrollingFrame")
+PlrScroll.Size = UDim2.new(1, -10, 1, -55)
+PlrScroll.Position = UDim2.new(0, 5, 0, 52)
+PlrScroll.BackgroundTransparency = 1
+PlrScroll.ScrollBarThickness = 4
+PlrScroll.Parent = PlayerListFrame
+
+local PlrListLayout = Instance.new("UIListLayout")
+PlrListLayout.Parent = PlrScroll
+PlrListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+PlrListLayout.Padding = UDim.new(0, 4)
+
+PlrListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    PlrScroll.CanvasSize = UDim2.new(0, 0, 0, PlrListLayout.AbsoluteContentSize.Y + 5)
+end)
+
+local TargetRightFrame = Instance.new("Frame")
+TargetRightFrame.Size = UDim2.new(1, -220, 1, -10)
+TargetRightFrame.Position = UDim2.new(0, 210, 0, 0)
+TargetRightFrame.BackgroundTransparency = 1
+TargetRightFrame.Parent = KillContainer
+
+local GlobalKeyFrame = Instance.new("Frame")
+GlobalKeyFrame.Size = UDim2.new(1, 0, 0, 30)
+GlobalKeyFrame.Position = UDim2.new(0, 0, 0, 0)
+GlobalKeyFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+GlobalKeyFrame.Parent = TargetRightFrame
+Instance.new("UICorner", GlobalKeyFrame).CornerRadius = UDim.new(0, 5)
+
+local GlobalKeyLabel = Instance.new("TextLabel")
+GlobalKeyLabel.Size = UDim2.new(0, 220, 1, 0)
+GlobalKeyLabel.Position = UDim2.new(0, 10, 0, 0)
+GlobalKeyLabel.BackgroundTransparency = 1
+GlobalKeyLabel.Text = "⌨️ Phím tắt Bật/Tắt Kill Cùng Lúc:"
+GlobalKeyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+GlobalKeyLabel.Font = Enum.Font.SourceSansBold
+GlobalKeyLabel.TextSize = 13
+GlobalKeyLabel.TextXAlignment = Enum.TextXAlignment.Left
+GlobalKeyLabel.Parent = GlobalKeyFrame
+
+local GlobalKeyBtn = Instance.new("TextButton")
+GlobalKeyBtn.Size = UDim2.new(0, 120, 0, 22)
+GlobalKeyBtn.Position = UDim2.new(1, -130, 0, 4)
+GlobalKeyBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
+GlobalKeyBtn.Text = "Phím: Q"
+GlobalKeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+GlobalKeyBtn.Font = Enum.Font.SourceSansBold
+GlobalKeyBtn.TextSize = 12
+GlobalKeyBtn.Parent = GlobalKeyFrame
+Instance.new("UICorner", GlobalKeyBtn).CornerRadius = UDim.new(0, 4)
+
+GlobalKeyBtn.MouseButton1Click:Connect(function()
+    IsBindingGlobalKey = true
+    GlobalKeyBtn.Text = "Nhấn phím..."
+    GlobalKeyBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+end)
+
+local TargetCodeInput = Instance.new("TextBox")
+TargetCodeInput.Size = UDim2.new(1, 0, 0, 70)
+TargetCodeInput.Position = UDim2.new(0, 0, 0, 36)
+TargetCodeInput.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+TargetCodeInput.TextColor3 = Color3.fromRGB(255, 200, 200)
+TargetCodeInput.PlaceholderText = "-- Dán mẫu code Kill Remote vào đây..."
+TargetCodeInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+TargetCodeInput.Text = ""
+TargetCodeInput.TextSize = 13
+TargetCodeInput.Font = Enum.Font.Code
+TargetCodeInput.TextXAlignment = Enum.TextXAlignment.Left
+TargetCodeInput.TextYAlignment = Enum.TextYAlignment.Top
+TargetCodeInput.ClearTextOnFocus = false
+TargetCodeInput.MultiLine = true
+TargetCodeInput.Parent = TargetRightFrame
+Instance.new("UICorner", TargetCodeInput).CornerRadius = UDim.new(0, 6)
+
+local TargetNameBox = Instance.new("TextBox")
+TargetNameBox.Size = UDim2.new(0, 100, 0, 28)
+TargetNameBox.Position = UDim2.new(0, 0, 0, 112)
+TargetNameBox.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+TargetNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+TargetNameBox.PlaceholderText = "Tên Kill..."
+TargetNameBox.Text = ""
+TargetNameBox.Font = Enum.Font.SourceSans
+TargetNameBox.TextSize = 13
+TargetNameBox.Parent = TargetRightFrame
+Instance.new("UICorner", TargetNameBox).CornerRadius = UDim.new(0, 5)
+
+local SampleNameBox = Instance.new("TextBox")
+SampleNameBox.Size = UDim2.new(0, 100, 0, 28)
+SampleNameBox.Position = UDim2.new(0, 105, 0, 112)
+SampleNameBox.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+SampleNameBox.TextColor3 = Color3.fromRGB(255, 255, 150)
+SampleNameBox.PlaceholderText = "Mẫu người chơi..."
+SampleNameBox.Text = "KrimsonBwoi0"
+SampleNameBox.Font = Enum.Font.SourceSans
+SampleNameBox.TextSize = 13
+SampleNameBox.Parent = TargetRightFrame
+Instance.new("UICorner", SampleNameBox).CornerRadius = UDim.new(0, 5)
+
+local KillCurrentMode = 1
+local KillModeBtn = Instance.new("TextButton")
+KillModeBtn.Size = UDim2.new(0, 110, 0, 28)
+KillModeBtn.Position = UDim2.new(0, 210, 0, 112)
+KillModeBtn.BackgroundColor3 = Color3.fromRGB(45, 80, 140)
+KillModeBtn.Text = "Delay (Giây)"
+KillModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+KillModeBtn.Font = Enum.Font.SourceSansBold
+KillModeBtn.TextSize = 12
+KillModeBtn.Parent = TargetRightFrame
+Instance.new("UICorner", KillModeBtn).CornerRadius = UDim.new(0, 5)
+
+KillModeBtn.MouseButton1Click:Connect(function()
+    if KillCurrentMode == 1 then
+        KillCurrentMode = 2
+        KillModeBtn.Text = "Spam (Lần)"
+        KillModeBtn.BackgroundColor3 = Color3.fromRGB(140, 45, 80)
+    else
+        KillCurrentMode = 1
+        KillModeBtn.Text = "Delay (Giây)"
+        KillModeBtn.BackgroundColor3 = Color3.fromRGB(45, 80, 140)
+    end
+end)
+
+local KillValueBox = Instance.new("TextBox")
+KillValueBox.Size = UDim2.new(0, 50, 0, 28)
+KillValueBox.Position = UDim2.new(0, 325, 0, 112)
+KillValueBox.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+KillValueBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+KillValueBox.PlaceholderText = "Val"
+KillValueBox.Text = "0.1"
+KillValueBox.Font = Enum.Font.SourceSans
+KillValueBox.TextSize = 13
+KillValueBox.Parent = TargetRightFrame
+Instance.new("UICorner", KillValueBox).CornerRadius = UDim.new(0, 5)
+
+local AddTargetBtn = Instance.new("TextButton")
+AddTargetBtn.Size = UDim2.new(0, 70, 0, 28)
+AddTargetBtn.Position = UDim2.new(0, 380, 0, 112)
+AddTargetBtn.BackgroundColor3 = Color3.fromRGB(160, 40, 80)
+AddTargetBtn.Text = "+ Thêm"
+AddTargetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AddTargetBtn.Font = Enum.Font.SourceSansBold
+AddTargetBtn.TextSize = 13
+AddTargetBtn.Parent = TargetRightFrame
+Instance.new("UICorner", AddTargetBtn).CornerRadius = UDim.new(0, 5)
+
+local TargetScroll = Instance.new("ScrollingFrame")
+TargetScroll.Size = UDim2.new(1, 0, 0, 235)
+TargetScroll.Position = UDim2.new(0, 0, 0, 146)
+TargetScroll.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+TargetScroll.BorderSizePixel = 0
+TargetScroll.ScrollBarThickness = 6
+TargetScroll.Parent = TargetRightFrame
+Instance.new("UICorner", TargetScroll).CornerRadius = UDim.new(0, 6)
+
+local TargetUIList = Instance.new("UIListLayout")
+TargetUIList.Parent = TargetScroll
+TargetUIList.SortOrder = Enum.SortOrder.LayoutOrder
+TargetUIList.Padding = UDim.new(0, 6)
+
+TargetUIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    TargetScroll.CanvasSize = UDim2.new(0, 0, 0, TargetUIList.AbsoluteContentSize.Y + 10)
+end)
+
+local function UpdatePlayerListUI()
+    for _, child in ipairs(PlrScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, -5, 0, 25)
+            Btn.Font = Enum.Font.SourceSansBold
+            Btn.TextSize = 12
+            Btn.Text = plr.Name
+            Btn.Parent = PlrScroll
+            Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 4)
+
+            local function RefreshBtnStyle()
+                if SelectedPlayers[plr] then
+                    Btn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+                    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                else
+                    Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+                    Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                end
+            end
+            RefreshBtnStyle()
+
+            Btn.MouseButton1Click:Connect(function()
+                SelectedPlayers[plr] = not SelectedPlayers[plr] and true or nil
+                RefreshBtnStyle()
+            end)
+        end
+    end
+end
+
+SelectAllBtn.MouseButton1Click:Connect(function()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then SelectedPlayers[plr] = true end
+    end
+    UpdatePlayerListUI()
+end)
+
+ClearAllBtn.MouseButton1Click:Connect(function()
+    SelectedPlayers = {}
+    UpdatePlayerListUI()
+end)
+
+Players.PlayerAdded:Connect(UpdatePlayerListUI)
+Players.PlayerRemoving:Connect(function(plr)
+    SelectedPlayers[plr] = nil
+    UpdatePlayerListUI()
+end)
+UpdatePlayerListUI()
+
+local TargetRemotesList = {}
+
+local function SaveTargetDataToFile()
+    if not writefile then return end
+    local exportTable = {}
+    for _, item in ipairs(TargetRemotesList) do
+        table.insert(exportTable, {
+            Name = item.Name,
+            Code = item.Code,
+            SampleName = item.SampleName,
+            Mode = item.Mode,
+            Value = item.Value,
+            IsActive = item.IsActive,
+            KeyName = item.Key and item.Key.Name or nil
+        })
+    end
+    pcall(function()
+        writefile(TargetSaveFileName, HttpService:JSONEncode(exportTable))
+    end)
+end
+
+local function ExecuteKillForTargetRemote(itemData)
+    for plr, _ in pairs(SelectedPlayers) do
+        if plr and plr.Parent == Players then
+            local targetChar = plr.Character or workspace:FindFirstChild(plr.Name)
+            if targetChar then
+                local codeToRun = itemData.Code
+                if string.find(codeToRun, itemData.SampleName .. "%.Humanoid") then
+                    codeToRun = string.gsub(codeToRun, "workspace%." .. itemData.SampleName .. "%.Humanoid", "game:GetService('Players')['" .. plr.Name  .. "'].Character.Humanoid")
+                else
+                    codeToRun = string.gsub(codeToRun, itemData.SampleName, plr.Name)
+                end
+
+                local func, err = loadstring(codeToRun)
+                if func then task.spawn(function() pcall(func) end) end
+            end
+        end
+    end
+end
+
+local function OpenTargetEditPopup(itemData, onSaveCallback)
+    if ScreenGui:FindFirstChild("TargetEditOverlay") then
+        ScreenGui.TargetEditOverlay:Destroy()
+    end
+
+    local Overlay = Instance.new("Frame")
+    Overlay.Name = "TargetEditOverlay"
+    Overlay.Size = UDim2.new(1, 0, 1, 0)
+    Overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    Overlay.BackgroundTransparency = 0.5
+    Overlay.ZIndex = 10
+    Overlay.Parent = ScreenGui
+
+    local PopupFrame = Instance.new("Frame")
+    PopupFrame.Size = UDim2.new(0, 450, 0, 320)
+    PopupFrame.Position = UDim2.new(0.5, -225, 0.5, -160)
+    PopupFrame.BackgroundColor3 = Color3.fromRGB(35, 25, 30)
+    PopupFrame.ZIndex = 11
+    PopupFrame.Parent = Overlay
+    Instance.new("UICorner", PopupFrame).CornerRadius = UDim.new(0, 8)
+
+    local PopupTitle = Instance.new("TextLabel")
+    PopupTitle.Size = UDim2.new(1, 0, 0, 35)
+    PopupTitle.Position = UDim2.new(0, 10, 0, 0)
+    PopupTitle.BackgroundTransparency = 1
+    PopupTitle.Text = "✏️ Sửa Lệnh Kill: " .. itemData.Name
+    PopupTitle.TextColor3 = Color3.fromRGB(255, 220, 220)
+    PopupTitle.Font = Enum.Font.SourceSansBold
+    PopupTitle.TextSize = 14
+    PopupTitle.TextXAlignment = Enum.TextXAlignment.Left
+    PopupTitle.ZIndex = 12
+    PopupTitle.Parent = PopupFrame
+
+    local EditCodeBox = Instance.new("TextBox")
+    EditCodeBox.Size = UDim2.new(1, -20, 0, 120)
+    EditCodeBox.Position = UDim2.new(0, 10, 0, 40)
+    EditCodeBox.BackgroundColor3 = Color3.fromRGB(20, 15, 18)
+    EditCodeBox.TextColor3 = Color3.fromRGB(255, 200, 200)
+    EditCodeBox.Text = itemData.Code
+    EditCodeBox.TextSize = 12
+    EditCodeBox.Font = Enum.Font.Code
+    EditCodeBox.TextXAlignment = Enum.TextXAlignment.Left
+    EditCodeBox.TextYAlignment = Enum.TextYAlignment.Top
+    EditCodeBox.ClearTextOnFocus = false
+    EditCodeBox.MultiLine = true
+    EditCodeBox.ZIndex = 12
+    EditCodeBox.Parent = PopupFrame
+    Instance.new("UICorner", EditCodeBox).CornerRadius = UDim.new(0, 5)
+
+    local EditNameBox = Instance.new("TextBox")
+    EditNameBox.Size = UDim2.new(0, 200, 0, 30)
+    EditNameBox.Position = UDim2.new(0, 10, 0, 170)
+    EditNameBox.BackgroundColor3 = Color3.fromRGB(45, 35, 40)
+    EditNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    EditNameBox.Text = itemData.Name
+    EditNameBox.PlaceholderText = "Tên Kill..."
+    EditNameBox.Font = Enum.Font.SourceSans
+    EditNameBox.TextSize = 13
+    EditNameBox.ZIndex = 12
+    EditNameBox.Parent = PopupFrame
+    Instance.new("UICorner", EditNameBox).CornerRadius = UDim.new(0, 5)
+
+    local EditSampleBox = Instance.new("TextBox")
+    EditSampleBox.Size = UDim2.new(0, 210, 0, 30)
+    EditSampleBox.Position = UDim2.new(0, 220, 0, 170)
+    EditSampleBox.BackgroundColor3 = Color3.fromRGB(45, 35, 40)
+    EditSampleBox.TextColor3 = Color3.fromRGB(255, 255, 150)
+    EditSampleBox.Text = itemData.SampleName
+    EditSampleBox.PlaceholderText = "Mẫu người chơi..."
+    EditSampleBox.Font = Enum.Font.SourceSans
+    EditSampleBox.TextSize = 13
+    EditSampleBox.ZIndex = 12
+    EditSampleBox.Parent = PopupFrame
+    Instance.new("UICorner", EditSampleBox).CornerRadius = UDim.new(0, 5)
+
+    local EditValBox = Instance.new("TextBox")
+    EditValBox.Size = UDim2.new(0, 200, 0, 30)
+    EditValBox.Position = UDim2.new(0, 10, 0, 210)
+    EditValBox.BackgroundColor3 = Color3.fromRGB(45, 35, 40)
+    EditValBox.TextColor3 = Color3.fromRGB(255, 255, 150)
+    EditValBox.Text = tostring(itemData.Value)
+    EditValBox.PlaceholderText = "Giá trị Delay/Spam..."
+    EditValBox.Font = Enum.Font.SourceSans
+    EditValBox.TextSize = 13
+    EditValBox.ZIndex = 12
+    EditValBox.Parent = PopupFrame
+    Instance.new("UICorner", EditValBox).CornerRadius = UDim.new(0, 5)
+
+    local SaveEditBtn = Instance.new("TextButton")
+    SaveEditBtn.Size = UDim2.new(0, 210, 0, 35)
+    SaveEditBtn.Position = UDim2.new(0, 220, 0, 210)
+    SaveEditBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 80)
+    SaveEditBtn.Text = "💾 Lưu Thay Đổi"
+    SaveEditBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SaveEditBtn.Font = Enum.Font.SourceSansBold
+    SaveEditBtn.TextSize = 13
+    SaveEditBtn.ZIndex = 12
+    SaveEditBtn.Parent = PopupFrame
+    Instance.new("UICorner", SaveEditBtn).CornerRadius = UDim.new(0, 5)
+
+    local CancelEditBtn = Instance.new("TextButton")
+    CancelEditBtn.Size = UDim2.new(1, -20, 0, 30)
+    CancelEditBtn.Position = UDim2.new(0, 10, 0, 265)
+    CancelEditBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    CancelEditBtn.Text = "Hủy bỏ"
+    CancelEditBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CancelEditBtn.Font = Enum.Font.SourceSansBold
+    CancelEditBtn.TextSize = 13
+    CancelEditBtn.ZIndex = 12
+    CancelEditBtn.Parent = PopupFrame
+    Instance.new("UICorner", CancelEditBtn).CornerRadius = UDim.new(0, 5)
+
+    SaveEditBtn.MouseButton1Click:Connect(function()
+        itemData.Name = (EditNameBox.Text ~= "" and EditNameBox.Text) or itemData.Name
+        itemData.Code = EditCodeBox.Text
+        itemData.SampleName = (EditSampleBox.Text ~= "" and EditSampleBox.Text) or itemData.SampleName
+        itemData.Value = tonumber(EditValBox.Text) or itemData.Value
+        if onSaveCallback then onSaveCallback() end
+        Overlay:Destroy()
+    end)
+
+    CancelEditBtn.MouseButton1Click:Connect(function()
+        Overlay:Destroy()
+    end)
+end
+
+function AddTargetRemoteToList(name, rawCode, sampleName, mode, val, isActive, savedKeyName)
+    if rawCode == "" then return end
+
+    local itemData = {
+        Name = (name ~= "" and name) or "Kill #" .. (#TargetRemotesList + 1),
+        Code = rawCode,
+        SampleName = (sampleName ~= "" and sampleName) or "KrimsonBwoi0",
+        Mode = mode or 1,
+        Value = tonumber(val) or (mode == 1 and 0.1 or 10),
+        IsActive = (isActive == true),
+        Key = savedKeyName and Enum.KeyCode[savedKeyName] or nil,
+        LoopThread = nil
+    }
+
+    local ItemFrame = Instance.new("Frame")
+    ItemFrame.Size = UDim2.new(1, -10, 0, 45)
+    ItemFrame.BackgroundColor3 = Color3.fromRGB(35, 25, 30)
+    ItemFrame.Parent = TargetScroll
+    Instance.new("UICorner", ItemFrame).CornerRadius = UDim.new(0, 6)
+    itemData.GuiFrame = ItemFrame
+
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Size = UDim2.new(0, 70, 1, 0)
+    NameLabel.Position = UDim2.new(0, 8, 0, 0)
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.Text = itemData.Name
+    NameLabel.TextColor3 = Color3.fromRGB(255, 220, 220)
+    NameLabel.Font = Enum.Font.SourceSansBold
+    NameLabel.TextSize = 13
+    NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    NameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    NameLabel.Parent = ItemFrame
+
+    local SwitchModeBtn = Instance.new("TextButton")
+    SwitchModeBtn.Size = UDim2.new(0, 45, 0, 28)
+    SwitchModeBtn.Position = UDim2.new(0, 80, 0, 8)
+    SwitchModeBtn.Font = Enum.Font.SourceSansBold
+    SwitchModeBtn.TextSize = 11
+    SwitchModeBtn.Parent = ItemFrame
+    Instance.new("UICorner", SwitchModeBtn).CornerRadius = UDim.new(0, 4)
+
+    local ItemValBox = Instance.new("TextBox")
+    ItemValBox.Size = UDim2.new(0, 32, 0, 28)
+    ItemValBox.Position = UDim2.new(0, 128, 0, 8)
+    ItemValBox.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    ItemValBox.TextColor3 = Color3.fromRGB(255, 255, 150)
+    ItemValBox.Text = tostring(itemData.Value)
+    ItemValBox.Font = Enum.Font.SourceSansBold
+    ItemValBox.TextSize = 12
+    ItemValBox.Parent = ItemFrame
+    Instance.new("UICorner", ItemValBox).CornerRadius = UDim.new(0, 4)
+
+    local function UpdateItemModeUI()
+        if itemData.Mode == 1 then
+            SwitchModeBtn.BackgroundColor3 = Color3.fromRGB(45, 80, 140)
+            SwitchModeBtn.Text = "⏱️ Dl"
+        else
+            SwitchModeBtn.BackgroundColor3 = Color3.fromRGB(140, 45, 80)
+            SwitchModeBtn.Text = "💥 Sp"
+        end
+    end
+    UpdateItemModeUI()
+
+    local KeyBtn = Instance.new("TextButton")
+    KeyBtn.Size = UDim2.new(0, 48, 0, 28)
+    KeyBtn.Position = UDim2.new(0, 163, 0, 8)
+    KeyBtn.BackgroundColor3 = itemData.Key and Color3.fromRGB(50, 120, 180) or Color3.fromRGB(45, 45, 55)
+    KeyBtn.Text = itemData.Key and itemData.Key.Name or "Phím"
+    KeyBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    KeyBtn.Font = Enum.Font.SourceSans
+    KeyBtn.TextSize = 11
+    KeyBtn.Parent = ItemFrame
+    Instance.new("UICorner", KeyBtn).CornerRadius = UDim.new(0, 4)
+    itemData.KeyBtn = KeyBtn
+
+    KeyBtn.MouseButton1Click:Connect(function()
+        if ActiveTargetBindingItem == itemData then
+            ActiveTargetBindingItem = nil
+            KeyBtn.Text = itemData.Key and itemData.Key.Name or "Phím"
+            KeyBtn.BackgroundColor3 = itemData.Key and Color3.fromRGB(50, 120, 180) or Color3.fromRGB(45, 45, 55)
+        else
+            ActiveTargetBindingItem = itemData
+            KeyBtn.Text = "Nhấn..."
+            KeyBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
+        end
+    end)
+
+    local ToggleBtn = Instance.new("TextButton")
+    ToggleBtn.Size = UDim2.new(0, 42, 0, 28)
+    ToggleBtn.Position = UDim2.new(0, 214, 0, 8)
+    ToggleBtn.Font = Enum.Font.SourceSansBold
+    ToggleBtn.TextSize = 11
+    ToggleBtn.Parent = ItemFrame
+    Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 4)
+
+    local function RestartKillLoop()
+        if itemData.LoopThread then
+            task.cancel(itemData.LoopThread)
+            itemData.LoopThread = nil
+        end
+        if itemData.IsActive then
+            if itemData.Mode == 1 then
+                itemData.LoopThread = task.spawn(function()
+                    while itemData.IsActive do
+                        ExecuteKillForTargetRemote(itemData)
+                        task.wait(itemData.Value)
+                    end
+                end)
+            elseif itemData.Mode == 2 then
+                local count = math.clamp(math.floor(itemData.Value), 1, 500)
+                for i = 1, count do
+                    task.spawn(function() ExecuteKillForTargetRemote(itemData) end)
+                end
+            end
+        end
+    end
+
+    SwitchModeBtn.MouseButton1Click:Connect(function()
+        itemData.Mode = (itemData.Mode == 1 and 2 or 1)
+        UpdateItemModeUI()
+        RestartKillLoop()
+        SaveTargetDataToFile()
+    end)
+
+    ItemValBox.FocusLost:Connect(function()
+        local n = tonumber(ItemValBox.Text)
+        if n and n > 0 then itemData.Value = n else ItemValBox.Text = tostring(itemData.Value) end
+        RestartKillLoop()
+        SaveTargetDataToFile()
+    end)
+
+    local function UpdateToggleUI()
+        if itemData.IsActive then
+            ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 80)
+            ToggleBtn.Text = "ON"
+        else
+            ToggleBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+            ToggleBtn.Text = "OFF"
+        end
+        RestartKillLoop()
+    end
+    UpdateToggleUI()
+    itemData.UpdateToggleUI = UpdateToggleUI
+
+    -- Định nghĩa hàm ToggleOrExecute để phím tắt có thể gọi bật/tắt đúng cách
+    function itemData:ToggleOrExecute()
+        self.IsActive = not self.IsActive
+        UpdateToggleUI()
+        SaveTargetDataToFile()
+    end
+
+    ToggleBtn.MouseButton1Click:Connect(function()
+        itemData:ToggleOrExecute()
+    end)
+
+    local EditKillBtn = Instance.new("TextButton")
+    EditKillBtn.Size = UDim2.new(0, 32, 0, 28)
+    EditKillBtn.Position = UDim2.new(0, 259, 0, 8)
+    EditKillBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 180)
+    EditKillBtn.Text = "Sửa"
+    EditKillBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    EditKillBtn.Font = Enum.Font.SourceSansBold
+    EditKillBtn.TextSize = 11
+    EditKillBtn.Parent = ItemFrame
+    Instance.new("UICorner", EditKillBtn).CornerRadius = UDim.new(0, 4)
+
+    EditKillBtn.MouseButton1Click:Connect(function()
+        OpenTargetEditPopup(itemData, function()
+            NameLabel.Text = itemData.Name
+            SaveTargetDataToFile()
+        end)
+    end)
+
+    local ManualKillBtn = Instance.new("TextButton")
+    ManualKillBtn.Size = UDim2.new(0, 45, 0, 28)
+    ManualKillBtn.Position = UDim2.new(0, 294, 0, 8)
+    ManualKillBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+    ManualKillBtn.Text = "⚡ Kill"
+    ManualKillBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ManualKillBtn.Font = Enum.Font.SourceSansBold
+    ManualKillBtn.TextSize = 11
+    ManualKillBtn.Parent = ItemFrame
+    Instance.new("UICorner", ManualKillBtn).CornerRadius = UDim.new(0, 4)
+
+    ManualKillBtn.MouseButton1Click:Connect(function()
+        if itemData.Mode == 1 then
+            ExecuteKillForTargetRemote(itemData)
+        else
+            local count = math.clamp(math.floor(itemData.Value), 1, 500)
+            for i = 1, count do
+                task.spawn(function() ExecuteKillForTargetRemote(itemData) end)
+            end
+        end
+    end)
+
+    local UpBtn = Instance.new("TextButton")
+    UpBtn.Size = UDim2.new(0, 22, 0, 13)
+    UpBtn.Position = UDim2.new(0, 342, 0, 8)
+    UpBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    UpBtn.Text = "▲"
+    UpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    UpBtn.Font = Enum.Font.SourceSansBold
+    UpBtn.TextSize = 9
+    UpBtn.Parent = ItemFrame
+    Instance.new("UICorner", UpBtn).CornerRadius = UDim.new(0, 3)
+
+    local DownBtn = Instance.new("TextButton")
+    DownBtn.Size = UDim2.new(0, 22, 0, 13)
+    DownBtn.Position = UDim2.new(0, 342, 0, 23)
+    DownBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    DownBtn.Text = "▼"
+    DownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DownBtn.Font = Enum.Font.SourceSansBold
+    DownBtn.TextSize = 9
+    DownBtn.Parent = ItemFrame
+    Instance.new("UICorner", DownBtn).CornerRadius = UDim.new(0, 3)
+
+    local function RefreshTargetLayout()
+        for idx, obj in ipairs(TargetRemotesList) do
+            if obj.GuiFrame then
+                obj.GuiFrame.LayoutOrder = idx
+            end
+        end
+    end
+
+    UpBtn.MouseButton1Click:Connect(function()
+        for i, v in ipairs(TargetRemotesList) do
+            if v == itemData and i > 1 then
+                TargetRemotesList[i], TargetRemotesList[i - 1] = TargetRemotesList[i - 1], TargetRemotesList[i]
+                break
+            end
+        end
+        RefreshTargetLayout()
+        SaveTargetDataToFile()
+    end)
+
+    DownBtn.MouseButton1Click:Connect(function()
+        for i, v in ipairs(TargetRemotesList) do
+            if v == itemData and i < #TargetRemotesList then
+                TargetRemotesList[i], TargetRemotesList[i + 1] = TargetRemotesList[i + 1], TargetRemotesList[i]
+                break
+            end
+        end
+        RefreshTargetLayout()
+        SaveTargetDataToFile()
+    end)
+
+    local DelBtn = Instance.new("TextButton")
+    DelBtn.Size = UDim2.new(0, 32, 0, 28)
+    DelBtn.Position = UDim2.new(1, -37, 0, 8)
+    DelBtn.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
+    DelBtn.Text = "Xóa"
+    DelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DelBtn.Font = Enum.Font.SourceSansBold
+    DelBtn.TextSize = 11
+    DelBtn.Parent = ItemFrame
+
+    DelBtn.MouseButton1Click:Connect(function()
+        if itemData.LoopThread then task.cancel(itemData.LoopThread) end
+        for idx, elem in ipairs(TargetRemotesList) do
+            if elem == itemData then table.remove(TargetRemotesList, idx); break end
+        end
+        ItemFrame:Destroy()
+        RefreshTargetLayout()
+        SaveTargetDataToFile()
+    end)
+
+    table.insert(TargetRemotesList, itemData)
+    RefreshTargetLayout()
+end
+
+local function LoadTargetDataFromFile()
+    if not isfile or not isfile(TargetSaveFileName) or not readfile then return end
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(readfile(TargetSaveFileName))
+    end)
+    if success and type(result) == "table" then
+        for _, savedData in ipairs(result) do
+            AddTargetRemoteToList(savedData.Name, savedData.Code, savedData.SampleName, savedData.Mode, savedData.Value, savedData.IsActive, savedData.KeyName)
+        end
+    end
+end
+
+AddTargetBtn.MouseButton1Click:Connect(function()
+    AddTargetRemoteToList(TargetNameBox.Text, TargetCodeInput.Text, SampleNameBox.Text, KillCurrentMode, KillValueBox.Text, false, nil)
+    SaveTargetDataToFile()
+    TargetCodeInput.Text = ""
+    TargetNameBox.Text = ""
+end)
+
+----------------------------------------------------------------
+-- TAB 3: SCRIPT HUB
+----------------------------------------------------------------
+local HubCodeInput = Instance.new("TextBox")
+HubCodeInput.Size = UDim2.new(1, -20, 0, 75)
+HubCodeInput.Position = UDim2.new(0, 10, 0, 0)
+HubCodeInput.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+HubCodeInput.TextColor3 = Color3.fromRGB(200, 200, 255)
+HubCodeInput.PlaceholderText = "Dán đoạn loadstring vào đây (VD: loadstring(game:HttpGet(...))())"
+HubCodeInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+HubCodeInput.Text = ""
+HubCodeInput.TextSize = 13
+HubCodeInput.Font = Enum.Font.Code
+HubCodeInput.TextXAlignment = Enum.TextXAlignment.Left
+HubCodeInput.TextYAlignment = Enum.TextYAlignment.Top
+HubCodeInput.ClearTextOnFocus = false
+HubCodeInput.MultiLine = true
+HubCodeInput.Parent = HubContainer
+Instance.new("UICorner", HubCodeInput).CornerRadius = UDim.new(0, 6)
+
+local HubNameBox = Instance.new("TextBox")
+HubNameBox.Size = UDim2.new(0, 200, 0, 28)
+HubNameBox.Position = UDim2.new(0, 10, 0, 82)
+HubNameBox.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+HubNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+HubNameBox.PlaceholderText = "Tên Script..."
+HubNameBox.Text = ""
+HubNameBox.Font = Enum.Font.SourceSans
+HubNameBox.TextSize = 14
+HubNameBox.Parent = HubContainer
+Instance.new("UICorner", HubNameBox).CornerRadius = UDim.new(0, 5)
+
+local AddHubBtn = Instance.new("TextButton")
+AddHubBtn.Size = UDim2.new(0, 444, 0, 28)
+AddHubBtn.Position = UDim2.new(0, 214, 0, 82)
+AddHubBtn.BackgroundColor3 = Color3.fromRGB(100, 50, 180)
+AddHubBtn.Text = "+ Thêm Script vào danh sách"
+AddHubBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AddHubBtn.Font = Enum.Font.SourceSansBold
+AddHubBtn.TextSize = 14
+AddHubBtn.Parent = HubContainer
+Instance.new("UICorner", AddHubBtn).CornerRadius = UDim.new(0, 5)
+
+local HubScrollFrame = Instance.new("ScrollingFrame")
+HubScrollFrame.Size = UDim2.new(1, -20, 0, 265)
+HubScrollFrame.Position = UDim2.new(0, 10, 0, 118)
+HubScrollFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+HubScrollFrame.BorderSizePixel = 0
+HubScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+HubScrollFrame.ScrollBarThickness = 6
+HubScrollFrame.Parent = HubContainer
+Instance.new("UICorner", HubScrollFrame).CornerRadius = UDim.new(0, 6)
+
+local HubUIList = Instance.new("UIListLayout")
+HubUIList.Parent = HubScrollFrame
+HubUIList.SortOrder = Enum.SortOrder.LayoutOrder
+HubUIList.Padding = UDim.new(0, 6)
+
+HubUIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    HubScrollFrame.CanvasSize = UDim2.new(0, 0, 0, HubUIList.AbsoluteContentSize.Y + 10)
+end)
+
+local ScriptHubList = {}
+
+local function SaveScriptHubToFile()
+    if not writefile then return end
+    local exportTable = {}
+    for _, item in ipairs(ScriptHubList) do
+        table.insert(exportTable, { Name = item.Name, Code = item.Code })
+    end
+    pcall(function()
+        writefile(ScriptHubSaveFileName, HttpService:JSONEncode(exportTable))
+    end)
+end
+
+local function AddScriptHubToList(name, rawCode)
+    if rawCode == "" then return end
+    local itemData = {
+        Name = (name ~= "" and name) or "Script #" .. (#ScriptHubList + 1),
+        Code = rawCode
+    }
+
+    local ItemFrame = Instance.new("Frame")
+    ItemFrame.Size = UDim2.new(1, -10, 0, 45)
+    ItemFrame.BackgroundColor3 = Color3.fromRGB(30, 25, 40)
+    ItemFrame.Parent = HubScrollFrame
+    Instance.new("UICorner", ItemFrame).CornerRadius = UDim.new(0, 6)
+
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Size = UDim2.new(0, 360, 1, 0)
+    NameLabel.Position = UDim2.new(0, 10, 0, 0)
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.Text = itemData.Name
+    NameLabel.TextColor3 = Color3.fromRGB(230, 220, 255)
+    NameLabel.Font = Enum.Font.SourceSansBold
+    NameLabel.TextSize = 13
+    NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    NameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    NameLabel.Parent = ItemFrame
+
+    local RunHubBtn = Instance.new("TextButton")
+    RunHubBtn.Size = UDim2.new(0, 100, 0, 28)
+    RunHubBtn.Position = UDim2.new(1, -150, 0, 8)
+    RunHubBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 180)
+    RunHubBtn.Text = "🚀 Chạy"
+    RunHubBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    RunHubBtn.Font = Enum.Font.SourceSansBold
+    RunHubBtn.TextSize = 12
+    RunHubBtn.Parent = ItemFrame
+    Instance.new("UICorner", RunHubBtn).CornerRadius = UDim.new(0, 4)
+
+    RunHubBtn.MouseButton1Click:Connect(function()
+        task.spawn(function()
+            pcall(function()
+                local f = loadstring(itemData.Code)
+                if f then f() end
+            end)
+        end)
+    end)
+
+    local DelHubBtn = Instance.new("TextButton")
+    DelHubBtn.Size = UDim2.new(0, 40, 0, 28)
+    DelHubBtn.Position = UDim2.new(1, -45, 0, 8)
+    DelHubBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    DelHubBtn.Text = "Xóa"
+    DelHubBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DelHubBtn.Font = Enum.Font.SourceSansBold
+    DelHubBtn.TextSize = 12
+    DelHubBtn.Parent = ItemFrame
+    Instance.new("UICorner", DelHubBtn).CornerRadius = UDim.new(0, 4)
+
+    DelHubBtn.MouseButton1Click:Connect(function()
+        for idx, elem in ipairs(ScriptHubList) do
+            if elem == itemData then table.remove(ScriptHubList, idx); break end
+        end
+        ItemFrame:Destroy()
+        SaveScriptHubToFile()
+    end)
+
+    table.insert(ScriptHubList, itemData)
+    ItemFrame.LayoutOrder = #ScriptHubList
+end
+
+local function LoadScriptHubFromFile()
+    if not isfile or not isfile(ScriptHubSaveFileName) or not readfile then return end
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(readfile(ScriptHubSaveFileName))
+    end)
+    if success and type(result) == "table" then
+        for _, savedData in ipairs(result) do
+            AddScriptHubToList(savedData.Name, savedData.Code)
+        end
+    end
+end
+
+AddHubBtn.MouseButton1Click:Connect(function()
+    AddScriptHubToList(HubNameBox.Text, HubCodeInput.Text)
+    SaveScriptHubToFile()
+    HubCodeInput.Text = ""
+    HubNameBox.Text = ""
+end)
+
+----------------------------------------------------------------
+-- TAB 4: SETTINGS
+----------------------------------------------------------------
+local SettingsBoxFrame = Instance.new("Frame")
+SettingsBoxFrame.Size = UDim2.new(1, -20, 0, 80)
+SettingsBoxFrame.Position = UDim2.new(0, 10, 0, 10)
+SettingsBoxFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+SettingsBoxFrame.Parent = SettingsContainer
+Instance.new("UICorner", SettingsBoxFrame).CornerRadius = UDim.new(0, 6)
+
+local SettingLabelTitle = Instance.new("TextLabel")
+SettingLabelTitle.Size = UDim2.new(1, -20, 0, 30)
+SettingLabelTitle.Position = UDim2.new(0, 10, 0, 5)
+SettingLabelTitle.BackgroundTransparency = 1
+SettingLabelTitle.Text = "⌨️ Phím tắt Ẩn / Hiện Menu GUI:"
+SettingLabelTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+SettingLabelTitle.Font = Enum.Font.SourceSansBold
+SettingLabelTitle.TextSize = 14
+SettingLabelTitle.TextXAlignment = Enum.TextXAlignment.Left
+SettingLabelTitle.Parent = SettingsBoxFrame
+
+local ToggleKeyBindBtn = Instance.new("TextButton")
+ToggleKeyBindBtn.Size = UDim2.new(0, 180, 0, 30)
+ToggleKeyBindBtn.Position = UDim2.new(0, 10, 0, 40)
+ToggleKeyBindBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 180)
+ToggleKeyBindBtn.Text = "Phím: RightShift"
+ToggleKeyBindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleKeyBindBtn.Font = Enum.Font.SourceSansBold
+ToggleKeyBindBtn.TextSize = 13
+ToggleKeyBindBtn.Parent = SettingsBoxFrame
+Instance.new("UICorner", ToggleKeyBindBtn).CornerRadius = UDim.new(0, 5)
+
+local ESPBoxFrame = Instance.new("Frame")
+ESPBoxFrame.Size = UDim2.new(1, -20, 0, 80)
+ESPBoxFrame.Position = UDim2.new(0, 10, 0, 95)
+ESPBoxFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+ESPBoxFrame.Parent = SettingsContainer
+Instance.new("UICorner", ESPBoxFrame).CornerRadius = UDim.new(0, 6)
+
+local ESPLabelTitle = Instance.new("TextLabel")
+ESPLabelTitle.Size = UDim2.new(1, -20, 0, 30)
+ESPLabelTitle.Position = UDim2.new(0, 10, 0, 5)
+ESPLabelTitle.BackgroundTransparency = 1
+ESPLabelTitle.Text = "👁️ Phím tắt ESP Tên:"
+ESPLabelTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+ESPLabelTitle.Font = Enum.Font.SourceSansBold
+ESPLabelTitle.TextSize = 14
+ESPLabelTitle.TextXAlignment = Enum.TextXAlignment.Left
+ESPLabelTitle.Parent = ESPBoxFrame
+
+local ESPKeyBindBtn = Instance.new("TextButton")
+ESPKeyBindBtn.Size = UDim2.new(0, 180, 0, 30)
+ESPKeyBindBtn.Position = UDim2.new(0, 10, 0, 40)
+ESPKeyBindBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 180)
+ESPKeyBindBtn.Text = "Phím ESP: F10"
+ESPKeyBindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ESPKeyBindBtn.Font = Enum.Font.SourceSansBold
+ESPKeyBindBtn.TextSize = 13
+ESPKeyBindBtn.Parent = ESPBoxFrame
+Instance.new("UICorner", ESPKeyBindBtn).CornerRadius = UDim.new(0, 5)
+
+local function SaveSettingsToFile()
+    if not writefile then return end
+    local settingsData = {
+        ToggleGuiKeyName = ToggleGuiKey.Name,
+        ESPToggleKeyName = ESPToggleKey.Name
+    }
+    pcall(function()
+        writefile(SettingsSaveFileName, HttpService:JSONEncode(settingsData))
+    end)
+end
+
+local function LoadSettingsFromFile()
+    if not isfile or not isfile(SettingsSaveFileName) or not readfile then return end
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(readfile(SettingsSaveFileName))
+    end)
+    if success and type(result) == "table" then
+        if result.ToggleGuiKeyName and Enum.KeyCode[result.ToggleGuiKeyName] then
+            ToggleGuiKey = Enum.KeyCode[result.ToggleGuiKeyName]
+            ToggleKeyBindBtn.Text = "Phím: " .. ToggleGuiKey.Name
+        end
+        if result.ESPToggleKeyName and Enum.KeyCode[result.ESPToggleKeyName] then
+            ESPToggleKey = Enum.KeyCode[result.ESPToggleKeyName]
+            ESPKeyBindBtn.Text = "Phím ESP: " .. ESPToggleKey.Name
+        end
+    end
+end
+
+ToggleKeyBindBtn.MouseButton1Click:Connect(function()
+    IsBindingToggleGuiKey = true
+    ToggleKeyBindBtn.Text = "Đang chờ nhấn..."
+    ToggleKeyBindBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 30)
+end)
+
+ESPKeyBindBtn.MouseButton1Click:Connect(function()
+    IsBindingESPKey = true
+    ESPKeyBindBtn.Text = "Đang chờ nhấn..."
+    ESPKeyBindBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 30)
+end)
+
+----------------------------------------------------------------
+-- LẮNG NGHE SỰ KIỆN PHÍM TẮT
+----------------------------------------------------------------
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if IsBindingToggleGuiKey then
+            ToggleGuiKey = input.KeyCode
+            ToggleKeyBindBtn.Text = "Phím: " .. input.KeyCode.Name
+            ToggleKeyBindBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 180)
+            IsBindingToggleGuiKey = false
+            SaveSettingsToFile()
+            return
+        end
+
+        if IsBindingESPKey then
+            ESPToggleKey = input.KeyCode
+            ESPKeyBindBtn.Text = "Phím ESP: " .. input.KeyCode.Name
+            ESPKeyBindBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 180)
+            IsBindingESPKey = false
+            SaveSettingsToFile()
+            return
+        end
+
+        if input.KeyCode == ToggleGuiKey and not gpe then
+            MainFrame.Visible = not MainFrame.Visible
+            return
+        end
+
+        if input.KeyCode == ESPToggleKey and not gpe then
+            ESPEnabled = not ESPEnabled
+            return
+        end
+
+        if ActiveBindingItem then
+            ActiveBindingItem.Key = input.KeyCode
+            ActiveBindingItem.KeyBtn.Text = input.KeyCode.Name
+            ActiveBindingItem.KeyBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 180)
+            ActiveBindingItem = nil
+            SaveDataToFile()
+            return
+        end
+
+        if ActiveTargetBindingItem then
+            ActiveTargetBindingItem.Key = input.KeyCode
+            ActiveTargetBindingItem.KeyBtn.Text = input.KeyCode.Name
+            ActiveTargetBindingItem.KeyBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 180)
+            ActiveTargetBindingItem = nil
+            SaveTargetDataToFile()
+            return
+        end
+
+        if IsBindingGlobalKey then
+            KillGlobalKey = input.KeyCode
+            GlobalKeyBtn.Text = "Phím: " .. input.KeyCode.Name
+            GlobalKeyBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
+            IsBindingGlobalKey = false
+            return
+        end
+
+        -- Lắng nghe phím tắt cho Remote Exec (Tab 1)
+        for _, item in ipairs(RemotesList) do
+            if item.Key and input.KeyCode == item.Key and not gpe then
+                item:ToggleOrExecute()
+            end
+        end
+
+        -- [ĐÃ SỬA] Bổ sung lắng nghe phím tắt cho Multi-Kill (Tab 2)
+        for _, item in ipairs(TargetRemotesList) do
+            if item.Key and input.KeyCode == item.Key and not gpe then
+                item:ToggleOrExecute()
+            end
+        end
+    end
+
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        for _, item in ipairs(RemotesList) do
+            if item.IsActive and item.UseMouseClick then
+                if item.Mode == 1 then
+                    pcall(function() ExecuteSmartRemote(item) end)
+                elseif item.Mode == 2 then
+                    local count = math.clamp(math.floor(item.Value), 1, 500)
+                    for i = 1, count do
+                        task.spawn(function() pcall(function() ExecuteSmartRemote(item) end) end)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+----------------------------------------------------------------
+-- HỆ THỐNG ESP TÊN & KHOẢNG CÁCH
+----------------------------------------------------------------
+local function applyCustomESP(targetModel)
+    if not targetModel:IsA("Model") then return end
+    if targetModel.Name == LocalPlayer.Name then return end
+
+    local targetPart = targetModel:FindFirstChild("Head") 
+        or targetModel:FindFirstChild("RootPart") 
+        or targetModel:FindFirstChild("HumanoidRootPart") 
+        or targetModel:FindFirstChildWhichIsA("BasePart")
+
+    if not targetPart then return end
+    if targetPart:FindFirstChild("CustomPlayerESP") then targetPart.CustomPlayerESP:Destroy() end
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "CustomPlayerESP"
+    bb.Size = UDim2.new(0, 200, 0, 50)
+    bb.AlwaysOnTop = true
+    bb.ExtentsOffset = Vector3.new(0, 2.5, 0)
+    bb.Adornee = targetPart
+    bb.Parent = targetPart
+
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.TextStrokeTransparency = 0
+    txt.Font = Enum.Font.SourceSansBold
+    txt.TextSize = 14
+    txt.Parent = bb
+
+    if not targetModel:FindFirstChild("CustomESP_Highlight") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "CustomESP_Highlight"
+        highlight.Adornee = targetModel
+        highlight.Parent = targetModel
+        highlight.FillColor = Color3.fromRGB(255, 0, 0)
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.FillTransparency = 0.6
+        highlight.OutlineTransparency = 0
+    end
+
+    local connection
+    connection = RunService.RenderStepped:Connect(function()
+        if not targetModel:IsDescendantOf(workspace) or not targetPart:IsDescendantOf(targetModel) or not LocalPlayer.Character or not (LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or LocalPlayer.Character:FindFirstChild("RootPart")) then
+            connection:Disconnect()
+            bb:Destroy()
+            if targetModel:FindFirstChild("CustomESP_Highlight") then targetModel.CustomESP_Highlight:Destroy() end
+            return
+        end
+
+        if not ESPEnabled then
+            txt.Visible = false
+            if targetModel:FindFirstChild("CustomESP_Highlight") then targetModel.CustomESP_Highlight.Enabled = false end
+            return
+        else
+            txt.Visible = true
+            if targetModel:FindFirstChild("CustomESP_Highlight") then targetModel.CustomESP_Highlight.Enabled = true end
+        end
+
+        local myRoot = LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or LocalPlayer.Character:FindFirstChild("RootPart")
+        local distance = math.floor((myRoot.Position - targetPart.Position).Magnitude)
+        local maxDistLimit = tonumber(DistanceBox.Text) or 50
+        
+        local isTarget = ExecSelectedPlayers[targetModel.Name] or SelectedPlayers[targetModel.Name]
+        local prefix = ""
+        if distance <= maxDistLimit then prefix = "🌟 [Gần bạn]\n" end
+
+        if isTarget then
+            txt.Text = string.format("%s[🎯 TARGET] %s\n[%d m]", prefix, targetModel.Name, distance)
+            txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+        else
+            txt.Text = string.format("%s%s\n[%d m]", prefix, targetModel.Name, distance)
+            if distance <= maxDistLimit then
+                txt.TextColor3 = Color3.fromRGB(100, 255, 100)
+            else
+                txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
+        end
+    end)
+end
+
+local function InitESPWatcher()
+    local function applyStandardESP(player)
+        if player == LocalPlayer then return end
+        local function onChar(char) applyCustomESP(char) end
+        player.CharacterAdded:Connect(onChar)
+        if player.Character then onChar(player.Character) end
+    end
+
+    for _, p in pairs(Players:GetPlayers()) do applyStandardESP(p) end
+    Players.PlayerAdded:Connect(applyStandardESP)
+
+    task.spawn(function()
+        while task.wait(1) do
+            local pathStr = PathBox.Text
+            local parentObj = GetObjectsFromPath(pathStr)
+            if parentObj and parentObj ~= Players then
+                for _, obj in ipairs(parentObj:GetChildren()) do
+                    if obj:IsA("Model") then applyCustomESP(obj) end
+                end
+            end
+        end
+    end)
+end
+
+InitESPWatcher()
+
+----------------------------------------------------------------
+-- LOAD DỮ LIỆU KHI KHỞI ĐỘNG
+----------------------------------------------------------------
+LoadDataFromFile()
+LoadTargetDataFromFile()
+LoadScriptHubFromFile()
+LoadSettingsFromFile()
