@@ -35,6 +35,8 @@ local targets = {}
 local teammates = {} 
 
 local aimLockActive = false     
+local monsterAimActive = false  
+local isMonsterAimToggled = false -- Biến trạng thái bật/tắt linh hoạt cho Aim Quái bằng chuột phải
 local crosshairAimActive = false
 local isAimToggled = false
 local espEnabled = true         
@@ -44,6 +46,7 @@ local currentViewMode = "KILL"
 local closestPlayerName = "" 
 
 local crosshairMaxDistance = 1000  
+local monsterMaxDistance = 1000    -- Khoảng cách mặc định cho Aim Quái
 local skillF3Distance = 10 
 local customSkillCooldown = 0.8
 
@@ -132,7 +135,7 @@ pcall(function()
 end)
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 700)
+MainFrame.Size = UDim2.new(0, 230, 0, 785) -- Mở rộng chiều cao giao diện để chứa ô nhập KC Quái
 MainFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -191,9 +194,57 @@ AimStatusLabel.TextSize = 11
 AimStatusLabel.Parent = MainFrame
 Instance.new("UICorner", AimStatusLabel).CornerRadius = UDim.new(0, 4)
 
+local MonsterAimStatusLabel = Instance.new("TextLabel")
+MonsterAimStatusLabel.Size = UDim2.new(1, -10, 0, 22)
+MonsterAimStatusLabel.Position = UDim2.new(0, 5, 0, 92)
+MonsterAimStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+MonsterAimStatusLabel.Text = "AIM MONSTERS: OFF [J]"
+MonsterAimStatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
+MonsterAimStatusLabel.Font = Enum.Font.SourceSansBold
+MonsterAimStatusLabel.TextSize = 11
+MonsterAimStatusLabel.Parent = MainFrame
+Instance.new("UICorner", MonsterAimStatusLabel).CornerRadius = UDim.new(0, 4)
+
+-- Khung chỉnh khoảng cách cho Aim Monsters [J]
+local DistMonsterFrame = Instance.new("Frame")
+DistMonsterFrame.Size = UDim2.new(1, -10, 0, 28)
+DistMonsterFrame.Position = UDim2.new(0, 5, 0, 119)
+DistMonsterFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+DistMonsterFrame.BorderSizePixel = 0
+DistMonsterFrame.Parent = MainFrame
+Instance.new("UICorner", DistMonsterFrame).CornerRadius = UDim.new(0, 4)
+
+local DistMonsterLabel = Instance.new("TextLabel")
+DistMonsterLabel.Size = UDim2.new(0, 135, 1, 0)
+DistMonsterLabel.Position = UDim2.new(0, 5, 0, 0)
+DistMonsterLabel.BackgroundTransparency = 1
+DistMonsterLabel.Text = "KC Aim Monsters [J]:"
+DistMonsterLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+DistMonsterLabel.Font = Enum.Font.SourceSansBold
+DistMonsterLabel.TextSize = 11
+DistMonsterLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistMonsterLabel.Parent = DistMonsterFrame
+
+local DistMonsterBox = Instance.new("TextBox")
+DistMonsterBox.Size = UDim2.new(0, 60, 0, 20)
+DistMonsterBox.Position = UDim2.new(1, -65, 0.5, -10)
+DistMonsterBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+DistMonsterBox.BorderSizePixel = 0
+DistMonsterBox.Text = tostring(monsterMaxDistance)
+DistMonsterBox.TextColor3 = Color3.fromRGB(255, 165, 0)
+DistMonsterBox.Font = Enum.Font.SourceSansBold
+DistMonsterBox.TextSize = 12
+DistMonsterBox.Parent = DistMonsterFrame
+Instance.new("UICorner", DistMonsterBox).CornerRadius = UDim.new(0, 4)
+
+DistMonsterBox.FocusLost:Connect(function()
+    local num = tonumber(DistMonsterBox.Text)
+    if num and num >= 0 then monsterMaxDistance = num else DistMonsterBox.Text = tostring(monsterMaxDistance) end
+end)
+
 local SkillF3StatusLabel = Instance.new("TextLabel")
 SkillF3StatusLabel.Size = UDim2.new(1, -10, 0, 22)
-SkillF3StatusLabel.Position = UDim2.new(0, 5, 0, 92)
+SkillF3StatusLabel.Position = UDim2.new(0, 5, 0, 152)
 SkillF3StatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SkillF3StatusLabel.Text = "SKILL AUTO: OFF [F3]"
 SkillF3StatusLabel.TextColor3 = Color3.fromRGB(255, 70, 70)
@@ -204,7 +255,7 @@ Instance.new("UICorner", SkillF3StatusLabel).CornerRadius = UDim.new(0, 4)
 
 local DistSkillFrame = Instance.new("Frame")
 DistSkillFrame.Size = UDim2.new(1, -10, 0, 28)
-DistSkillFrame.Position = UDim2.new(0, 5, 0, 119)
+DistSkillFrame.Position = UDim2.new(0, 5, 0, 179)
 DistSkillFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistSkillFrame.BorderSizePixel = 0
 DistSkillFrame.Parent = MainFrame
@@ -240,7 +291,7 @@ end)
 
 local CrosshairStatusLabel = Instance.new("TextLabel")
 CrosshairStatusLabel.Size = UDim2.new(1, -10, 0, 22)
-CrosshairStatusLabel.Position = UDim2.new(0, 5, 0, 152)
+CrosshairStatusLabel.Position = UDim2.new(0, 5, 0, 212)
 CrosshairStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 CrosshairStatusLabel.Text = "CROSSHAIR AIM: ON [K]"
 CrosshairStatusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
@@ -252,7 +303,7 @@ crosshairAimActive = true
 
 local DistCrossFrame = Instance.new("Frame")
 DistCrossFrame.Size = UDim2.new(1, -10, 0, 28)
-DistCrossFrame.Position = UDim2.new(0, 5, 0, 179)
+DistCrossFrame.Position = UDim2.new(0, 5, 0, 239)
 DistCrossFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistCrossFrame.BorderSizePixel = 0
 DistCrossFrame.Parent = MainFrame
@@ -288,7 +339,7 @@ end)
 
 local OpenSkillManagerBtn = Instance.new("TextButton")
 OpenSkillManagerBtn.Size = UDim2.new(1, -10, 0, 28)
-OpenSkillManagerBtn.Position = UDim2.new(0, 5, 0, 212)
+OpenSkillManagerBtn.Position = UDim2.new(0, 5, 0, 272)
 OpenSkillManagerBtn.BackgroundColor3 = Color3.fromRGB(100, 50, 150)
 OpenSkillManagerBtn.Text = "⚡ QUẢN LÝ CUSTOM SKILLS"
 OpenSkillManagerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -299,7 +350,7 @@ Instance.new("UICorner", OpenSkillManagerBtn).CornerRadius = UDim.new(0, 4)
 
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 246)
+SearchBox.Position = UDim2.new(0, 5, 0, 306)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -312,7 +363,7 @@ Instance.new("UICorner", SearchBox).CornerRadius = UDim.new(0, 4)
 
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 276)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 336)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL TARGETS [Y]"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -322,8 +373,8 @@ SelectAllBtn.Parent = MainFrame
 Instance.new("UICorner", SelectAllBtn).CornerRadius = UDim.new(0, 4)
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -313)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 308)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -373)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 368)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -602,10 +653,8 @@ local function getCharacter(player)
     return player.Character or workspace:FindFirstChild(pName)
 end
 
--- Cắt và giữ nguyên Stamina thông minh theo đúng thư mục Values.Stamina trong game
 task.spawn(function()
     local lastStaminaVal = nil
-    
     while true do
         pcall(function()
             local char = getCharacter(LocalPlayer)
@@ -894,6 +943,7 @@ RunService.RenderStepped:Connect(function()
         performAutoSkillF3Attack()
     end
 
+    -- Xử lý Aim Lock Player (Phím L)
     if aimLockActive and isAimToggled then
         local myCharacter = getCharacter(LocalPlayer)
         local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
@@ -919,6 +969,36 @@ RunService.RenderStepped:Connect(function()
             Camera.CFrame = CFrame.new(Camera.CFrame.Position, closestHead.Position)
         end
     end
+
+    -- Xử lý Aim Lock Quái trong workspace.Monsters (Phím J kết hợp trạng thái chuột phải y hệt L)
+    if monsterAimActive and isMonsterAimToggled then
+        local myCharacter = getCharacter(LocalPlayer)
+        local myRoot = myCharacter and (myCharacter:FindFirstChild("HumanoidRootPart") or myCharacter:FindFirstChild("UpperTorso") or myCharacter:FindFirstChild("Head"))
+        if myRoot then
+            local monstersFolder = workspace:FindFirstChild("Monsters")
+            if monstersFolder then
+                local closestMonsterPart = nil
+                local shortestDist = math.huge
+
+                for _, monster in pairs(monstersFolder:GetChildren()) do
+                    local mRoot = monster:FindFirstChild("HumanoidRootPart") or monster:FindFirstChild("Head") or monster:FindFirstChildOfClass("BasePart")
+                    local mHum = monster:FindFirstChildOfClass("Humanoid")
+                    
+                    if mRoot and mHum and mHum.Health > 0 then
+                        local dist = (myRoot.Position - mRoot.Position).Magnitude
+                        if dist <= monsterMaxDistance and dist < shortestDist then
+                            shortestDist = dist
+                            closestMonsterPart = mRoot
+                        end
+                    end
+                end
+
+                if closestMonsterPart then
+                    Camera.CFrame = CFrame.new(Camera.CFrame.Position, closestMonsterPart.Position)
+                end
+            end
+        end
+    end
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -929,9 +1009,15 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             performManualAttack()
         end
     elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+        -- Chuột phải bật/tắt khóa Aim Player (L)
         if aimLockActive then
             isAimToggled = not isAimToggled
             AimStatusLabel.Text = isAimToggled and "AIM TARGET: ACTIVE (ON) [L]" or "AIM TARGET: ON [L]"
+        end
+        -- Chuột phải bật/tắt khóa Aim Monsters (J) y hệt như Aim Target [L]
+        if monsterAimActive then
+            isMonsterAimToggled = not isMonsterAimToggled
+            MonsterAimStatusLabel.Text = isMonsterAimToggled and "AIM MONSTERS: ACTIVE (ON) [J]" or "AIM MONSTERS: ON [J]"
         end
     end
 
@@ -973,6 +1059,15 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
         AimStatusLabel.Text = aimLockActive and "AIM TARGET: ON [L]" or "AIM TARGET: OFF [L]"
         AimStatusLabel.TextColor3 = aimLockActive and Color3.fromRGB(0, 220, 255) or Color3.fromRGB(255, 70, 70)
+    end
+
+    if input.KeyCode == Enum.KeyCode.J then
+        monsterAimActive = not monsterAimActive
+        if not monsterAimActive then
+            isMonsterAimToggled = false
+        end
+        MonsterAimStatusLabel.Text = monsterAimActive and "AIM MONSTERS: ON [J]" or "AIM MONSTERS: OFF [J]"
+        MonsterAimStatusLabel.TextColor3 = monsterAimActive and Color3.fromRGB(255, 165, 0) or Color3.fromRGB(255, 70, 70)
     end
 
     if input.KeyCode == Enum.KeyCode.K then
@@ -1098,4 +1193,4 @@ task.spawn(function()
     end
 end)
 
-print("Lizluk Full Script with Smart Stamina Cut Loaded Successfully!")
+print("Lizluk Full Script with Configurable Monster Aim & Right-Click Toggle [J] Loaded Successfully!")
