@@ -31,7 +31,6 @@ local lastAttackTime = 0
 -- 1. TẠO GIAO DIỆN (GUI) ẨN KHỎI PLAYERGUI ĐỂ TRÁNH ANTI-CHEAT
 ----------------------------------------------------------------
 
--- Chọn môi trường chứa GUI an toàn (ưu tiên gethui() để qua mặt anti-cheat quét CoreGui)
 local guiParent = nil
 local success, err = pcall(function()
     guiParent = gethui()
@@ -47,7 +46,6 @@ if not guiParent then
     guiParent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Xóa bản cũ nếu có
 if guiParent:FindFirstChild("PlayerStatsUI") then
     guiParent.PlayerStatsUI:Destroy()
 end
@@ -120,10 +118,61 @@ local StatusCorner = Instance.new("UICorner")
 StatusCorner.CornerRadius = UDim.new(0, 4)
 StatusCorner.Parent = StatusLabel
 
+-- KHUNG NHẬP KHOẢNG CÁCH (DISTANCE INPUT)
+local DistanceInputFrame = Instance.new("Frame")
+DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 75)
+DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+DistanceInputFrame.BorderSizePixel = 0
+DistanceInputFrame.Parent = MainFrame
+
+local InputFrameCorner = Instance.new("UICorner")
+InputFrameCorner.CornerRadius = UDim.new(0, 4)
+InputFrameCorner.Parent = DistanceInputFrame
+
+local DistanceLabel = Instance.new("TextLabel")
+DistanceLabel.Size = UDim2.new(0, 130, 1, 0)
+DistanceLabel.Position = UDim2.new(0, 5, 0, 0)
+DistanceLabel.BackgroundTransparency = 1
+DistanceLabel.Text = "Hạn mức khoảng cách:"
+DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+DistanceLabel.Font = Enum.Font.SourceSansBold
+DistanceLabel.TextSize = 12
+DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistanceLabel.Parent = DistanceInputFrame
+
+local DistanceBox = Instance.new("TextBox")
+DistanceBox.Size = UDim2.new(0, 65, 0, 23)
+DistanceBox.Position = UDim2.new(1, -70, 0.5, -11)
+DistanceBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+DistanceBox.BorderSizePixel = 0
+DistanceBox.Text = tostring(maxDetectDistance)
+DistanceBox.TextColor3 = Color3.fromRGB(0, 220, 255)
+DistanceBox.Font = Enum.Font.SourceSansBold
+DistanceBox.TextSize = 13
+DistanceBox.ClearTextOnFocus = false
+DistanceBox.PlaceholderText = "Số mét..."
+DistanceBox.Parent = DistanceInputFrame
+
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 4)
+InputCorner.Parent = DistanceBox
+
+DistanceBox.FocusLost:Connect(function(enterPressed)
+    local text = DistanceBox.Text
+    local number = tonumber(text)
+    if number and number >= 0 then
+        maxDetectDistance = number
+        DistanceBox.Text = tostring(number)
+    else
+        DistanceBox.Text = tostring(maxDetectDistance)
+    end
+end)
+
 -- Ô TÌM KIẾM TÊN (SEARCH BOX)
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 295)
+SearchBox.Position = UDim2.new(0, 5, 0, 115)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -142,7 +191,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN / BỎ CHỌN TẤT CẢ (SELECT ALL BUTTON)
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 325)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 145)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -155,8 +204,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -360)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 355)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -180)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 175)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -219,7 +268,7 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- Hàm thực thi đòn đánh Kill Aura khi nhấp chuột trái (Tìm trong Workspace)
+-- Hàm thực thi đòn đánh Kill Aura khi nhấp chuột trái (Tìm nhân vật trực tiếp trong Workspace)
 local function performKillAuraAttack()
     if not killAuraActive then return end
     if tick() - lastAttackTime < attackCooldown then return end
@@ -392,6 +441,14 @@ task.spawn(function()
 
         for pName, btnData in pairs(buttons) do
             local Btn = btnData.Button
+            local p = Players:FindFirstChild(pName)
+            local distText = ""
+            
+            if myRoot and p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local dist = math.floor((myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude)
+                distText = " [" .. dist .. "m]"
+            end
+
             if searchFilterText == "" or string.find(string.lower(pName), searchFilterText, 1, true) then
                 Btn.Visible = true
             else
@@ -401,19 +458,19 @@ task.spawn(function()
             if targets[pName] then
                 if killAuraActive then
                     Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-                    Btn.Text = pName .. " [TARGET]"
+                    Btn.Text = pName .. distText .. " [TARGET]"
                 else
                     Btn.BackgroundColor3 = Color3.fromRGB(160, 120, 30)
-                    Btn.Text = pName .. " [PAUSED]"
+                    Btn.Text = pName .. distText .. " [PAUSED]"
                 end
                 Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
             elseif pName == closestPlayerName then
                 Btn.BackgroundColor3 = Color3.fromRGB(15, 45, 30) 
-                Btn.Text = "⭐ " .. pName .. " (GẦN NHẤT)"
+                Btn.Text = "⭐ " .. pName .. " [GẦN]"
                 Btn.TextColor3 = Color3.fromRGB(50, 255, 130)
             else
                 Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-                Btn.Text = pName
+                Btn.Text = pName .. distText
                 Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
             end
         end
