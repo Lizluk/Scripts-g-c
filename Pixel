@@ -6,11 +6,13 @@ local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Remote cho Kill Aura
+-- Remote cho Kill Aura và Ability
 local primaryAttackHitRemote = ReplicatedStorage:FindFirstChild("PrimaryAttackHit")
+local abilityHitRemote = ReplicatedStorage:FindFirstChild("AbilityHit")
 
 local targets = {} 
 local killAuraActive = true 
+local abilityActive = false 
 local autoDrinkActive = false 
 local autoEatActive = false 
 local passiveSkillActive = false 
@@ -26,6 +28,8 @@ local startTime = os.time()
 -- Tốc độ gửi Remote & Cooldown
 local attackCooldown = 1.4     
 local lastAttackTime = 0
+local abilityCooldown = 1.5
+local lastAbilityTime = 0
 
 ----------------------------------------------------------------
 -- 1. TẠO GIAO DIỆN (GUI) ẨN KHỎI PLAYERGUI ĐỂ TRÁNH ANTI-CHEAT
@@ -57,7 +61,7 @@ ScreenGui.Parent = guiParent
 
 -- KHUNG MENU CHÍNH
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 650)
+MainFrame.Size = UDim2.new(0, 220, 0, 680)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -118,10 +122,37 @@ local StatusCorner = Instance.new("UICorner")
 StatusCorner.CornerRadius = UDim.new(0, 4)
 StatusCorner.Parent = StatusLabel
 
+-- NÚT ABILITY [H]
+local AbilityStatusLabel = Instance.new("TextButton")
+AbilityStatusLabel.Size = UDim2.new(1, -10, 0, 25)
+AbilityStatusLabel.Position = UDim2.new(0, 5, 0, 70)
+AbilityStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+AbilityStatusLabel.Text = "ABILITY: OFF [H]"
+AbilityStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+AbilityStatusLabel.Font = Enum.Font.SourceSansBold
+AbilityStatusLabel.TextSize = 13
+AbilityStatusLabel.Parent = MainFrame
+
+local AbilityStatusCorner = Instance.new("UICorner")
+AbilityStatusCorner.CornerRadius = UDim.new(0, 4)
+AbilityStatusCorner.Parent = AbilityStatusLabel
+
+local function updateAbilityVisuals()
+    if abilityActive then
+        AbilityStatusLabel.BackgroundColor3 = Color3.fromRGB(120, 40, 180)
+        AbilityStatusLabel.Text = "ABILITY: ACTIVE [H]"
+        AbilityStatusLabel.TextColor3 = Color3.fromRGB(220, 150, 255)
+    else
+        AbilityStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        AbilityStatusLabel.Text = "ABILITY: OFF [H]"
+        AbilityStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end
+
 -- KHUNG NHẬP KHOẢNG CÁCH (DISTANCE INPUT)
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 75)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 100)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -172,7 +203,7 @@ end)
 -- Ô TÌM KIẾM TÊN (SEARCH BOX)
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 115)
+SearchBox.Position = UDim2.new(0, 5, 0, 140)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -191,7 +222,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN / BỎ CHỌN TẤT CẢ (SELECT ALL BUTTON)
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 145)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 170)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -204,8 +235,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -180)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 175)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -205)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 200)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -268,7 +299,7 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- Hàm thực thi đòn đánh Kill Aura khi nhấp chuột trái (Tìm nhân vật trực tiếp trong Workspace)
+-- Hàm thực thi đòn đánh Kill Aura khi nhấp chuột trái
 local function performKillAuraAttack()
     if not killAuraActive then return end
     if tick() - lastAttackTime < attackCooldown then return end
@@ -300,6 +331,49 @@ local function performKillAuraAttack()
     end
 end
 
+-- Vòng lặp tự động kích hoạt Ability (Pounce) khi bật phím H
+task.spawn(function()
+    while true do
+        if abilityActive then
+            if tick() - lastAbilityTime >= abilityCooldown then
+                local myCharacter = LocalPlayer.Character
+                local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+
+                if myRoot then
+                    for pName, isTargeted in pairs(targets) do
+                        if isTargeted then
+                            local targetCharacter = workspace:FindFirstChild(pName)
+                            local targetBody = targetCharacter and (targetCharacter:FindFirstChild("Body") or targetCharacter:FindFirstChild("Torso") or targetCharacter:FindFirstChild("UpperTorso") or targetCharacter:FindFirstChild("HumanoidRootPart"))
+                            local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+
+                            if targetRoot and targetBody then
+                                local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                                if currentDist <= maxDetectDistance then
+                                    pcall(function()
+                                        if abilityHitRemote then
+                                            local ohString1 = "Pounce"
+                                            local ohCFrame3 = targetRoot.CFrame
+                                            abilityHitRemote:FireServer(ohString1, targetBody, ohCFrame3)
+                                        end
+                                    end)
+                                    lastAbilityTime = tick()
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(0.2)
+    end
+end)
+
+AbilityStatusLabel.MouseButton1Click:Connect(function()
+    abilityActive = not abilityActive
+    updateAbilityVisuals()
+end)
+
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if UserInputService:GetFocusedTextBox() then return end
     if gameProcessed then return end
@@ -310,6 +384,10 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
     if input.KeyCode == Enum.KeyCode.T then toggleSelectAll() end
+    if input.KeyCode == Enum.KeyCode.H then
+        abilityActive = not abilityActive
+        updateAbilityVisuals()
+    end
     if input.KeyCode == Enum.KeyCode.Q then
         killAuraActive = not killAuraActive
         if killAuraActive then
