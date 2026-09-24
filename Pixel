@@ -11,6 +11,7 @@ local primaryAttackHitRemote = ReplicatedStorage:FindFirstChild("PrimaryAttackHi
 local abilityHitRemote = ReplicatedStorage:FindFirstChild("AbilityHit")
 
 local targets = {} 
+local teamSafeList = {} -- Danh sách Team (không bị đánh)
 local killAuraActive = true 
 local abilityActive = false 
 local killAuraKActive = false 
@@ -22,6 +23,7 @@ local autoForageActive = false
 local closestPlayerName = "" 
 local maxDetectDistance = 50 
 local searchFilterText = ""
+local teamSearchFilterText = ""
 
 -- Thời gian khởi chạy Script
 local startTime = os.time()
@@ -31,11 +33,11 @@ local attackCooldown = 1.4
 local lastAttackTime = 0
 local abilityCooldown = 1.5
 local lastAbilityTime = 0
-local killAuraKCooldown = 1.5
+local killAuraKCooldown = 1.4     
 local lastKillAuraKTime = 0
 
 ----------------------------------------------------------------
--- 1. TẠO GIAO DIỆN (GUI) ẨN KHỎI PLAYERGUI ĐỂ TRÁNH ANTI-CHEAT
+-- 1. TẠO GIAO DIỆN (GUI) & BẢNG TEAM (F5)
 ----------------------------------------------------------------
 
 local guiParent = nil
@@ -64,7 +66,7 @@ ScreenGui.Parent = guiParent
 
 -- KHUNG MENU CHÍNH
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 710)
+MainFrame.Size = UDim2.new(0, 220, 0, 740)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -75,6 +77,74 @@ MainFrame.Parent = ScreenGui
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 8)
 UICorner.Parent = MainFrame
+
+-- KHUNG QUẢN LÝ TEAM (F5 / PHÍM U)
+local TeamFrame = Instance.new("Frame")
+TeamFrame.Size = UDim2.new(0, 220, 0, 450)
+TeamFrame.Position = UDim2.new(0.23, 0, 0.2, 0)
+TeamFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+TeamFrame.BorderSizePixel = 0
+TeamFrame.Active = true
+TeamFrame.Draggable = true
+TeamFrame.Visible = false -- Mặc định ẩn, bấm F5 hoặc U để mở
+TeamFrame.Parent = ScreenGui
+
+local TeamFrameCorner = Instance.new("UICorner")
+TeamFrameCorner.CornerRadius = UDim.new(0, 8)
+TeamFrameCorner.Parent = TeamFrame
+
+local TeamTitle = Instance.new("TextLabel")
+TeamTitle.Size = UDim2.new(1, 0, 0, 35)
+TeamTitle.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+TeamTitle.Text = "TEAM MANAGEMENT [F5]"
+TeamTitle.TextColor3 = Color3.fromRGB(100, 255, 150)
+TeamTitle.Font = Enum.Font.SourceSansBold
+TeamTitle.TextSize = 14
+TeamTitle.Parent = TeamFrame
+
+local TeamTitleCorner = Instance.new("UICorner")
+TeamTitleCorner.CornerRadius = UDim.new(0, 8)
+TeamTitleCorner.Parent = TeamTitle
+
+local TeamSearchBox = Instance.new("TextBox")
+TeamSearchBox.Size = UDim2.new(1, -10, 0, 25)
+TeamSearchBox.Position = UDim2.new(0, 5, 0, 45)
+TeamSearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+TeamSearchBox.BorderSizePixel = 0
+TeamSearchBox.Text = ""
+TeamSearchBox.PlaceholderText = "🔍 Tìm tên để thêm vào Team..."
+TeamSearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+TeamSearchBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+TeamSearchBox.Font = Enum.Font.SourceSansBold
+TeamSearchBox.TextSize = 13
+TeamSearchBox.ClearTextOnFocus = false
+TeamSearchBox.Parent = TeamFrame
+
+local TeamSearchCorner = Instance.new("UICorner")
+TeamSearchCorner.CornerRadius = UDim.new(0, 4)
+TeamSearchCorner.Parent = TeamSearchBox
+
+local TeamScrollingFrame = Instance.new("ScrollingFrame")
+TeamScrollingFrame.Size = UDim2.new(1, -10, 1, -80)
+TeamScrollingFrame.Position = UDim2.new(0, 5, 0, 75)
+TeamScrollingFrame.BackgroundTransparency = 1
+TeamScrollingFrame.BorderSizePixel = 0
+TeamScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+TeamScrollingFrame.ScrollBarThickness = 4
+TeamScrollingFrame.Parent = TeamFrame
+
+local TeamUIListLayout = Instance.new("UIListLayout")
+TeamUIListLayout.Parent = TeamScrollingFrame
+TeamUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+TeamUIListLayout.Padding = UDim.new(0, 5)
+
+TeamUIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    TeamScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, TeamUIListLayout.AbsoluteContentSize.Y)
+end)
+
+TeamSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    teamSearchFilterText = string.lower(TeamSearchBox.Text)
+end)
 
 -- KHUNG ĐỒNG HỒ TÁCH BIỆT
 local TimeFrame = Instance.new("Frame")
@@ -155,6 +225,21 @@ local KillAuraKCorner = Instance.new("UICorner")
 KillAuraKCorner.CornerRadius = UDim.new(0, 4)
 KillAuraKCorner.Parent = KillAuraKStatusLabel
 
+-- NÚT MỞ BẢNG TEAM [U / F5]
+local TeamMenuBtn = Instance.new("TextButton")
+TeamMenuBtn.Size = UDim2.new(1, -10, 0, 25)
+TeamMenuBtn.Position = UDim2.new(0, 5, 0, 130)
+TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
+TeamMenuBtn.Text = "TEAM LIST [U / F5]"
+TeamMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+TeamMenuBtn.Font = Enum.Font.SourceSansBold
+TeamMenuBtn.TextSize = 13
+TeamMenuBtn.Parent = MainFrame
+
+local TeamMenuCorner = Instance.new("UICorner")
+TeamMenuCorner.CornerRadius = UDim.new(0, 4)
+TeamMenuCorner.Parent = TeamMenuBtn
+
 local function updateAbilityVisuals()
     if abilityActive then
         AbilityStatusLabel.BackgroundColor3 = Color3.fromRGB(120, 40, 180)
@@ -182,7 +267,7 @@ end
 -- KHUNG NHẬP KHOẢNG CÁCH (DISTANCE INPUT)
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 130)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 160)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -233,7 +318,7 @@ end)
 -- Ô TÌM KIẾM TÊN (SEARCH BOX)
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 170)
+SearchBox.Position = UDim2.new(0, 5, 0, 200)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -252,7 +337,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN / BỎ CHỌN TẤT CẢ (SELECT ALL BUTTON)
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 200)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 230)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -265,8 +350,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -235)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 230)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -265)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 260)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -304,7 +389,7 @@ local function toggleSelectAll()
     local selectedCount = 0
 
     for _, p in pairs(allPlayers) do
-        if p ~= LocalPlayer then
+        if p ~= LocalPlayer and not teamSafeList[p.Name] then
             otherPlayersCount = otherPlayersCount + 1
             if targets[p.Name] then
                 selectedCount = selectedCount + 1
@@ -318,7 +403,7 @@ local function toggleSelectAll()
         SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
     else
         for _, p in pairs(allPlayers) do
-            if p ~= LocalPlayer then
+            if p ~= LocalPlayer and not teamSafeList[p.Name] then
                 targets[p.Name] = true
             end
         end
@@ -329,17 +414,17 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- Hàm thực thi đòn đánh Kill Aura Q khi nhấp chuột trái
-local function performKillAuraAttack()
-    if not killAuraActive then return end
-    if tick() - lastAttackTime < attackCooldown then return end
-    
+-- Hàm thực thi khi nhấp chuột trái (Loại trừ người chơi thuộc teamSafeList)
+local function performAttacks()
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
 
-    if myRoot then
+    if not myRoot then return end
+
+    -- 1. Xử lý Kill Aura Q (PrimaryAttackHit)
+    if killAuraActive and (tick() - lastAttackTime >= attackCooldown) then
         for pName, isTargeted in pairs(targets) do
-            if isTargeted then
+            if isTargeted and not teamSafeList[pName] then
                 local targetCharacter = workspace:FindFirstChild(pName)
                 local targetHead = targetCharacter and targetCharacter:FindFirstChild("Head")
                 local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
@@ -354,6 +439,32 @@ local function performKillAuraAttack()
                             end
                         end)
                         lastAttackTime = tick()
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    -- 2. Xử lý Kill Aura K (AbilityHit - Charge vào Jaw)
+    if killAuraKActive and (tick() - lastKillAuraKTime >= killAuraKCooldown) then
+        for pName, isTargeted in pairs(targets) do
+            if isTargeted and not teamSafeList[pName] then
+                local targetCharacter = workspace:FindFirstChild(pName)
+                local targetJaw = targetCharacter and (targetCharacter:FindFirstChild("Jaw") or targetCharacter:FindFirstChild("Head"))
+                local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot and targetJaw then
+                    local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                    if currentDist <= maxDetectDistance then
+                        pcall(function()
+                            if abilityHitRemote then
+                                local ohString1 = "Charge"
+                                abilityHitRemote:FireServer(ohString1, targetJaw)
+                            end
+                        end)
+                        lastKillAuraKTime = tick()
+                        break
                     end
                 end
             end
@@ -361,7 +472,7 @@ local function performKillAuraAttack()
     end
 end
 
--- Vòng lặp tự động kích hoạt Ability (Pounce) khi bật phím H
+-- Vòng lặp tự động kích hoạt Ability (Pounce) khi bật phím H (Loại trừ teamSafeList)
 task.spawn(function()
     while true do
         if abilityActive then
@@ -371,7 +482,7 @@ task.spawn(function()
 
                 if myRoot then
                     for pName, isTargeted in pairs(targets) do
-                        if isTargeted then
+                        if isTargeted and not teamSafeList[pName] then
                             local targetCharacter = workspace:FindFirstChild(pName)
                             local targetBody = targetCharacter and (targetCharacter:FindFirstChild("Body") or targetCharacter:FindFirstChild("Torso") or targetCharacter:FindFirstChild("UpperTorso") or targetCharacter:FindFirstChild("HumanoidRootPart"))
                             local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
@@ -399,43 +510,6 @@ task.spawn(function()
     end
 end)
 
--- Vòng lặp tự động kích hoạt Kill Aura K (Charge) khi bật phím K
-task.spawn(function()
-    while true do
-        if killAuraKActive then
-            if tick() - lastKillAuraKTime >= killAuraKCooldown then
-                local myCharacter = LocalPlayer.Character
-                local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-
-                if myRoot then
-                    for pName, isTargeted in pairs(targets) do
-                        if isTargeted then
-                            local targetCharacter = workspace:FindFirstChild(pName)
-                            local targetJaw = targetCharacter and (targetCharacter:FindFirstChild("Jaw") or targetCharacter:FindFirstChild("Head"))
-                            local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-
-                            if targetRoot and targetJaw then
-                                local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
-                                if currentDist <= maxDetectDistance then
-                                    pcall(function()
-                                        if abilityHitRemote then
-                                            local ohString1 = "Charge"
-                                            abilityHitRemote:FireServer(ohString1, targetJaw)
-                                        end
-                                    end)
-                                    lastKillAuraKTime = tick()
-                                    break
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        task.wait(0.2)
-    end
-end)
-
 AbilityStatusLabel.MouseButton1Click:Connect(function()
     abilityActive = not abilityActive
     updateAbilityVisuals()
@@ -446,15 +520,20 @@ KillAuraKStatusLabel.MouseButton1Click:Connect(function()
     updateKillAuraKVisuals()
 end)
 
+TeamMenuBtn.MouseButton1Click:Connect(function()
+    TeamFrame.Visible = not TeamFrame.Visible
+end)
+
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if UserInputService:GetFocusedTextBox() then return end
     if gameProcessed then return end
     
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        performKillAuraAttack()
+        performAttacks()
     end
 
     if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
+    if input.KeyCode == Enum.KeyCode.F5 or input.KeyCode == Enum.KeyCode.U then TeamFrame.Visible = not TeamFrame.Visible end
     if input.KeyCode == Enum.KeyCode.T then toggleSelectAll() end
     if input.KeyCode == Enum.KeyCode.H then
         abilityActive = not abilityActive
@@ -477,7 +556,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 ----------------------------------------------------------------
--- 2. HỆ THỐNG ESP & DANH SÁCH NGƯỜI CHƠI
+-- 2. HỆ THỐNG ESP (ĐÃ SỬA HIỂN THỊ KHOẢNG CÁCH) & DANH SÁCH
 ----------------------------------------------------------------
 
 local function applyESP(player, character)
@@ -491,9 +570,9 @@ local function applyESP(player, character)
 
     local bb = Instance.new("BillboardGui")
     bb.Name = "PlayerESP"
-    bb.Size = UDim2.new(0, 150, 0, 30)
+    bb.Size = UDim2.new(0, 150, 0, 40)
     bb.AlwaysOnTop = true
-    bb.ExtentsOffset = Vector3.new(0, 2.5, 0)
+    bb.ExtentsOffset = Vector3.new(0, 2.8, 0)
     bb.Adornee = head
     bb.MaxDistance = maxDetectDistance
     bb.Parent = head
@@ -523,16 +602,23 @@ end
 Players.PlayerAdded:Connect(setupPlayerESP)
 
 local buttons = {}
+local teamButtons = {}
 
 local function buildButtons()
     for _, child in pairs(ScrollingFrame:GetChildren()) do
         if child:IsA("TextButton") then child:Destroy() end
     end
+    for _, child in pairs(TeamScrollingFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
     buttons = {}
+    teamButtons = {}
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
             local pName = player.Name
+
+            -- Nút trong Menu Chính (Kill List)
             local Btn = Instance.new("TextButton")
             Btn.Size = UDim2.new(1, 0, 0, 30)
             Btn.Font = Enum.Font.SourceSansBold
@@ -545,14 +631,37 @@ local function buildButtons()
             BtnCorner.Parent = Btn
 
             Btn.MouseButton1Click:Connect(function()
-                if targets[pName] then
-                    targets[pName] = nil
-                else
-                    targets[pName] = true
+                if not teamSafeList[pName] then
+                    if targets[pName] then
+                        targets[pName] = nil
+                    else
+                        targets[pName] = true
+                    end
                 end
             end)
-
             buttons[pName] = {Button = Btn}
+
+            -- Nút trong Bảng Team (Team Management)
+            local TeamBtn = Instance.new("TextButton")
+            TeamBtn.Size = UDim2.new(1, 0, 0, 30)
+            TeamBtn.Font = Enum.Font.SourceSansBold
+            TeamBtn.TextSize = 14
+            TeamBtn.BorderSizePixel = 0
+            TeamBtn.Parent = TeamScrollingFrame
+
+            local TeamBtnCorner = Instance.new("UICorner")
+            TeamBtnCorner.CornerRadius = UDim.new(0, 4)
+            TeamBtnCorner.Parent = TeamBtn
+
+            TeamBtn.MouseButton1Click:Connect(function()
+                if teamSafeList[pName] then
+                    teamSafeList[pName] = nil
+                else
+                    teamSafeList[pName] = true
+                    targets[pName] = nil -- Xóa khỏi danh sách target kill nếu cho vào team
+                end
+            end)
+            teamButtons[pName] = {Button = TeamBtn}
         end
     end
 end
@@ -560,6 +669,7 @@ end
 Players.PlayerAdded:Connect(buildButtons)
 Players.PlayerRemoving:Connect(function(player)
     targets[player.Name] = nil
+    teamSafeList[player.Name] = nil
     buildButtons()
 end)
 buildButtons()
@@ -576,7 +686,40 @@ task.spawn(function()
             for pName, btnData in pairs(buttons) do
                 local p = Players:FindFirstChild(pName)
                 if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local head = p.Character:FindFirstChild("Head")
                     local dist = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
+                    
+                    -- Cập nhật ESP chuẩn xác khoảng cách
+                    if head then
+                        local espGui = head:FindFirstChild("PlayerESP")
+                        if not espGui then
+                            applyESP(p, p.Character)
+                        else
+                            espGui.MaxDistance = maxDetectDistance
+                            local txt = espGui:FindFirstChild("ESPText")
+                            if txt then
+                                local intDist = math.floor(dist)
+                                if intDist <= maxDetectDistance then
+                                    if teamSafeList[pName] then
+                                        txt.Text = string.format("[🛡️ TEAM] %s\n[%d m]", pName, intDist)
+                                        txt.TextColor3 = Color3.fromRGB(100, 255, 150)
+                                    elseif targets[pName] then
+                                        txt.Text = string.format("[🎯 TARGET] %s\n[%d m]", pName, intDist)
+                                        txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                                    elseif pName == closestPlayerName then
+                                        txt.Text = string.format("[⭐ GẦN] %s\n[%d m]", pName, intDist)
+                                        txt.TextColor3 = Color3.fromRGB(50, 255, 130)
+                                    else
+                                        txt.Text = string.format("%s\n[%d m]", pName, intDist)
+                                        txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+                                    end
+                                else
+                                    txt.Text = ""
+                                end
+                            end
+                        end
+                    end
+
                     if dist <= maxDetectDistance and dist < minDistance then
                         minDistance = dist
                         tempClosest = pName
@@ -593,6 +736,7 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
+        -- Cập nhật trạng thái hiển thị của các nút Kill List
         for pName, btnData in pairs(buttons) do
             local Btn = btnData.Button
             local p = Players:FindFirstChild(pName)
@@ -609,7 +753,11 @@ task.spawn(function()
                 Btn.Visible = false
             end
 
-            if targets[pName] then
+            if teamSafeList[pName] then
+                Btn.BackgroundColor3 = Color3.fromRGB(40, 90, 60)
+                Btn.Text = pName .. distText .. " [TEAM SAFE]"
+                Btn.TextColor3 = Color3.fromRGB(150, 255, 150)
+            elseif targets[pName] then
                 if killAuraActive then
                     Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
                     Btn.Text = pName .. distText .. " [TARGET]"
@@ -626,6 +774,27 @@ task.spawn(function()
                 Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
                 Btn.Text = pName .. distText
                 Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+            end
+        end
+
+        -- Cập nhật trạng thái hiển thị của các nút trong Bảng Team (F5)
+        for pName, teamBtnData in pairs(teamButtons) do
+            local TeamBtn = teamBtnData.Button
+            
+            if teamSearchFilterText == "" or string.find(string.lower(pName), teamSearchFilterText, 1, true) then
+                TeamBtn.Visible = true
+            else
+                TeamBtn.Visible = false
+            end
+
+            if teamSafeList[pName] then
+                TeamBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 80)
+                TeamBtn.Text = "🛡️ " .. pName .. " (IN TEAM)"
+                TeamBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            else
+                TeamBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+                TeamBtn.Text = pName
+                TeamBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
             end
         end
 
