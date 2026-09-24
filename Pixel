@@ -11,19 +11,26 @@ local primaryAttackHitRemote = ReplicatedStorage:FindFirstChild("PrimaryAttackHi
 local abilityHitRemote = ReplicatedStorage:FindFirstChild("AbilityHit")
 
 local targets = {} 
-local teamSafeList = {} -- Danh sách Team (không bị đánh)
+local teamSafeList = {} 
 local killAuraActive = true 
 local abilityActive = false 
 local killAuraKActive = false 
-local autoDrinkActive = false 
-local autoEatActive = false 
-local passiveSkillActive = false 
-local autoGrabActive = false 
-local autoForageActive = false
 local closestPlayerName = "" 
 local maxDetectDistance = 50 
 local searchFilterText = ""
 local teamSearchFilterText = ""
+
+-- Bảng lưu trữ phím tắt tùy chỉnh
+local Keybinds = {
+    ToggleMenu = Enum.KeyCode.P,
+    ToggleTeamMenu = Enum.KeyCode.F5,
+    ToggleKillAuraQ = Enum.KeyCode.Q,
+    ToggleAbilityH = Enum.KeyCode.H,
+    ToggleKillAuraK = Enum.KeyCode.K,
+    SelectAll = Enum.KeyCode.T,
+}
+
+local waitingForKey = nil -- Lưu chức năng đang chờ bấm phím mới
 
 -- Thời gian khởi chạy Script
 local startTime = os.time()
@@ -37,7 +44,7 @@ local killAuraKCooldown = 1.4
 local lastKillAuraKTime = 0
 
 ----------------------------------------------------------------
--- 1. TẠO GIAO DIỆN (GUI) & BẢNG TEAM (F5)
+-- 1. TẠO GIAO DIỆN (GUI) & BẢNG TEAM
 ----------------------------------------------------------------
 
 local guiParent = nil
@@ -66,7 +73,7 @@ ScreenGui.Parent = guiParent
 
 -- KHUNG MENU CHÍNH
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 220, 0, 740)
+MainFrame.Size = UDim2.new(0, 230, 0, 780)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -78,15 +85,15 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 8)
 UICorner.Parent = MainFrame
 
--- KHUNG QUẢN LÝ TEAM (F5 / PHÍM U)
+-- KHUNG QUẢN LÝ TEAM
 local TeamFrame = Instance.new("Frame")
 TeamFrame.Size = UDim2.new(0, 220, 0, 450)
-TeamFrame.Position = UDim2.new(0.23, 0, 0.2, 0)
+TeamFrame.Position = UDim2.new(0.24, 0, 0.2, 0)
 TeamFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 TeamFrame.BorderSizePixel = 0
 TeamFrame.Active = true
 TeamFrame.Draggable = true
-TeamFrame.Visible = false -- Mặc định ẩn, bấm F5 hoặc U để mở
+TeamFrame.Visible = false 
 TeamFrame.Parent = ScreenGui
 
 local TeamFrameCorner = Instance.new("UICorner")
@@ -96,7 +103,7 @@ TeamFrameCorner.Parent = TeamFrame
 local TeamTitle = Instance.new("TextLabel")
 TeamTitle.Size = UDim2.new(1, 0, 0, 35)
 TeamTitle.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-TeamTitle.Text = "TEAM MANAGEMENT [F5]"
+TeamTitle.Text = "TEAM MANAGEMENT"
 TeamTitle.TextColor3 = Color3.fromRGB(100, 255, 150)
 TeamTitle.Font = Enum.Font.SourceSansBold
 TeamTitle.TextSize = 14
@@ -171,7 +178,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.Position = UDim2.new(0, 0, 0, 0)
 Title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-Title.Text = "STATS MENU [P]"
+Title.Text = "STATS MENU"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 15
@@ -181,73 +188,71 @@ local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 8)
 TitleCorner.Parent = Title
 
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(1, -10, 0, 25)
-StatusLabel.Position = UDim2.new(0, 5, 0, 40)
-StatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-StatusLabel.Text = "KILL AURA: READY [Q]"
+-- CÁC NÚT CHỨC NĂNG & ĐỔI PHÍM
+local function createFeatureButton(posY, defaultText, keyKey)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 25)
+    btn.Position = UDim2.new(0, 5, 0, posY)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 13
+    btn.Parent = MainFrame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = btn
+
+    local keyBtn = Instance.new("TextButton")
+    keyBtn.Size = UDim2.new(0, 45, 1, -4)
+    keyBtn.Position = UDim2.new(1, -47, 0, 2)
+    keyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    keyBtn.Font = Enum.Font.SourceSansBold
+    keyBtn.TextSize = 12
+    keyBtn.TextColor3 = Color3.fromRGB(0, 255, 200)
+    keyBtn.Parent = btn
+
+    local keyCorner = Instance.new("UICorner")
+    keyCorner.CornerRadius = UDim.new(0, 3)
+    keyCorner.Parent = keyBtn
+
+    local function updateKeyText()
+        keyBtn.Text = "[" .. tostring(Keybinds[keyKey].Name) .. "]"
+    end
+    updateKeyText()
+
+    keyBtn.MouseButton1Click:Connect(function()
+        waitingForKey = keyKey
+        keyBtn.Text = "[...]"
+    end)
+
+    return btn, keyBtn, updateKeyText
+end
+
+local StatusLabel, QKeyBtn, updateQKey = createFeatureButton(40, "KILL AURA Q", "ToggleKillAuraQ")
+StatusLabel.Text = "KILL AURA Q: READY"
 StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
-StatusLabel.Font = Enum.Font.SourceSansBold
-StatusLabel.TextSize = 13
-StatusLabel.Parent = MainFrame
 
-local StatusCorner = Instance.new("UICorner")
-StatusCorner.CornerRadius = UDim.new(0, 4)
-StatusCorner.Parent = StatusLabel
-
--- NÚT ABILITY [H]
-local AbilityStatusLabel = Instance.new("TextButton")
-AbilityStatusLabel.Size = UDim2.new(1, -10, 0, 25)
-AbilityStatusLabel.Position = UDim2.new(0, 5, 0, 70)
-AbilityStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-AbilityStatusLabel.Text = "ABILITY: OFF [H]"
+local AbilityStatusLabel, HKeyBtn, updateHKey = createFeatureButton(70, "ABILITY H", "ToggleAbilityH")
+AbilityStatusLabel.Text = "ABILITY: OFF"
 AbilityStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-AbilityStatusLabel.Font = Enum.Font.SourceSansBold
-AbilityStatusLabel.TextSize = 13
-AbilityStatusLabel.Parent = MainFrame
 
-local AbilityStatusCorner = Instance.new("UICorner")
-AbilityStatusCorner.CornerRadius = UDim.new(0, 4)
-AbilityStatusCorner.Parent = AbilityStatusLabel
-
--- NÚT KILL AURA K [K]
-local KillAuraKStatusLabel = Instance.new("TextButton")
-KillAuraKStatusLabel.Size = UDim2.new(1, -10, 0, 25)
-KillAuraKStatusLabel.Position = UDim2.new(0, 5, 0, 100)
-KillAuraKStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-KillAuraKStatusLabel.Text = "KILL AURA K: OFF [K]"
+local KillAuraKStatusLabel, KKeyBtn, updateKKey = createFeatureButton(100, "KILL AURA K", "ToggleKillAuraK")
+KillAuraKStatusLabel.Text = "KILL AURA K: OFF"
 KillAuraKStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-KillAuraKStatusLabel.Font = Enum.Font.SourceSansBold
-KillAuraKStatusLabel.TextSize = 13
-KillAuraKStatusLabel.Parent = MainFrame
 
-local KillAuraKCorner = Instance.new("UICorner")
-KillAuraKCorner.CornerRadius = UDim.new(0, 4)
-KillAuraKCorner.Parent = KillAuraKStatusLabel
-
--- NÚT MỞ BẢNG TEAM [U / F5]
-local TeamMenuBtn = Instance.new("TextButton")
-TeamMenuBtn.Size = UDim2.new(1, -10, 0, 25)
-TeamMenuBtn.Position = UDim2.new(0, 5, 0, 130)
-TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
-TeamMenuBtn.Text = "TEAM LIST [U / F5]"
+local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(130, "TEAM LIST", "ToggleTeamMenu")
+TeamMenuBtn.Text = "TEAM LIST"
 TeamMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-TeamMenuBtn.Font = Enum.Font.SourceSansBold
-TeamMenuBtn.TextSize = 13
-TeamMenuBtn.Parent = MainFrame
-
-local TeamMenuCorner = Instance.new("UICorner")
-TeamMenuCorner.CornerRadius = UDim.new(0, 4)
-TeamMenuCorner.Parent = TeamMenuBtn
+TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
 
 local function updateAbilityVisuals()
     if abilityActive then
         AbilityStatusLabel.BackgroundColor3 = Color3.fromRGB(120, 40, 180)
-        AbilityStatusLabel.Text = "ABILITY: ACTIVE [H]"
+        AbilityStatusLabel.Text = "ABILITY: ACTIVE"
         AbilityStatusLabel.TextColor3 = Color3.fromRGB(220, 150, 255)
     else
         AbilityStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        AbilityStatusLabel.Text = "ABILITY: OFF [H]"
+        AbilityStatusLabel.Text = "ABILITY: OFF"
         AbilityStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
     end
 end
@@ -255,16 +260,16 @@ end
 local function updateKillAuraKVisuals()
     if killAuraKActive then
         KillAuraKStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 80, 30)
-        KillAuraKStatusLabel.Text = "KILL AURA K: ACTIVE [K]"
+        KillAuraKStatusLabel.Text = "KILL AURA K: ACTIVE"
         KillAuraKStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
     else
         KillAuraKStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        KillAuraKStatusLabel.Text = "KILL AURA K: OFF [K]"
+        KillAuraKStatusLabel.Text = "KILL AURA K: OFF"
         KillAuraKStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
     end
 end
 
--- KHUNG NHẬP KHOẢNG CÁCH (DISTANCE INPUT)
+-- KHUNG NHẬP KHOẢNG CÁCH
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
 DistanceInputFrame.Position = UDim2.new(0, 5, 0, 160)
@@ -304,9 +309,8 @@ local InputCorner = Instance.new("UICorner")
 InputCorner.CornerRadius = UDim.new(0, 4)
 InputCorner.Parent = DistanceBox
 
-DistanceBox.FocusLost:Connect(function(enterPressed)
-    local text = DistanceBox.Text
-    local number = tonumber(text)
+DistanceBox.FocusLost:Connect(function()
+    local number = tonumber(DistanceBox.Text)
     if number and number >= 0 then
         maxDetectDistance = number
         DistanceBox.Text = tostring(number)
@@ -315,7 +319,7 @@ DistanceBox.FocusLost:Connect(function(enterPressed)
     end
 end)
 
--- Ô TÌM KIẾM TÊN (SEARCH BOX)
+-- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
 SearchBox.Position = UDim2.new(0, 5, 0, 200)
@@ -334,12 +338,12 @@ local SearchCorner = Instance.new("UICorner")
 SearchCorner.CornerRadius = UDim.new(0, 4)
 SearchCorner.Parent = SearchBox
 
--- NÚT CHỌN / BỎ CHỌN TẤT CẢ (SELECT ALL BUTTON)
+-- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
 SelectAllBtn.Position = UDim2.new(0, 5, 0, 230)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
-SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
+SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 SelectAllBtn.Font = Enum.Font.SourceSansBold
 SelectAllBtn.TextSize = 13
@@ -399,29 +403,25 @@ local function toggleSelectAll()
 
     if selectedCount == otherPlayersCount and otherPlayersCount > 0 then
         targets = {}
-        SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS [T]"
-        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
+        SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
     else
         for _, p in pairs(allPlayers) do
             if p ~= LocalPlayer and not teamSafeList[p.Name] then
                 targets[p.Name] = true
             end
         end
-        SelectAllBtn.Text = "☒ DESELECT ALL PLAYERS [T]"
-        SelectAllBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+        SelectAllBtn.Text = "☒ DESELECT ALL PLAYERS"
     end
 end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- Hàm thực thi khi nhấp chuột trái (Loại trừ người chơi thuộc teamSafeList)
+-- Hàm thực thi đòn đánh khi nhấp chuột trái
 local function performAttacks()
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-
     if not myRoot then return end
 
-    -- 1. Xử lý Kill Aura Q (PrimaryAttackHit)
     if killAuraActive and (tick() - lastAttackTime >= attackCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -434,8 +434,7 @@ local function performAttacks()
                     if currentDist <= maxDetectDistance then
                         pcall(function()
                             if primaryAttackHitRemote then
-                                local ohString1 = "Left"
-                                primaryAttackHitRemote:FireServer(ohString1, targetHead)
+                                primaryAttackHitRemote:FireServer("Left", targetHead)
                             end
                         end)
                         lastAttackTime = tick()
@@ -446,7 +445,6 @@ local function performAttacks()
         end
     end
 
-    -- 2. Xử lý Kill Aura K (AbilityHit - Charge vào Jaw)
     if killAuraKActive and (tick() - lastKillAuraKTime >= killAuraKCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -459,8 +457,7 @@ local function performAttacks()
                     if currentDist <= maxDetectDistance then
                         pcall(function()
                             if abilityHitRemote then
-                                local ohString1 = "Charge"
-                                abilityHitRemote:FireServer(ohString1, targetJaw)
+                                abilityHitRemote:FireServer("Charge", targetJaw)
                             end
                         end)
                         lastKillAuraKTime = tick()
@@ -472,7 +469,7 @@ local function performAttacks()
     end
 end
 
--- Vòng lặp tự động kích hoạt Ability (Pounce) khi bật phím H (Loại trừ teamSafeList)
+-- Vòng lặp Ability Pounce tự động
 task.spawn(function()
     while true do
         if abilityActive then
@@ -492,9 +489,7 @@ task.spawn(function()
                                 if currentDist <= maxDetectDistance then
                                     pcall(function()
                                         if abilityHitRemote then
-                                            local ohString1 = "Pounce"
-                                            local ohCFrame3 = targetRoot.CFrame
-                                            abilityHitRemote:FireServer(ohString1, targetBody, ohCFrame3)
+                                            abilityHitRemote:FireServer("Pounce", targetBody, targetRoot.CFrame)
                                         end
                                     end)
                                     lastAbilityTime = tick()
@@ -524,39 +519,58 @@ TeamMenuBtn.MouseButton1Click:Connect(function()
     TeamFrame.Visible = not TeamFrame.Visible
 end)
 
+-- Xử lý sự kiện bàn phím & gán phím mới
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if UserInputService:GetFocusedTextBox() then return end
-    if gameProcessed then return end
-    
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        performAttacks()
+        if not gameProcessed then
+            performAttacks()
+        end
+        return
     end
 
-    if input.KeyCode == Enum.KeyCode.P then MainFrame.Visible = not MainFrame.Visible end
-    if input.KeyCode == Enum.KeyCode.F5 or input.KeyCode == Enum.KeyCode.U then TeamFrame.Visible = not TeamFrame.Visible end
-    if input.KeyCode == Enum.KeyCode.T then toggleSelectAll() end
-    if input.KeyCode == Enum.KeyCode.H then
-        abilityActive = not abilityActive
-        updateAbilityVisuals()
-    end
-    if input.KeyCode == Enum.KeyCode.K then
-        killAuraKActive = not killAuraKActive
-        updateKillAuraKVisuals()
-    end
-    if input.KeyCode == Enum.KeyCode.Q then
-        killAuraActive = not killAuraActive
-        if killAuraActive then
-            StatusLabel.Text = "KILL AURA: READY [Q]"
-            StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
-        else
-            StatusLabel.Text = "KILL AURA: PAUSED [Q]"
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if waitingForKey then
+            if input.KeyCode ~= Enum.KeyCode.Unknown then
+                Keybinds[waitingForKey] = input.KeyCode
+                waitingForKey = nil
+                updateQKey()
+                updateHKey()
+                updateKKey()
+                updateF5Key()
+            end
+            return
+        end
+
+        if UserInputService:GetFocusedTextBox() then return end
+        if gameProcessed then return end
+
+        if input.KeyCode == Keybinds.ToggleMenu then
+            MainFrame.Visible = not MainFrame.Visible
+        elseif input.KeyCode == Keybinds.ToggleTeamMenu then
+            TeamFrame.Visible = not TeamFrame.Visible
+        elseif input.KeyCode == Keybinds.SelectAll then
+            toggleSelectAll()
+        elseif input.KeyCode == Keybinds.ToggleAbilityH then
+            abilityActive = not abilityActive
+            updateAbilityVisuals()
+        elseif input.KeyCode == Keybinds.ToggleKillAuraK then
+            killAuraKActive = not killAuraKActive
+            updateKillAuraKVisuals()
+        elseif input.KeyCode == Keybinds.ToggleKillAuraQ then
+            killAuraActive = not killAuraActive
+            if killAuraActive then
+                StatusLabel.Text = "KILL AURA Q: READY"
+                StatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+            else
+                StatusLabel.Text = "KILL AURA Q: PAUSED"
+                StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+            end
         end
     end
 end)
 
 ----------------------------------------------------------------
--- 2. HỆ THỐNG ESP (ĐÃ SỬA HIỂN THỊ KHOẢNG CÁCH) & DANH SÁCH
+-- 2. HỆ THỐNG ESP & DANH SÁCH
 ----------------------------------------------------------------
 
 local function applyESP(player, character)
@@ -618,7 +632,7 @@ local function buildButtons()
         if player ~= LocalPlayer then
             local pName = player.Name
 
-            -- Nút trong Menu Chính (Kill List)
+            -- Nút Kill List
             local Btn = Instance.new("TextButton")
             Btn.Size = UDim2.new(1, 0, 0, 30)
             Btn.Font = Enum.Font.SourceSansBold
@@ -632,16 +646,12 @@ local function buildButtons()
 
             Btn.MouseButton1Click:Connect(function()
                 if not teamSafeList[pName] then
-                    if targets[pName] then
-                        targets[pName] = nil
-                    else
-                        targets[pName] = true
-                    end
+                    targets[pName] = not targets[pName]
                 end
             end)
             buttons[pName] = {Button = Btn}
 
-            -- Nút trong Bảng Team (Team Management)
+            -- Nút Team List
             local TeamBtn = Instance.new("TextButton")
             TeamBtn.Size = UDim2.new(1, 0, 0, 30)
             TeamBtn.Font = Enum.Font.SourceSansBold
@@ -658,7 +668,7 @@ local function buildButtons()
                     teamSafeList[pName] = nil
                 else
                     teamSafeList[pName] = true
-                    targets[pName] = nil -- Xóa khỏi danh sách target kill nếu cho vào team
+                    targets[pName] = nil 
                 end
             end)
             teamButtons[pName] = {Button = TeamBtn}
@@ -689,7 +699,6 @@ task.spawn(function()
                     local head = p.Character:FindFirstChild("Head")
                     local dist = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
                     
-                    -- Cập nhật ESP chuẩn xác khoảng cách
                     if head then
                         local espGui = head:FindFirstChild("PlayerESP")
                         if not espGui then
@@ -736,7 +745,6 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
-        -- Cập nhật trạng thái hiển thị của các nút Kill List
         for pName, btnData in pairs(buttons) do
             local Btn = btnData.Button
             local p = Players:FindFirstChild(pName)
@@ -777,7 +785,6 @@ task.spawn(function()
             end
         end
 
-        -- Cập nhật trạng thái hiển thị của các nút trong Bảng Team (F5)
         for pName, teamBtnData in pairs(teamButtons) do
             local TeamBtn = teamBtnData.Button
             
