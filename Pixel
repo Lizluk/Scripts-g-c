@@ -3,6 +3,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
+local SoundService = game:GetService("SoundService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -16,7 +17,7 @@ local killAuraActive = true
 local abilityActive = false 
 local killAuraKActive = false 
 local closestPlayerName = "" 
-local maxDetectDistance = 50 
+local maxDetectDistance = 100 
 local searchFilterText = ""
 local teamSearchFilterText = ""
 
@@ -33,9 +34,18 @@ local Keybinds = {
 
 local waitingForKey = nil
 
--- DANH SÁCH LƯU CÁC LỆNH MACRO TÙY CHỈNH DO BẠN TỰ THÊM
-local CustomMacros = {}
--- Ví dụ cấu trúc mỗi macro: { Name = "Tên", RemoteName = "AbilityHit", Action = "SkillMới", Part = "Head", Key = Enum.KeyCode.J, Active = true, Cooldown = 1.4, LastTime = 0 }
+-- DANH SÁCH LƯU CÁC LỆNH MACRO TÙY CHỈNH
+local CustomMacros = {
+    {
+        Name = "Custom Charge Head",
+        RemoteName = "AbilityHit",
+        Action = "Charge",
+        Part = "Head",
+        Active = true,
+        Cooldown = 1.4,
+        LastTime = 0
+    }
+}
 
 -- Thời gian khởi chạy Script
 local startTime = os.time()
@@ -46,9 +56,10 @@ local abilityCooldown = 1.5
 local lastAbilityTime = 0
 local killAuraKCooldown = 1.4     
 local lastKillAuraKTime = 0
+local lastDangerSoundTime = 0
 
 ----------------------------------------------------------------
--- 1. TẠO GIAO DIỆN (GUI) & BẢNG MACRO TÙY CHỈNH (F6)
+-- 1. TẠO GIAO DIỆN (GUI) & BẢNG QUẢN LÝ
 ----------------------------------------------------------------
 
 local guiParent = nil
@@ -185,7 +196,6 @@ local MacroTitleCorner = Instance.new("UICorner")
 MacroTitleCorner.CornerRadius = UDim.new(0, 8)
 MacroTitleCorner.Parent = MacroTitle
 
--- Các ô nhập liệu tạo Macro mới
 local function createInputBox(posY, placeholder)
     local box = Instance.new("TextBox")
     box.Size = UDim2.new(1, -10, 0, 25)
@@ -208,9 +218,9 @@ local function createInputBox(posY, placeholder)
 end
 
 local RemoteNameBox = createInputBox(45, "Tên Remote (VD: AbilityHit)")
-local ActionBox = createInputBox(75, "Hành động / String (VD: Charge, Pounce)")
-local PartBox = createInputBox(105, "Bộ phận đích (VD: Head, Jaw, Body)")
-local MacroNameBox = createInputBox(135, "Tên nút hiển thị (VD: MySkill)")
+local ActionBox = createInputBox(75, "Hành động / String (VD: Charge)")
+local PartBox = createInputBox(105, "Bộ phận đích (VD: Head)")
+local MacroNameBox = createInputBox(135, "Tên nút hiển thị (VD: ChargeHead)")
 
 local AddMacroBtn = Instance.new("TextButton")
 AddMacroBtn.Size = UDim2.new(1, -10, 0, 30)
@@ -244,13 +254,10 @@ MacroUIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(functi
     MacroScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, MacroUIListLayout.AbsoluteContentSize.Y)
 end)
 
--- Hàm render lại danh sách các Macro đã thêm
-local macroButtons = {}
 local function buildMacroUI()
     for _, child in pairs(MacroScrollingFrame:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
-    macroButtons = {}
 
     for i, macro in ipairs(CustomMacros) do
         local itemFrame = Instance.new("Frame")
@@ -296,6 +303,7 @@ local function buildMacroUI()
         end)
     end
 end
+buildMacroUI()
 
 AddMacroBtn.MouseButton1Click:Connect(function()
     local rName = RemoteNameBox.Text
@@ -458,8 +466,8 @@ local DistanceLabel = Instance.new("TextLabel")
 DistanceLabel.Size = UDim2.new(0, 130, 1, 0)
 DistanceLabel.Position = UDim2.new(0, 5, 0, 0)
 DistanceLabel.BackgroundTransparency = 1
-DistanceLabel.Text = "Hạn mức khoảng cách:"
-DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+DistanceLabel.Text = "Phát hiện nguy hiểm:"
+DistanceLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
 DistanceLabel.Font = Enum.Font.SourceSansBold
 DistanceLabel.TextSize = 12
 DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -471,7 +479,7 @@ DistanceBox.Position = UDim2.new(1, -70, 0.5, -11)
 DistanceBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
 DistanceBox.BorderSizePixel = 0
 DistanceBox.Text = tostring(maxDetectDistance)
-DistanceBox.TextColor3 = Color3.fromRGB(0, 220, 255)
+DistanceBox.TextColor3 = Color3.fromRGB(255, 50, 50)
 DistanceBox.Font = Enum.Font.SourceSansBold
 DistanceBox.TextSize = 13
 DistanceBox.ClearTextOnFocus = false
@@ -589,7 +597,7 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- HÀM THỰC THI CHUỘT TRÁI (BAO GỒM CẢ KILL AURA VÀ CÁC MACRO TÙY CHỈNH)
+-- HÀM THỰC THI CHUỘT TRÁI
 local function performAttacks()
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
@@ -643,7 +651,7 @@ local function performAttacks()
         end
     end
 
-    -- 3. Các Macro Tùy Chỉnh do bạn tự thêm
+    -- 3. Các Macro Tùy Chỉnh
     for _, macro in ipairs(CustomMacros) do
         if macro.Active and (tick() - macro.LastTime >= macro.Cooldown) then
             for pName, isTargeted in pairs(targets) do
@@ -779,10 +787,10 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 ----------------------------------------------------------------
--- 2. HỆ THỐNG ESP & DANH SÁCH
+-- 2. HỆ THỐNG ESP TỰ ĐỘNG CẬP NHẬT KHI HỒI SINH & PHÁT HIỆN NGUY HIỂM
 ----------------------------------------------------------------
 
-local function applyESP(player, character)
+local function updateESPForCharacter(player, character)
     if not character or player == LocalPlayer then return end
     local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 5)
     if not head then return end
@@ -793,9 +801,9 @@ local function applyESP(player, character)
 
     local bb = Instance.new("BillboardGui")
     bb.Name = "PlayerESP"
-    bb.Size = UDim2.new(0, 150, 0, 40)
+    bb.Size = UDim2.new(0, 160, 0, 45)
     bb.AlwaysOnTop = true
-    bb.ExtentsOffset = Vector3.new(0, 2.8, 0)
+    bb.ExtentsOffset = Vector3.new(0, 3, 0)
     bb.Adornee = head
     bb.MaxDistance = maxDetectDistance
     bb.Parent = head
@@ -811,11 +819,13 @@ end
 
 local function setupPlayerESP(player)
     if player == LocalPlayer then return end
+    
     player.CharacterAdded:Connect(function(char)
-        applyESP(player, char)
+        updateESPForCharacter(player, char)
     end)
+    
     if player.Character then
-        applyESP(player, player.Character)
+        updateESPForCharacter(player, player.Character)
     end
 end
 
@@ -900,6 +910,7 @@ task.spawn(function()
         
         local minDistance = math.huge
         local tempClosest = ""
+        local dangerDetected = false
 
         if myRoot then
             for pName, btnData in pairs(buttons) do
@@ -911,7 +922,7 @@ task.spawn(function()
                     if head then
                         local espGui = head:FindFirstChild("PlayerESP")
                         if not espGui then
-                            applyESP(p, p.Character)
+                            updateESPForCharacter(p, p.Character)
                         else
                             espGui.MaxDistance = maxDetectDistance
                             local txt = espGui:FindFirstChild("ESPText")
@@ -921,6 +932,10 @@ task.spawn(function()
                                     if teamSafeList[pName] then
                                         txt.Text = string.format("[🛡️ TEAM] %s\n[%d m]", pName, intDist)
                                         txt.TextColor3 = Color3.fromRGB(100, 255, 150)
+                                    elseif targets[pName] and intDist <= maxDetectDistance then
+                                        dangerDetected = true
+                                        txt.Text = string.format("[⚠️ NGUY HIỂM !] %s\n[%d m]", pName, intDist)
+                                        txt.TextColor3 = Color3.fromRGB(255, 0, 0)
                                     elseif targets[pName] then
                                         txt.Text = string.format("[🎯 TARGET] %s\n[%d m]", pName, intDist)
                                         txt.TextColor3 = Color3.fromRGB(255, 50, 50)
@@ -954,6 +969,18 @@ task.spawn(function()
         end
         closestPlayerName = tempClosest
 
+        if dangerDetected and (tick() - lastDangerSoundTime >= 2) then
+            pcall(function()
+                local sound = Instance.new("Sound")
+                sound.SoundId = "rbxassetid://4590657391"
+                sound.Volume = 1
+                sound.Parent = SoundService
+                sound:Play()
+                game.Debris:AddItem(sound, 2)
+            end)
+            lastDangerSoundTime = tick()
+        end
+
         for pName, btnData in pairs(buttons) do
             local Btn = btnData.Button
             local p = Players:FindFirstChild(pName)
@@ -975,7 +1002,11 @@ task.spawn(function()
                 Btn.Text = pName .. distText .. " [TEAM SAFE]"
                 Btn.TextColor3 = Color3.fromRGB(150, 255, 150)
             elseif targets[pName] then
-                if killAuraActive then
+                local currentDist = myRoot and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude or 999
+                if currentDist <= maxDetectDistance then
+                    Btn.BackgroundColor3 = Color3.fromRGB(220, 20, 20)
+                    Btn.Text = "⚠️ " .. pName .. distText .. " [ĐANG LẠI GẦN!]"
+                elseif killAuraActive then
                     Btn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
                     Btn.Text = pName .. distText .. " [TARGET]"
                 else
