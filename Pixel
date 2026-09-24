@@ -6,7 +6,7 @@ local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Remote cho Kill Aura và Ability
+-- Remote mặc định
 local primaryAttackHitRemote = ReplicatedStorage:FindFirstChild("PrimaryAttackHit")
 local abilityHitRemote = ReplicatedStorage:FindFirstChild("AbilityHit")
 
@@ -20,22 +20,26 @@ local maxDetectDistance = 50
 local searchFilterText = ""
 local teamSearchFilterText = ""
 
--- Bảng lưu trữ phím tắt tùy chỉnh
+-- Bảng lưu trữ phím tắt cơ bản
 local Keybinds = {
     ToggleMenu = Enum.KeyCode.P,
     ToggleTeamMenu = Enum.KeyCode.F5,
+    ToggleMacroMenu = Enum.KeyCode.F6,
     ToggleKillAuraQ = Enum.KeyCode.Q,
     ToggleAbilityH = Enum.KeyCode.H,
     ToggleKillAuraK = Enum.KeyCode.K,
     SelectAll = Enum.KeyCode.T,
 }
 
-local waitingForKey = nil -- Lưu chức năng đang chờ bấm phím mới
+local waitingForKey = nil
+
+-- DANH SÁCH LƯU CÁC LỆNH MACRO TÙY CHỈNH DO BẠN TỰ THÊM
+local CustomMacros = {}
+-- Ví dụ cấu trúc mỗi macro: { Name = "Tên", RemoteName = "AbilityHit", Action = "SkillMới", Part = "Head", Key = Enum.KeyCode.J, Active = true, Cooldown = 1.4, LastTime = 0 }
 
 -- Thời gian khởi chạy Script
 local startTime = os.time()
 
--- Tốc độ gửi Remote & Cooldown
 local attackCooldown = 1.4     
 local lastAttackTime = 0
 local abilityCooldown = 1.5
@@ -44,7 +48,7 @@ local killAuraKCooldown = 1.4
 local lastKillAuraKTime = 0
 
 ----------------------------------------------------------------
--- 1. TẠO GIAO DIỆN (GUI) & BẢNG TEAM
+-- 1. TẠO GIAO DIỆN (GUI) & BẢNG MACRO TÙY CHỈNH (F6)
 ----------------------------------------------------------------
 
 local guiParent = nil
@@ -72,8 +76,8 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
 -- KHUNG MENU CHÍNH
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 780)
+MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 230, 0, 810)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -85,7 +89,7 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 8)
 UICorner.Parent = MainFrame
 
--- KHUNG QUẢN LÝ TEAM
+-- KHUNG QUẢN LÝ TEAM (F5)
 local TeamFrame = Instance.new("Frame")
 TeamFrame.Size = UDim2.new(0, 220, 0, 450)
 TeamFrame.Position = UDim2.new(0.24, 0, 0.2, 0)
@@ -153,6 +157,170 @@ TeamSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     teamSearchFilterText = string.lower(TeamSearchBox.Text)
 end)
 
+-- KHUNG QUẢN LÝ MACRO TÙY CHỈNH (F6)
+local MacroFrame = Instance.new("Frame")
+MacroFrame.Size = UDim2.new(0, 280, 0, 420)
+MacroFrame.Position = UDim2.new(0.24, 0, 0.45, 0)
+MacroFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MacroFrame.BorderSizePixel = 0
+MacroFrame.Active = true
+MacroFrame.Draggable = true
+MacroFrame.Visible = false 
+MacroFrame.Parent = ScreenGui
+
+local MacroFrameCorner = Instance.new("UICorner")
+MacroFrameCorner.CornerRadius = UDim.new(0, 8)
+MacroFrameCorner.Parent = MacroFrame
+
+local MacroTitle = Instance.new("TextLabel")
+MacroTitle.Size = UDim2.new(1, 0, 0, 35)
+MacroTitle.BackgroundColor3 = Color3.fromRGB(50, 40, 70)
+MacroTitle.Text = "CUSTOM MACROS [F6]"
+MacroTitle.TextColor3 = Color3.fromRGB(220, 150, 255)
+MacroTitle.Font = Enum.Font.SourceSansBold
+MacroTitle.TextSize = 14
+MacroTitle.Parent = MacroFrame
+
+local MacroTitleCorner = Instance.new("UICorner")
+MacroTitleCorner.CornerRadius = UDim.new(0, 8)
+MacroTitleCorner.Parent = MacroTitle
+
+-- Các ô nhập liệu tạo Macro mới
+local function createInputBox(posY, placeholder)
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(1, -10, 0, 25)
+    box.Position = UDim2.new(0, 5, 0, posY)
+    box.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    box.BorderSizePixel = 0
+    box.Text = ""
+    box.PlaceholderText = placeholder
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    box.Font = Enum.Font.SourceSansBold
+    box.TextSize = 12
+    box.ClearTextOnFocus = false
+    box.Parent = MacroFrame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = box
+    return box
+end
+
+local RemoteNameBox = createInputBox(45, "Tên Remote (VD: AbilityHit)")
+local ActionBox = createInputBox(75, "Hành động / String (VD: Charge, Pounce)")
+local PartBox = createInputBox(105, "Bộ phận đích (VD: Head, Jaw, Body)")
+local MacroNameBox = createInputBox(135, "Tên nút hiển thị (VD: MySkill)")
+
+local AddMacroBtn = Instance.new("TextButton")
+AddMacroBtn.Size = UDim2.new(1, -10, 0, 30)
+AddMacroBtn.Position = UDim2.new(0, 5, 0, 165)
+AddMacroBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 140)
+AddMacroBtn.Text = "➕ THÊM LỆNH MỚI"
+AddMacroBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AddMacroBtn.Font = Enum.Font.SourceSansBold
+AddMacroBtn.TextSize = 13
+AddMacroBtn.Parent = MacroFrame
+
+local AddMacroCorner = Instance.new("UICorner")
+AddMacroCorner.CornerRadius = UDim.new(0, 4)
+AddMacroCorner.Parent = AddMacroBtn
+
+local MacroScrollingFrame = Instance.new("ScrollingFrame")
+MacroScrollingFrame.Size = UDim2.new(1, -10, 1, -205)
+MacroScrollingFrame.Position = UDim2.new(0, 5, 0, 200)
+MacroScrollingFrame.BackgroundTransparency = 1
+MacroScrollingFrame.BorderSizePixel = 0
+MacroScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+MacroScrollingFrame.ScrollBarThickness = 4
+MacroScrollingFrame.Parent = MacroFrame
+
+local MacroUIListLayout = Instance.new("UIListLayout")
+MacroUIListLayout.Parent = MacroScrollingFrame
+MacroUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+MacroUIListLayout.Padding = UDim.new(0, 5)
+
+MacroUIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    MacroScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, MacroUIListLayout.AbsoluteContentSize.Y)
+end)
+
+-- Hàm render lại danh sách các Macro đã thêm
+local macroButtons = {}
+local function buildMacroUI()
+    for _, child in pairs(MacroScrollingFrame:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    macroButtons = {}
+
+    for i, macro in ipairs(CustomMacros) do
+        local itemFrame = Instance.new("Frame")
+        itemFrame.Size = UDim2.new(1, 0, 0, 30)
+        itemFrame.BackgroundTransparency = 1
+        itemFrame.Parent = MacroScrollingFrame
+
+        local toggleBtn = Instance.new("TextButton")
+        toggleBtn.Size = UDim2.new(1, -65, 1, 0)
+        toggleBtn.BackgroundColor3 = macro.Active and Color3.fromRGB(70, 130, 70) or Color3.fromRGB(50, 50, 55)
+        toggleBtn.Text = macro.Name .. " (" .. macro.Action .. ")"
+        toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        toggleBtn.Font = Enum.Font.SourceSansBold
+        toggleBtn.TextSize = 12
+        toggleBtn.Parent = itemFrame
+
+        local toggleCorner = Instance.new("UICorner")
+        toggleCorner.CornerRadius = UDim.new(0, 4)
+        toggleCorner.Parent = toggleBtn
+
+        toggleBtn.MouseButton1Click:Connect(function()
+            macro.Active = not macro.Active
+            buildMacroUI()
+        end)
+
+        local delBtn = Instance.new("TextButton")
+        delBtn.Size = UDim2.new(0, 60, 1, 0)
+        delBtn.Position = UDim2.new(1, -60, 0, 0)
+        delBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+        delBtn.Text = "XÓA"
+        delBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        delBtn.Font = Enum.Font.SourceSansBold
+        delBtn.TextSize = 12
+        delBtn.Parent = itemFrame
+
+        local delCorner = Instance.new("UICorner")
+        delCorner.CornerRadius = UDim.new(0, 4)
+        delCorner.Parent = delBtn
+
+        delBtn.MouseButton1Click:Connect(function()
+            table.remove(CustomMacros, i)
+            buildMacroUI()
+        end)
+    end
+end
+
+AddMacroBtn.MouseButton1Click:Connect(function()
+    local rName = RemoteNameBox.Text
+    local act = ActionBox.Text
+    local part = PartBox.Text
+    local mName = MacroNameBox.Text
+
+    if rName ~= "" and act ~= "" and part ~= "" and mName ~= "" then
+        table.insert(CustomMacros, {
+            Name = mName,
+            RemoteName = rName,
+            Action = act,
+            Part = part,
+            Active = true,
+            Cooldown = 1.4,
+            LastTime = 0
+        })
+        RemoteNameBox.Text = ""
+        ActionBox.Text = ""
+        PartBox.Text = ""
+        MacroNameBox.Text = ""
+        buildMacroUI()
+    end
+end)
+
 -- KHUNG ĐỒNG HỒ TÁCH BIỆT
 local TimeFrame = Instance.new("Frame")
 TimeFrame.Size = UDim2.new(1, 0, 0, 30)
@@ -188,7 +356,7 @@ local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 8)
 TitleCorner.Parent = Title
 
--- CÁC NÚT CHỨC NĂNG & ĐỔI PHÍM
+-- TẠO CÁC NÚT TÍNH NĂNG CHÍNH VÀ ĐỔI PHÍM
 local function createFeatureButton(posY, defaultText, keyKey)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -10, 0, 25)
@@ -245,6 +413,11 @@ TeamMenuBtn.Text = "TEAM LIST"
 TeamMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
 
+local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(160, "CUSTOM MACROS", "ToggleMacroMenu")
+MacroMenuBtn.Text = "CUSTOM MACROS [F6]"
+MacroMenuBtn.TextColor3 = Color3.fromRGB(220, 150, 255)
+MacroMenuBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
+
 local function updateAbilityVisuals()
     if abilityActive then
         AbilityStatusLabel.BackgroundColor3 = Color3.fromRGB(120, 40, 180)
@@ -272,7 +445,7 @@ end
 -- KHUNG NHẬP KHOẢNG CÁCH
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 160)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 190)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -322,7 +495,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 200)
+SearchBox.Position = UDim2.new(0, 5, 0, 230)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -341,7 +514,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 230)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 260)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -354,8 +527,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -265)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 260)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -295)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 290)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -416,12 +589,13 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- Hàm thực thi đòn đánh khi nhấp chuột trái
+-- HÀM THỰC THI CHUỘT TRÁI (BAO GỒM CẢ KILL AURA VÀ CÁC MACRO TÙY CHỈNH)
 local function performAttacks()
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
 
+    -- 1. Kill Aura Q
     if killAuraActive and (tick() - lastAttackTime >= attackCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -445,6 +619,7 @@ local function performAttacks()
         end
     end
 
+    -- 2. Kill Aura K
     if killAuraKActive and (tick() - lastKillAuraKTime >= killAuraKCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -462,6 +637,33 @@ local function performAttacks()
                         end)
                         lastKillAuraKTime = tick()
                         break
+                    end
+                end
+            end
+        end
+    end
+
+    -- 3. Các Macro Tùy Chỉnh do bạn tự thêm
+    for _, macro in ipairs(CustomMacros) do
+        if macro.Active and (tick() - macro.LastTime >= macro.Cooldown) then
+            for pName, isTargeted in pairs(targets) do
+                if isTargeted and not teamSafeList[pName] then
+                    local targetCharacter = workspace:FindFirstChild(pName)
+                    local targetPart = targetCharacter and (targetCharacter:FindFirstChild(macro.Part) or targetCharacter:FindFirstChild("Head"))
+                    local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+                    
+                    if targetRoot and targetPart then
+                        local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                        if currentDist <= maxDetectDistance then
+                            pcall(function()
+                                local remote = ReplicatedStorage:FindFirstChild(macro.RemoteName)
+                                if remote then
+                                    remote:FireServer(macro.Action, targetPart)
+                                end
+                            end)
+                            macro.LastTime = tick()
+                            break
+                        end
                     end
                 end
             end
@@ -519,7 +721,11 @@ TeamMenuBtn.MouseButton1Click:Connect(function()
     TeamFrame.Visible = not TeamFrame.Visible
 end)
 
--- Xử lý sự kiện bàn phím & gán phím mới
+MacroMenuBtn.MouseButton1Click:Connect(function()
+    MacroFrame.Visible = not MacroFrame.Visible
+end)
+
+-- Xử lý bàn phím & đổi phím
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         if not gameProcessed then
@@ -537,6 +743,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateHKey()
                 updateKKey()
                 updateF5Key()
+                updateF6Key()
             end
             return
         end
@@ -548,6 +755,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             MainFrame.Visible = not MainFrame.Visible
         elseif input.KeyCode == Keybinds.ToggleTeamMenu then
             TeamFrame.Visible = not TeamFrame.Visible
+        elseif input.KeyCode == Keybinds.ToggleMacroMenu then
+            MacroFrame.Visible = not MacroFrame.Visible
         elseif input.KeyCode == Keybinds.SelectAll then
             toggleSelectAll()
         elseif input.KeyCode == Keybinds.ToggleAbilityH then
