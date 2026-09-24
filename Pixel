@@ -17,7 +17,11 @@ local killAuraActive = true
 local abilityActive = false 
 local killAuraKActive = false 
 local closestPlayerName = "" 
-local maxDetectDistance = 100 
+
+-- Tách riêng 2 khoảng cách
+local maxDetectDistance = 50     -- Tầm đánh Kill Aura
+local dangerDetectDistance = 100 -- Tầm phát hiện nguy hiểm (ESP & Cảnh báo)
+
 local searchFilterText = ""
 local teamSearchFilterText = ""
 
@@ -86,9 +90,9 @@ ScreenGui.Name = "PlayerStatsUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
--- KHUNG MENU CHÍNH
+-- KHUNG MENU CHÍNH (Nới rộng chiều cao để chứa 2 ô khoảng cách)
 MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 810)
+MainFrame.Size = UDim2.new(0, 230, 0, 840)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -450,7 +454,7 @@ local function updateKillAuraKVisuals()
     end
 end
 
--- KHUNG NHẬP KHOẢNG CÁCH
+-- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
 DistanceInputFrame.Position = UDim2.new(0, 5, 0, 190)
@@ -463,11 +467,11 @@ InputFrameCorner.CornerRadius = UDim.new(0, 4)
 InputFrameCorner.Parent = DistanceInputFrame
 
 local DistanceLabel = Instance.new("TextLabel")
-DistanceLabel.Size = UDim2.new(0, 130, 1, 0)
+DistanceLabel.Size = UDim2.new(0, 120, 1, 0)
 DistanceLabel.Position = UDim2.new(0, 5, 0, 0)
 DistanceLabel.BackgroundTransparency = 1
-DistanceLabel.Text = "Phát hiện nguy hiểm:"
-DistanceLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+DistanceLabel.Text = "Tầm đánh KillAura:"
+DistanceLabel.TextColor3 = Color3.fromRGB(0, 220, 255)
 DistanceLabel.Font = Enum.Font.SourceSansBold
 DistanceLabel.TextSize = 12
 DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -479,11 +483,11 @@ DistanceBox.Position = UDim2.new(1, -70, 0.5, -11)
 DistanceBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
 DistanceBox.BorderSizePixel = 0
 DistanceBox.Text = tostring(maxDetectDistance)
-DistanceBox.TextColor3 = Color3.fromRGB(255, 50, 50)
+DistanceBox.TextColor3 = Color3.fromRGB(0, 220, 255)
 DistanceBox.Font = Enum.Font.SourceSansBold
 DistanceBox.TextSize = 13
 DistanceBox.ClearTextOnFocus = false
-DistanceBox.PlaceholderText = "Số mét..."
+DistanceBox.PlaceholderText = "Mét..."
 DistanceBox.Parent = DistanceInputFrame
 
 local InputCorner = Instance.new("UICorner")
@@ -500,10 +504,60 @@ DistanceBox.FocusLost:Connect(function()
     end
 end)
 
+-- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
+local DangerInputFrame = Instance.new("Frame")
+DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 230)
+DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+DangerInputFrame.BorderSizePixel = 0
+DangerInputFrame.Parent = MainFrame
+
+local DangerInputCorner = Instance.new("UICorner")
+DangerInputCorner.CornerRadius = UDim.new(0, 4)
+DangerInputCorner.Parent = DangerInputFrame
+
+local DangerLabel = Instance.new("TextLabel")
+DangerLabel.Size = UDim2.new(0, 120, 1, 0)
+DangerLabel.Position = UDim2.new(0, 5, 0, 0)
+DangerLabel.BackgroundTransparency = 1
+DangerLabel.Text = "Tầm báo nguy hiểm:"
+DangerLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+DangerLabel.Font = Enum.Font.SourceSansBold
+DangerLabel.TextSize = 12
+DangerLabel.TextXAlignment = Enum.TextXAlignment.Left
+DangerLabel.Parent = DangerInputFrame
+
+local DangerBox = Instance.new("TextBox")
+DangerBox.Size = UDim2.new(0, 65, 0, 23)
+DangerBox.Position = UDim2.new(1, -70, 0.5, -11)
+DangerBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+DangerBox.BorderSizePixel = 0
+DangerBox.Text = tostring(dangerDetectDistance)
+DangerBox.TextColor3 = Color3.fromRGB(255, 50, 50)
+DangerBox.Font = Enum.Font.SourceSansBold
+DangerBox.TextSize = 13
+DangerBox.ClearTextOnFocus = false
+DangerBox.PlaceholderText = "Mét..."
+DangerBox.Parent = DangerInputFrame
+
+local DangerBoxCorner = Instance.new("UICorner")
+DangerBoxCorner.CornerRadius = UDim.new(0, 4)
+DangerBoxCorner.Parent = DangerBox
+
+DangerBox.FocusLost:Connect(function()
+    local number = tonumber(DangerBox.Text)
+    if number and number >= 0 then
+        dangerDetectDistance = number
+        DangerBox.Text = tostring(number)
+    else
+        DangerBox.Text = tostring(dangerDetectDistance)
+    end
+end)
+
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 230)
+SearchBox.Position = UDim2.new(0, 5, 0, 270)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -522,7 +576,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 260)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 300)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -535,8 +589,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -295)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 290)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -335)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 330)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -787,7 +841,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 ----------------------------------------------------------------
--- 2. HỆ THỐNG ESP TỰ ĐỘNG CẬP NHẬT KHI HỒI SINH & PHÁT HIỆN NGUY HIỂM
+-- 2. HỆ THỐNG ESP & PHÁT HIỆN NGUY HIỂM (DÙNG dangerDetectDistance)
 ----------------------------------------------------------------
 
 local function updateESPForCharacter(player, character)
@@ -805,7 +859,7 @@ local function updateESPForCharacter(player, character)
     bb.AlwaysOnTop = true
     bb.ExtentsOffset = Vector3.new(0, 3, 0)
     bb.Adornee = head
-    bb.MaxDistance = maxDetectDistance
+    bb.MaxDistance = dangerDetectDistance
     bb.Parent = head
 
     local txt = Instance.new("TextLabel")
@@ -819,11 +873,9 @@ end
 
 local function setupPlayerESP(player)
     if player == LocalPlayer then return end
-    
     player.CharacterAdded:Connect(function(char)
         updateESPForCharacter(player, char)
     end)
-    
     if player.Character then
         updateESPForCharacter(player, player.Character)
     end
@@ -924,15 +976,15 @@ task.spawn(function()
                         if not espGui then
                             updateESPForCharacter(p, p.Character)
                         else
-                            espGui.MaxDistance = maxDetectDistance
+                            espGui.MaxDistance = dangerDetectDistance
                             local txt = espGui:FindFirstChild("ESPText")
                             if txt then
                                 local intDist = math.floor(dist)
-                                if intDist <= maxDetectDistance then
+                                if intDist <= dangerDetectDistance then
                                     if teamSafeList[pName] then
                                         txt.Text = string.format("[🛡️ TEAM] %s\n[%d m]", pName, intDist)
                                         txt.TextColor3 = Color3.fromRGB(100, 255, 150)
-                                    elseif targets[pName] and intDist <= maxDetectDistance then
+                                    elseif targets[pName] and intDist <= dangerDetectDistance then
                                         dangerDetected = true
                                         txt.Text = string.format("[⚠️ NGUY HIỂM !] %s\n[%d m]", pName, intDist)
                                         txt.TextColor3 = Color3.fromRGB(255, 0, 0)
@@ -953,7 +1005,7 @@ task.spawn(function()
                         end
                     end
 
-                    if dist <= maxDetectDistance and dist < minDistance then
+                    if dist <= dangerDetectDistance and dist < minDistance then
                         minDistance = dist
                         tempClosest = pName
                     end
@@ -1003,7 +1055,7 @@ task.spawn(function()
                 Btn.TextColor3 = Color3.fromRGB(150, 255, 150)
             elseif targets[pName] then
                 local currentDist = myRoot and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude or 999
-                if currentDist <= maxDetectDistance then
+                if currentDist <= dangerDetectDistance then
                     Btn.BackgroundColor3 = Color3.fromRGB(220, 20, 20)
                     Btn.Text = "⚠️ " .. pName .. distText .. " [ĐANG LẠI GẦN!]"
                 elseif killAuraActive then
