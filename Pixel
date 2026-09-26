@@ -25,7 +25,7 @@ local dangerDetectDistance = 100 -- Tầm phát hiện nguy hiểm (ESP & Cảnh
 local searchFilterText = ""
 local teamSearchFilterText = ""
 
--- Bảng lưu trữ phím tắt cơ bản
+-- Bảng lưu trữ phím tắt (Đã thêm ToggleHitNeckJ)
 local Keybinds = {
     ToggleMenu = Enum.KeyCode.P,
     ToggleTeamMenu = Enum.KeyCode.F5,
@@ -33,12 +33,13 @@ local Keybinds = {
     ToggleKillAuraQ = Enum.KeyCode.Q,
     ToggleAbilityH = Enum.KeyCode.H,
     ToggleKillAuraK = Enum.KeyCode.K,
+    ToggleHitNeckJ = Enum.KeyCode.J,
     SelectAll = Enum.KeyCode.T,
 }
 
 local waitingForKey = nil
 
--- DANH SÁCH LƯU CÁC LỆNH MACRO TÙY CHỈNH
+-- DANH SÁCH LƯU CÁC LỆNH MACRO TÙY CHỈNH (Đã tích hợp sẵn HitNeck)
 local CustomMacros = {
     {
         Name = "Custom Charge Head",
@@ -46,6 +47,15 @@ local CustomMacros = {
         Action = "Charge",
         Part = "Head",
         Active = true,
+        Cooldown = 1.4,
+        LastTime = 0
+    },
+    {
+        Name = "KillAura HitNeck",
+        RemoteName = "AbilityHit",
+        Action = "HitNeck",
+        Part = "Union", -- Tìm Union (hoặc tự chuyển về Head nếu không thấy)
+        Active = false, -- Mặc định tắt, bạn có thể bật lên trong bảng F6 hoặc dùng phím J
         Cooldown = 1.4,
         LastTime = 0
     }
@@ -90,9 +100,9 @@ ScreenGui.Name = "PlayerStatsUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
--- KHUNG MENU CHÍNH (Nới rộng chiều cao để chứa 2 ô khoảng cách)
+-- KHUNG MENU CHÍNH
 MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 840)
+MainFrame.Size = UDim2.new(0, 230, 0, 870)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -222,9 +232,9 @@ local function createInputBox(posY, placeholder)
 end
 
 local RemoteNameBox = createInputBox(45, "Tên Remote (VD: AbilityHit)")
-local ActionBox = createInputBox(75, "Hành động / String (VD: Charge)")
-local PartBox = createInputBox(105, "Bộ phận đích (VD: Head)")
-local MacroNameBox = createInputBox(135, "Tên nút hiển thị (VD: ChargeHead)")
+local ActionBox = createInputBox(75, "Hành động / String (VD: HitNeck)")
+local PartBox = createInputBox(105, "Bộ phận đích (VD: Union)")
+local MacroNameBox = createInputBox(135, "Tên nút hiển thị (VD: HitNeck)")
 
 local AddMacroBtn = Instance.new("TextButton")
 AddMacroBtn.Size = UDim2.new(1, -10, 0, 30)
@@ -420,12 +430,17 @@ local KillAuraKStatusLabel, KKeyBtn, updateKKey = createFeatureButton(100, "KILL
 KillAuraKStatusLabel.Text = "KILL AURA K: OFF"
 KillAuraKStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(130, "TEAM LIST", "ToggleTeamMenu")
+-- Nút bật tắt nhanh HitNeck J trên Menu chính
+local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(130, "HITNECK J", "ToggleHitNeckJ")
+HitNeckStatusLabel.Text = "HITNECK J: OFF"
+HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+
+local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(160, "TEAM LIST", "ToggleTeamMenu")
 TeamMenuBtn.Text = "TEAM LIST"
 TeamMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
 
-local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(160, "CUSTOM MACROS", "ToggleMacroMenu")
+local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(190, "CUSTOM MACROS", "ToggleMacroMenu")
 MacroMenuBtn.Text = "CUSTOM MACROS [F6]"
 MacroMenuBtn.TextColor3 = Color3.fromRGB(220, 150, 255)
 MacroMenuBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
@@ -454,10 +469,24 @@ local function updateKillAuraKVisuals()
     end
 end
 
+local function updateHitNeckVisuals()
+    local macro = CustomMacros[2] -- Macro HitNeck
+    if macro and macro.Active then
+        HitNeckStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 40, 100)
+        HitNeckStatusLabel.Text = "HITNECK J: ACTIVE"
+        HitNeckStatusLabel.TextColor3 = Color3.fromRGB(255, 150, 220)
+    else
+        HitNeckStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        HitNeckStatusLabel.Text = "HITNECK J: OFF"
+        HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end
+updateHitNeckVisuals()
+
 -- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 190)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 220)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -507,7 +536,7 @@ end)
 -- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DangerInputFrame.Position = UDim2.new(0, 5, 0, 230)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 260)
 DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DangerInputFrame.BorderSizePixel = 0
 DangerInputFrame.Parent = MainFrame
@@ -557,7 +586,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 270)
+SearchBox.Position = UDim2.new(0, 5, 0, 300)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -576,7 +605,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 300)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 330)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -589,8 +618,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -335)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 330)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -365)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 360)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -705,13 +734,14 @@ local function performAttacks()
         end
     end
 
-    -- 3. Các Macro Tùy Chỉnh
+    -- 3. Các Macro Tùy Chỉnh (Bao gồm HitNeck)
     for _, macro in ipairs(CustomMacros) do
         if macro.Active and (tick() - macro.LastTime >= macro.Cooldown) then
             for pName, isTargeted in pairs(targets) do
                 if isTargeted and not teamSafeList[pName] then
                     local targetCharacter = workspace:FindFirstChild(pName)
-                    local targetPart = targetCharacter and (targetCharacter:FindFirstChild(macro.Part) or targetCharacter:FindFirstChild("Head"))
+                    -- Tự tìm bộ phận Union hoặc Head/Jaw tương ứng
+                    local targetPart = targetCharacter and (targetCharacter:FindFirstChild(macro.Part) or targetCharacter:FindFirstChild("Union") or targetCharacter:FindFirstChild("Head"))
                     local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
                     
                     if targetRoot and targetPart then
@@ -779,6 +809,15 @@ KillAuraKStatusLabel.MouseButton1Click:Connect(function()
     updateKillAuraKVisuals()
 end)
 
+HitNeckStatusLabel.MouseButton1Click:Connect(function()
+    local macro = CustomMacros[2]
+    if macro then
+        macro.Active = not macro.Active
+        updateHitNeckVisuals()
+        buildMacroUI()
+    end
+end)
+
 TeamMenuBtn.MouseButton1Click:Connect(function()
     TeamFrame.Visible = not TeamFrame.Visible
 end)
@@ -804,6 +843,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateQKey()
                 updateHKey()
                 updateKKey()
+                updateJKey()
                 updateF5Key()
                 updateF6Key()
             end
@@ -827,6 +867,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         elseif input.KeyCode == Keybinds.ToggleKillAuraK then
             killAuraKActive = not killAuraKActive
             updateKillAuraKVisuals()
+        elseif input.KeyCode == Keybinds.ToggleHitNeckJ then
+            local macro = CustomMacros[2]
+            if macro then
+                macro.Active = not macro.Active
+                updateHitNeckVisuals()
+                buildMacroUI()
+            end
         elseif input.KeyCode == Keybinds.ToggleKillAuraQ then
             killAuraActive = not killAuraActive
             if killAuraActive then
@@ -841,7 +888,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 ----------------------------------------------------------------
--- 2. HỆ THỐNG ESP & PHÁT HIỆN NGUY HIỂM (DÙNG dangerDetectDistance)
+-- 2. HỆ THỐNG ESP & PHÁT HIỆN NGUY HIỂM
 ----------------------------------------------------------------
 
 local function updateESPForCharacter(player, character)
