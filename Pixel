@@ -16,6 +16,7 @@ local teamSafeList = {}
 local killAuraActive = true 
 local abilityActive = false 
 local killAuraKActive = false 
+local killAuraNoActive = false -- Trạng thái Kill Aura No
 local hitNeckActive = false 
 local closestPlayerName = "" 
 
@@ -39,6 +40,7 @@ local Keybinds = {
     ToggleKillAuraQ = Enum.KeyCode.Q,
     ToggleAbilityH = Enum.KeyCode.H,
     ToggleKillAuraK = Enum.KeyCode.K,
+    ToggleKillAuraNo = Enum.KeyCode.L, -- Phím tắt mặc định cho No là L
     ToggleHitNeckJ = Enum.KeyCode.J,
     SelectAll = Enum.KeyCode.T,
 }
@@ -54,6 +56,8 @@ local abilityCooldown = 1.5
 local lastAbilityTime = 0
 local killAuraKCooldown = 1.4     
 local lastKillAuraKTime = 0
+local killAuraNoCooldown = 1.4    
+local lastKillAuraNoTime = 0
 local hitNeckCooldown = 1.4
 local lastHitNeckTime = 0
 local lastDangerSoundTime = 0
@@ -88,7 +92,7 @@ ScreenGui.Parent = guiParent
 
 -- KHUNG MENU CHÍNH
 MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 870)
+MainFrame.Size = UDim2.new(0, 230, 0, 900)
 MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -452,7 +456,7 @@ local function executeDuplicate()
 
     local char = LocalPlayer.Character
     if not char then return end
-    local originalClient = char:WaitForChild("Client", 3) -- Tìm script Client trong nhân vật[cite: 3]
+    local originalClient = char:WaitForChild("Client", 3) -- Tìm script Client trong nhân vật
 
     if originalClient then
         clonedClientsList = {}
@@ -564,21 +568,25 @@ local KillAuraKStatusLabel, KKeyBtn, updateKKey = createFeatureButton(100, "KILL
 KillAuraKStatusLabel.Text = "KILL AURA K: OFF"
 KillAuraKStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(130, "HITNECK J", "ToggleHitNeckJ")
+local KillAuraNoStatusLabel, NoKeyBtn, updateNoKey = createFeatureButton(130, "KILL AURA NO", "ToggleKillAuraNo")
+KillAuraNoStatusLabel.Text = "KILL AURA NO: OFF"
+KillAuraNoStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+
+local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(160, "HITNECK J", "ToggleHitNeckJ")
 HitNeckStatusLabel.Text = "HITNECK J: OFF"
 HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(160, "TEAM LIST", "ToggleTeamMenu")
+local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(190, "TEAM LIST", "ToggleTeamMenu")
 TeamMenuBtn.Text = "TEAM LIST"
 TeamMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
 
-local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(190, "CUSTOM MACROS", "ToggleMacroMenu")
+local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(220, "CUSTOM MACROS", "ToggleMacroMenu")
 MacroMenuBtn.Text = "CUSTOM MACROS [F6]"
 MacroMenuBtn.TextColor3 = Color3.fromRGB(220, 150, 255)
 MacroMenuBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
 
-local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(220, "CLIENT MANAGER", "ToggleClientMenu")
+local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(250, "CLIENT MANAGER", "ToggleClientMenu")
 ClientMenuBtn.Text = "CLIENT MANAGER [F7]"
 ClientMenuBtn.TextColor3 = Color3.fromRGB(150, 220, 255)
 ClientMenuBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 90)
@@ -607,6 +615,18 @@ local function updateKillAuraKVisuals()
     end
 end
 
+local function updateKillAuraNoVisuals()
+    if killAuraNoActive then
+        KillAuraNoStatusLabel.BackgroundColor3 = Color3.fromRGB(30, 100, 180)
+        KillAuraNoStatusLabel.Text = "KILL AURA NO: ACTIVE"
+        KillAuraNoStatusLabel.TextColor3 = Color3.fromRGB(150, 220, 255)
+    else
+        KillAuraNoStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        KillAuraNoStatusLabel.Text = "KILL AURA NO: OFF"
+        KillAuraNoStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end
+
 local function updateHitNeckVisuals()
     if hitNeckActive then
         HitNeckStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 40, 100)
@@ -622,7 +642,7 @@ end
 -- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 255)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 285)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -672,7 +692,7 @@ end)
 -- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DangerInputFrame.Position = UDim2.new(0, 5, 0, 295)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 325)
 DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DangerInputFrame.BorderSizePixel = 0
 DangerInputFrame.Parent = MainFrame
@@ -722,7 +742,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 335)
+SearchBox.Position = UDim2.new(0, 5, 0, 365)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -741,7 +761,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 365)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 395)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -754,8 +774,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -400)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 395)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -430)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 425)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -870,7 +890,31 @@ local function performAttacks()
         end
     end
 
-    -- 3. Kill Aura HitNeck
+    -- 3. Kill Aura No (Nhắm thẳng vào Head)
+    if killAuraNoActive and (tick() - lastKillAuraNoTime >= killAuraNoCooldown) then
+        for pName, isTargeted in pairs(targets) do
+            if isTargeted and not teamSafeList[pName] then
+                local targetCharacter = workspace:FindFirstChild(pName)
+                local targetHead = targetCharacter and targetCharacter:FindFirstChild("Head")
+                local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot and targetHead then
+                    local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                    if currentDist <= maxDetectDistance then
+                        pcall(function()
+                            if abilityHitRemote then
+                                abilityHitRemote:FireServer("No", targetHead)
+                            end
+                        end)
+                        lastKillAuraNoTime = tick()
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    -- 4. Kill Aura HitNeck
     if hitNeckActive and (tick() - lastHitNeckTime >= hitNeckCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -894,7 +938,7 @@ local function performAttacks()
         end
     end
 
-    -- 4. Các Macro Tùy Chỉnh
+    -- 5. Các Macro Tùy Chỉnh
     for _, macro in ipairs(CustomMacros) do
         if macro.Active and (tick() - macro.LastTime >= macro.Cooldown) then
             for pName, isTargeted in pairs(targets) do
@@ -968,6 +1012,11 @@ KillAuraKStatusLabel.MouseButton1Click:Connect(function()
     updateKillAuraKVisuals()
 end)
 
+KillAuraNoStatusLabel.MouseButton1Click:Connect(function()
+    killAuraNoActive = not killAuraNoActive
+    updateKillAuraNoVisuals()
+end)
+
 HitNeckStatusLabel.MouseButton1Click:Connect(function()
     hitNeckActive = not hitNeckActive
     updateHitNeckVisuals()
@@ -1002,6 +1051,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateQKey()
                 updateHKey()
                 updateKKey()
+                updateNoKey()
                 updateJKey()
                 updateF5Key()
                 updateF6Key()
@@ -1029,6 +1079,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         elseif input.KeyCode == Keybinds.ToggleKillAuraK then
             killAuraKActive = not killAuraKActive
             updateKillAuraKVisuals()
+        elseif input.KeyCode == Keybinds.ToggleKillAuraNo then
+            killAuraNoActive = not killAuraNoActive
+            updateKillAuraNoVisuals()
         elseif input.KeyCode == Keybinds.ToggleHitNeckJ then
             hitNeckActive = not hitNeckActive
             updateHitNeckVisuals()
