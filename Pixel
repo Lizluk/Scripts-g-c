@@ -10,15 +10,20 @@ local LocalPlayer = Players.LocalPlayer
 -- Remote mặc định
 local primaryAttackHitRemote = ReplicatedStorage:FindFirstChild("PrimaryAttackHit")
 local abilityHitRemote = ReplicatedStorage:FindFirstChild("AbilityHit")
+local stompHitRemote = ReplicatedStorage:FindFirstChild("StompHit") -- Remote Stomp mới
 
 local targets = {} 
 local teamSafeList = {} 
 local killAuraActive = true 
 local abilityActive = false 
 local killAuraKActive = false 
-local killAuraNoActive = false -- Trạng thái Kill Aura No
+local killAuraNoActive = false 
+local killAuraStompActive = false -- Trạng thái Kill Aura Stomp
 local hitNeckActive = false 
 local closestPlayerName = "" 
+
+-- Biến cấu hình số lần spam lệnh khi click/gọi (Mặc định là 1)
+local burstCount = 1
 
 -- Tách riêng 2 khoảng cách
 local maxDetectDistance = 50     -- Tầm đánh Kill Aura
@@ -40,7 +45,8 @@ local Keybinds = {
     ToggleKillAuraQ = Enum.KeyCode.Q,
     ToggleAbilityH = Enum.KeyCode.H,
     ToggleKillAuraK = Enum.KeyCode.K,
-    ToggleKillAuraNo = Enum.KeyCode.L, -- Phím tắt mặc định cho No là L
+    ToggleKillAuraNo = Enum.KeyCode.L,
+    ToggleKillAuraStomp = Enum.KeyCode.M, -- Phím tắt mặc định cho Stomp là M
     ToggleHitNeckJ = Enum.KeyCode.J,
     SelectAll = Enum.KeyCode.T,
 }
@@ -58,6 +64,8 @@ local killAuraKCooldown = 1.4
 local lastKillAuraKTime = 0
 local killAuraNoCooldown = 1.4    
 local lastKillAuraNoTime = 0
+local killAuraStompCooldown = 1.4    
+local lastKillAuraStompTime = 0
 local hitNeckCooldown = 1.4
 local lastHitNeckTime = 0
 local lastDangerSoundTime = 0
@@ -90,10 +98,10 @@ ScreenGui.Name = "PlayerStatsUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
--- KHUNG MENU CHÍNH
+-- KHUNG MENU CHÍNH (Tăng chiều cao lên một chút để chứa ô nhập số lượng lệnh)
 MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 900)
-MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
+MainFrame.Size = UDim2.new(0, 230, 0, 940)
+MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -445,7 +453,6 @@ local function refreshClonedUI()
     end
 end
 
--- Hàm thực hiện duplicate thực tế
 local function executeDuplicate()
     local count = tonumber(CloneCountBox.Text)
     if count and count > 0 then
@@ -456,13 +463,13 @@ local function executeDuplicate()
 
     local char = LocalPlayer.Character
     if not char then return end
-    local originalClient = char:WaitForChild("Client", 3) -- Tìm script Client trong nhân vật
+    local originalClient = char:WaitForChild("Client", 3)
 
     if originalClient then
         clonedClientsList = {}
         for i = 1, savedCloneCount do
             local clone = originalClient:Clone()
-            clone.Name = "Client_Clone_" .. i
+            clone.Name = "Client_Clone_" + i
             clone.Parent = char
             table.insert(clonedClientsList, clone)
         end
@@ -472,10 +479,9 @@ end
 
 CloneBtn.MouseButton1Click:Connect(executeDuplicate)
 
--- Tự động duplicate lại khi nhân vật chết hoặc hồi sinh (CharacterAdded)
 LocalPlayer.CharacterAdded:Connect(function(newChar)
     newChar:WaitForChild("HumanoidRootPart", 5)
-    task.wait(0.5) -- Đợi nhân vật load ổn định
+    task.wait(0.5)
     if savedCloneCount > 0 then
         executeDuplicate()
     end
@@ -514,7 +520,7 @@ Title.Parent = MainFrame
 
 local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 8)
-TitleCorner.Parent = Title
+TitleCorner.Parent = MainFrame
 
 -- TẠO CÁC NÚT TÍNH NĂNG CHÍNH VÀ ĐỔI PHÍM
 local function createFeatureButton(posY, defaultText, keyKey)
@@ -572,21 +578,25 @@ local KillAuraNoStatusLabel, NoKeyBtn, updateNoKey = createFeatureButton(130, "K
 KillAuraNoStatusLabel.Text = "KILL AURA NO: OFF"
 KillAuraNoStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(160, "HITNECK J", "ToggleHitNeckJ")
+local KillAuraStompStatusLabel, StompKeyBtn, updateStompKey = createFeatureButton(160, "KILL AURA STOMP", "ToggleKillAuraStomp")
+KillAuraStompStatusLabel.Text = "KILL AURA STOMP: OFF"
+KillAuraStompStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+
+local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(190, "HITNECK J", "ToggleHitNeckJ")
 HitNeckStatusLabel.Text = "HITNECK J: OFF"
 HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(190, "TEAM LIST", "ToggleTeamMenu")
+local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(220, "TEAM LIST", "ToggleTeamMenu")
 TeamMenuBtn.Text = "TEAM LIST"
 TeamMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
 
-local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(220, "CUSTOM MACROS", "ToggleMacroMenu")
+local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(250, "CUSTOM MACROS", "ToggleMacroMenu")
 MacroMenuBtn.Text = "CUSTOM MACROS [F6]"
 MacroMenuBtn.TextColor3 = Color3.fromRGB(220, 150, 255)
 MacroMenuBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
 
-local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(250, "CLIENT MANAGER", "ToggleClientMenu")
+local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(280, "CLIENT MANAGER", "ToggleClientMenu")
 ClientMenuBtn.Text = "CLIENT MANAGER [F7]"
 ClientMenuBtn.TextColor3 = Color3.fromRGB(150, 220, 255)
 ClientMenuBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 90)
@@ -627,6 +637,18 @@ local function updateKillAuraNoVisuals()
     end
 end
 
+local function updateKillAuraStompVisuals()
+    if killAuraStompActive then
+        KillAuraStompStatusLabel.BackgroundColor3 = Color3.fromRGB(160, 40, 120)
+        KillAuraStompStatusLabel.Text = "KILL AURA STOMP: ACTIVE"
+        KillAuraStompStatusLabel.TextColor3 = Color3.fromRGB(255, 150, 230)
+    else
+        KillAuraStompStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        KillAuraStompStatusLabel.Text = "KILL AURA STOMP: OFF"
+        KillAuraStompStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end
+
 local function updateHitNeckVisuals()
     if hitNeckActive then
         HitNeckStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 40, 100)
@@ -639,10 +661,61 @@ local function updateHitNeckVisuals()
     end
 end
 
+-- Ô NHẬP SỐ LƯỢNG LỆNH GỌI (BURST COUNT)
+local BurstInputFrame = Instance.new("Frame")
+BurstInputFrame.Size = UDim2.new(1, -10, 0, 35)
+BurstInputFrame.Position = UDim2.new(0, 5, 0, 315)
+BurstInputFrame.BackgroundColor3 = Color3.fromRGB(45, 35, 50)
+BurstInputFrame.BorderSizePixel = 0
+BurstInputFrame.Parent = MainFrame
+
+local BurstCorner = Instance.new("UICorner")
+BurstCorner.CornerRadius = UDim.new(0, 4)
+BurstCorner.Parent = BurstInputFrame
+
+local BurstLabel = Instance.new("TextLabel")
+BurstLabel.Size = UDim2.new(0, 120, 1, 0)
+BurstLabel.Position = UDim2.new(0, 5, 0, 0)
+BurstLabel.BackgroundTransparency = 1
+BurstLabel.Text = "Số lệnh mỗi lần click:"
+BurstLabel.TextColor3 = Color3.fromRGB(220, 150, 255)
+BurstLabel.Font = Enum.Font.SourceSansBold
+BurstLabel.TextSize = 11
+BurstLabel.TextXAlignment = Enum.TextXAlignment.Left
+BurstLabel.Parent = BurstInputFrame
+
+local BurstBox = Instance.new("TextBox")
+BurstBox.Size = UDim2.new(0, 65, 0, 23)
+BurstBox.Position = UDim2.new(1, -70, 0.5, -11)
+BurstBox.BackgroundColor3 = Color3.fromRGB(60, 50, 70)
+BurstBox.BorderSizePixel = 0
+BurstBox.Text = tostring(burstCount)
+BurstBox.TextColor3 = Color3.fromRGB(220, 150, 255)
+BurstBox.Font = Enum.Font.SourceSansBold
+BurstBox.TextSize = 13
+BurstBox.ClearTextOnFocus = false
+BurstBox.PlaceholderText = "SL..."
+BurstBox.Parent = BurstInputFrame
+
+local BurstBoxCorner = Instance.new("UICorner")
+BurstBoxCorner.CornerRadius = UDim.new(0, 4)
+BurstBoxCorner.Parent = BurstBox
+
+BurstBox.FocusLost:Connect(function()
+    local number = tonumber(BurstBox.Text)
+    if number and number > 0 then
+        burstCount = math.floor(number)
+        BurstBox.Text = tostring(burstCount)
+    else
+        burstCount = 1
+        BurstBox.Text = "1"
+    end
+end)
+
 -- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 285)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 355)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -692,7 +765,7 @@ end)
 -- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DangerInputFrame.Position = UDim2.new(0, 5, 0, 325)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 395)
 DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DangerInputFrame.BorderSizePixel = 0
 DangerInputFrame.Parent = MainFrame
@@ -742,7 +815,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 365)
+SearchBox.Position = UDim2.new(0, 5, 0, 435)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -761,7 +834,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 395)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 465)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -774,8 +847,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -430)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 425)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -500)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 495)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -836,7 +909,7 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- HÀM THỰC THI CHUỘT TRÁI
+-- HÀM THỰC THI (HỖ TRỢ BURST LOOP THEO SỐ LƯỢNG Ô NHẬP)
 local function performAttacks()
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
@@ -855,7 +928,9 @@ local function performAttacks()
                     if currentDist <= maxDetectDistance then
                         pcall(function()
                             if primaryAttackHitRemote then
-                                primaryAttackHitRemote:FireServer("Left", targetHead)
+                                for i = 1, burstCount do
+                                    primaryAttackHitRemote:FireServer("Left", targetHead)
+                                end
                             end
                         end)
                         lastAttackTime = tick()
@@ -879,7 +954,9 @@ local function performAttacks()
                     if currentDist <= maxDetectDistance then
                         pcall(function()
                             if abilityHitRemote then
-                                abilityHitRemote:FireServer("Charge", targetJaw)
+                                for i = 1, burstCount do
+                                    abilityHitRemote:FireServer("Charge", targetJaw)
+                                end
                             end
                         end)
                         lastKillAuraKTime = tick()
@@ -890,7 +967,7 @@ local function performAttacks()
         end
     end
 
-    -- 3. Kill Aura No (Nhắm thẳng vào Head)
+    -- 3. Kill Aura No
     if killAuraNoActive and (tick() - lastKillAuraNoTime >= killAuraNoCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -903,7 +980,9 @@ local function performAttacks()
                     if currentDist <= maxDetectDistance then
                         pcall(function()
                             if abilityHitRemote then
-                                abilityHitRemote:FireServer("No", targetHead)
+                                for i = 1, burstCount do
+                                    abilityHitRemote:FireServer("No", targetHead)
+                                end
                             end
                         end)
                         lastKillAuraNoTime = tick()
@@ -914,7 +993,33 @@ local function performAttacks()
         end
     end
 
-    -- 4. Kill Aura HitNeck
+    -- 4. Kill Aura Stomp (Sử dụng StompHit với RightArmClaw và số 1)
+    if killAuraStompActive and (tick() - lastKillAuraStompTime >= killAuraStompCooldown) then
+        for pName, isTargeted in pairs(targets) do
+            if isTargeted and not teamSafeList[pName] then
+                local targetCharacter = workspace:FindFirstChild(pName)
+                local targetClaw = targetCharacter and (targetCharacter:FindFirstChild("RightArmClaw") or targetCharacter:FindFirstChild("RightHand") or targetCharacter:FindFirstChild("Head"))
+                local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot and targetClaw then
+                    local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                    if currentDist <= maxDetectDistance then
+                        pcall(function()
+                            if stompHitRemote then
+                                for i = 1, burstCount do
+                                    stompHitRemote:FireServer(1, targetClaw)
+                                end
+                            end
+                        end)
+                        lastKillAuraStompTime = tick()
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    -- 5. Kill Aura HitNeck
     if hitNeckActive and (tick() - lastHitNeckTime >= hitNeckCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -927,7 +1032,9 @@ local function performAttacks()
                     if currentDist <= maxDetectDistance then
                         pcall(function()
                             if abilityHitRemote then
-                                abilityHitRemote:FireServer("HitNeck", targetHead)
+                                for i = 1, burstCount do
+                                    abilityHitRemote:FireServer("HitNeck", targetHead)
+                                end
                             end
                         end)
                         lastHitNeckTime = tick()
@@ -938,7 +1045,7 @@ local function performAttacks()
         end
     end
 
-    -- 5. Các Macro Tùy Chỉnh
+    -- 6. Các Macro Tùy Chỉnh
     for _, macro in ipairs(CustomMacros) do
         if macro.Active and (tick() - macro.LastTime >= macro.Cooldown) then
             for pName, isTargeted in pairs(targets) do
@@ -953,7 +1060,9 @@ local function performAttacks()
                             pcall(function()
                                 local remote = ReplicatedStorage:FindFirstChild(macro.RemoteName)
                                 if remote then
-                                    remote:FireServer(macro.Action, targetPart)
+                                    for i = 1, burstCount do
+                                        remote:FireServer(macro.Action, targetPart)
+                                    end
                                 end
                             end)
                             macro.LastTime = tick()
@@ -986,7 +1095,9 @@ task.spawn(function()
                                 if currentDist <= maxDetectDistance then
                                     pcall(function()
                                         if abilityHitRemote then
-                                            abilityHitRemote:FireServer("Pounce", targetBody, targetRoot.CFrame)
+                                            for i = 1, burstCount do
+                                                abilityHitRemote:FireServer("Pounce", targetBody, targetRoot.CFrame)
+                                            end
                                         end
                                     end)
                                     lastAbilityTime = tick()
@@ -1015,6 +1126,11 @@ end)
 KillAuraNoStatusLabel.MouseButton1Click:Connect(function()
     killAuraNoActive = not killAuraNoActive
     updateKillAuraNoVisuals()
+end)
+
+KillAuraStompStatusLabel.MouseButton1Click:Connect(function()
+    killAuraStompActive = not killAuraStompActive
+    updateKillAuraStompVisuals()
 end)
 
 HitNeckStatusLabel.MouseButton1Click:Connect(function()
@@ -1052,6 +1168,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateHKey()
                 updateKKey()
                 updateNoKey()
+                updateStompKey()
                 updateJKey()
                 updateF5Key()
                 updateF6Key()
@@ -1082,6 +1199,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         elseif input.KeyCode == Keybinds.ToggleKillAuraNo then
             killAuraNoActive = not killAuraNoActive
             updateKillAuraNoVisuals()
+        elseif input.KeyCode == Keybinds.ToggleKillAuraStomp then
+            killAuraStompActive = not killAuraStompActive
+            updateKillAuraStompVisuals()
         elseif input.KeyCode == Keybinds.ToggleHitNeckJ then
             hitNeckActive = not hitNeckActive
             updateHitNeckVisuals()
@@ -1361,7 +1481,7 @@ task.spawn(function()
 
             if teamSafeList[pName] then
                 TeamBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 80)
-                TeamBtn.Text = "🛡️ " .. pName .. " (IN TEAM)"
+                TeamBtn.Text = "🛡️ " + pName + " (IN TEAM)"
                 TeamBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             else
                 TeamBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
