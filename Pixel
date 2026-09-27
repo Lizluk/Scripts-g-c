@@ -10,7 +10,7 @@ local LocalPlayer = Players.LocalPlayer
 -- Remote mặc định
 local primaryAttackHitRemote = ReplicatedStorage:FindFirstChild("PrimaryAttackHit")
 local abilityHitRemote = ReplicatedStorage:FindFirstChild("AbilityHit")
-local stompHitRemote = ReplicatedStorage:FindFirstChild("StompHit") -- Remote Stomp mới
+local stompHitRemote = ReplicatedStorage:FindFirstChild("StompHit")
 
 local targets = {} 
 local teamSafeList = {} 
@@ -18,7 +18,8 @@ local killAuraActive = true
 local abilityActive = false 
 local killAuraKActive = false 
 local killAuraNoActive = false 
-local killAuraStompActive = false -- Trạng thái Kill Aura Stomp
+local killAuraStompActive = false 
+local killAuraQuetzGrabActive = false -- Trạng thái Kill Aura QuetzGrab mới
 local hitNeckActive = false 
 local closestPlayerName = "" 
 
@@ -36,7 +37,7 @@ local teamSearchFilterText = ""
 local savedCloneCount = 0
 local clonedClientsList = {}
 
--- Bảng lưu trữ phím tắt
+-- Bảng lưu trữ phím tắt (Thêm QuetzGrab với phím N)
 local Keybinds = {
     ToggleMenu = Enum.KeyCode.P,
     ToggleTeamMenu = Enum.KeyCode.F5,
@@ -46,7 +47,8 @@ local Keybinds = {
     ToggleAbilityH = Enum.KeyCode.H,
     ToggleKillAuraK = Enum.KeyCode.K,
     ToggleKillAuraNo = Enum.KeyCode.L,
-    ToggleKillAuraStomp = Enum.KeyCode.M, -- Phím tắt mặc định cho Stomp là M
+    ToggleKillAuraStomp = Enum.KeyCode.M,
+    ToggleKillAuraQuetzGrab = Enum.KeyCode.N, -- Phím tắt mặc định cho QuetzGrab là N
     ToggleHitNeckJ = Enum.KeyCode.J,
     SelectAll = Enum.KeyCode.T,
 }
@@ -66,6 +68,8 @@ local killAuraNoCooldown = 1.4
 local lastKillAuraNoTime = 0
 local killAuraStompCooldown = 1.4    
 local lastKillAuraStompTime = 0
+local killAuraQuetzGrabCooldown = 1.4    
+local lastKillAuraQuetzGrabTime = 0
 local hitNeckCooldown = 1.4
 local lastHitNeckTime = 0
 local lastDangerSoundTime = 0
@@ -98,9 +102,9 @@ ScreenGui.Name = "PlayerStatsUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
--- KHUNG MENU CHÍNH (Tăng chiều cao lên một chút để chứa ô nhập số lượng lệnh)
+-- KHUNG MENU CHÍNH (Tăng chiều cao lên một chút để chứa các nút mới)
 MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 940)
+MainFrame.Size = UDim2.new(0, 230, 0, 970)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -464,14 +468,13 @@ local function executeDuplicate()
     local char = LocalPlayer.Character
     if not char then return end
     
-    -- Tìm linh hoạt script Client trong Character hoặc PlayerScripts
     local originalClient = char:FindFirstChild("Client") or LocalPlayer:WaitForChild("PlayerScripts", 2):FindFirstChild("Client")
 
     if originalClient then
         clonedClientsList = {}
         for i = 1, savedCloneCount do
             local clone = originalClient:Clone()
-            clone.Name = "Client_Clone_" .. tostring(i) -- Đã sửa lỗi dấu cộng thành dấu nối chuỗi ..
+            clone.Name = "Client_Clone_" .. tostring(i)
             clone.Parent = char
             table.insert(clonedClientsList, clone)
         end
@@ -586,21 +589,25 @@ local KillAuraStompStatusLabel, StompKeyBtn, updateStompKey = createFeatureButto
 KillAuraStompStatusLabel.Text = "KILL AURA STOMP: OFF"
 KillAuraStompStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(190, "HITNECK J", "ToggleHitNeckJ")
+local KillAuraQuetzGrabStatusLabel, QuetzGrabKeyBtn, updateQuetzGrabKey = createFeatureButton(190, "QUETZGRAB N", "ToggleKillAuraQuetzGrab")
+KillAuraQuetzGrabStatusLabel.Text = "QUETZGRAB N: OFF"
+KillAuraQuetzGrabStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+
+local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(220, "HITNECK J", "ToggleHitNeckJ")
 HitNeckStatusLabel.Text = "HITNECK J: OFF"
 HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(220, "TEAM LIST", "ToggleTeamMenu")
+local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(250, "TEAM LIST", "ToggleTeamMenu")
 TeamMenuBtn.Text = "TEAM LIST"
 TeamMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
 
-local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(250, "CUSTOM MACROS", "ToggleMacroMenu")
+local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(280, "CUSTOM MACROS", "ToggleMacroMenu")
 MacroMenuBtn.Text = "CUSTOM MACROS [F6]"
 MacroMenuBtn.TextColor3 = Color3.fromRGB(220, 150, 255)
 MacroMenuBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
 
-local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(280, "CLIENT MANAGER", "ToggleClientMenu")
+local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(310, "CLIENT MANAGER", "ToggleClientMenu")
 ClientMenuBtn.Text = "CLIENT MANAGER [F7]"
 ClientMenuBtn.TextColor3 = Color3.fromRGB(150, 220, 255)
 ClientMenuBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 90)
@@ -653,6 +660,18 @@ local function updateKillAuraStompVisuals()
     end
 end
 
+local function updateKillAuraQuetzGrabVisuals()
+    if killAuraQuetzGrabActive then
+        KillAuraQuetzGrabStatusLabel.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
+        KillAuraQuetzGrabStatusLabel.Text = "QUETZGRAB N: ACTIVE"
+        KillAuraQuetzGrabStatusLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
+    else
+        KillAuraQuetzGrabStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        KillAuraQuetzGrabStatusLabel.Text = "QUETZGRAB N: OFF"
+        KillAuraQuetzGrabStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end
+
 local function updateHitNeckVisuals()
     if hitNeckActive then
         HitNeckStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 40, 100)
@@ -668,7 +687,7 @@ end
 -- Ô NHẬP SỐ LƯỢNG LỆNH GỌI (BURST COUNT)
 local BurstInputFrame = Instance.new("Frame")
 BurstInputFrame.Size = UDim2.new(1, -10, 0, 35)
-BurstInputFrame.Position = UDim2.new(0, 5, 0, 315)
+BurstInputFrame.Position = UDim2.new(0, 5, 0, 345)
 BurstInputFrame.BackgroundColor3 = Color3.fromRGB(45, 35, 50)
 BurstInputFrame.BorderSizePixel = 0
 BurstInputFrame.Parent = MainFrame
@@ -719,7 +738,7 @@ end)
 -- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 355)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 385)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -769,7 +788,7 @@ end)
 -- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DangerInputFrame.Position = UDim2.new(0, 5, 0, 395)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 425)
 DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DangerInputFrame.BorderSizePixel = 0
 DangerInputFrame.Parent = MainFrame
@@ -819,7 +838,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 435)
+SearchBox.Position = UDim2.new(0, 5, 0, 465)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -838,7 +857,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 465)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 495)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -851,8 +870,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -500)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 495)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -530)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 525)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -997,7 +1016,7 @@ local function performAttacks()
         end
     end
 
-    -- 4. Kill Aura Stomp (Sử dụng StompHit với RightArmClaw và số 1)
+    -- 4. Kill Aura Stomp
     if killAuraStompActive and (tick() - lastKillAuraStompTime >= killAuraStompCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -1023,7 +1042,33 @@ local function performAttacks()
         end
     end
 
-    -- 5. Kill Aura HitNeck
+    -- 5. Kill Aura QuetzGrab (Sử dụng AbilityHit với "QuetzGrab" và Head của mục tiêu)
+    if killAuraQuetzGrabActive and (tick() - lastKillAuraQuetzGrabTime >= killAuraQuetzGrabCooldown) then
+        for pName, isTargeted in pairs(targets) do
+            if isTargeted and not teamSafeList[pName] then
+                local targetCharacter = workspace:FindFirstChild(pName)
+                local targetHead = targetCharacter and targetCharacter:FindFirstChild("Head")
+                local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot and targetHead then
+                    local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                    if currentDist <= maxDetectDistance then
+                        pcall(function()
+                            if abilityHitRemote then
+                                for i = 1, burstCount do
+                                    abilityHitRemote:FireServer("QuetzGrab", targetHead)
+                                end
+                            end
+                        end)
+                        lastKillAuraQuetzGrabTime = tick()
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    -- 6. Kill Aura HitNeck
     if hitNeckActive and (tick() - lastHitNeckTime >= hitNeckCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -1049,7 +1094,7 @@ local function performAttacks()
         end
     end
 
-    -- 6. Các Macro Tùy Chỉnh
+    -- 7. Các Macro Tùy Chỉnh
     for _, macro in ipairs(CustomMacros) do
         if macro.Active and (tick() - macro.LastTime >= macro.Cooldown) then
             for pName, isTargeted in pairs(targets) do
@@ -1137,6 +1182,11 @@ KillAuraStompStatusLabel.MouseButton1Click:Connect(function()
     updateKillAuraStompVisuals()
 end)
 
+KillAuraQuetzGrabStatusLabel.MouseButton1Click:Connect(function()
+    killAuraQuetzGrabActive = not killAuraQuetzGrabActive
+    updateKillAuraQuetzGrabVisuals()
+end)
+
 HitNeckStatusLabel.MouseButton1Click:Connect(function()
     hitNeckActive = not hitNeckActive
     updateHitNeckVisuals()
@@ -1173,6 +1223,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateKKey()
                 updateNoKey()
                 updateStompKey()
+                updateQuetzGrabKey()
                 updateJKey()
                 updateF5Key()
                 updateF6Key()
@@ -1206,6 +1257,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         elseif input.KeyCode == Keybinds.ToggleKillAuraStomp then
             killAuraStompActive = not killAuraStompActive
             updateKillAuraStompVisuals()
+        elseif input.KeyCode == Keybinds.ToggleKillAuraQuetzGrab then
+            killAuraQuetzGrabActive = not killAuraQuetzGrabActive
+            updateKillAuraQuetzGrabVisuals()
         elseif input.KeyCode == Keybinds.ToggleHitNeckJ then
             hitNeckActive = not hitNeckActive
             updateHitNeckVisuals()
@@ -1485,7 +1539,7 @@ task.spawn(function()
 
             if teamSafeList[pName] then
                 TeamBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 80)
-                TeamBtn.Text = "🛡️ " .. pName .. " (IN TEAM)" -- Đã sửa lỗi dùng dấu + thành dấu nối chuỗi ..
+                TeamBtn.Text = "🛡️ " .. pName .. " (IN TEAM)"
                 TeamBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             else
                 TeamBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
