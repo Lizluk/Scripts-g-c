@@ -16,7 +16,7 @@ local teamSafeList = {}
 local killAuraActive = true 
 local abilityActive = false 
 local killAuraKActive = false 
-local hitNeckActive = false -- Trạng thái HitNeck chuẩn xác
+local hitNeckActive = false 
 local closestPlayerName = "" 
 
 -- Tách riêng 2 khoảng cách
@@ -26,11 +26,12 @@ local dangerDetectDistance = 100 -- Tầm phát hiện nguy hiểm (ESP & Cảnh
 local searchFilterText = ""
 local teamSearchFilterText = ""
 
--- Bảng lưu trữ phím tắt
+-- Bảng lưu trữ phím tắt (Thêm ToggleClientMenu F7)
 local Keybinds = {
     ToggleMenu = Enum.KeyCode.P,
     ToggleTeamMenu = Enum.KeyCode.F5,
     ToggleMacroMenu = Enum.KeyCode.F6,
+    ToggleClientMenu = Enum.KeyCode.F7,
     ToggleKillAuraQ = Enum.KeyCode.Q,
     ToggleAbilityH = Enum.KeyCode.H,
     ToggleKillAuraK = Enum.KeyCode.K,
@@ -54,7 +55,7 @@ local lastHitNeckTime = 0
 local lastDangerSoundTime = 0
 
 ----------------------------------------------------------------
--- 1. TẠO GIAO DIỆN (GUI) & BẢNG QUẢN LÝ
+-- 1. TẠO GIAO DIỆN (GUI) & CÁC BẢNG QUẢN LÝ
 ----------------------------------------------------------------
 
 local guiParent = nil
@@ -324,6 +325,138 @@ AddMacroBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+----------------------------------------------------------------
+-- 1.2 KHUNG QUẢN LÝ CLIENT CLONE (F7)
+----------------------------------------------------------------
+local ClientManagerFrame = Instance.new("Frame")
+ClientManagerFrame.Size = UDim2.new(0, 280, 0, 400)
+ClientManagerFrame.Position = UDim2.new(0.24, 0, 0.7, 0)
+ClientManagerFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+ClientManagerFrame.BorderSizePixel = 0
+ClientManagerFrame.Active = true
+ClientManagerFrame.Draggable = true
+ClientManagerFrame.Visible = false 
+ClientManagerFrame.Parent = ScreenGui
+
+local ClientFrameCorner = Instance.new("UICorner")
+ClientFrameCorner.CornerRadius = UDim.new(0, 8)
+ClientFrameCorner.Parent = ClientManagerFrame
+
+local ClientTitle = Instance.new("TextLabel")
+ClientTitle.Size = UDim2.new(1, 0, 0, 35)
+ClientTitle.BackgroundColor3 = Color3.fromRGB(40, 70, 90)
+ClientTitle.Text = "CLIENT MANAGER [F7]"
+ClientTitle.TextColor3 = Color3.fromRGB(150, 220, 255)
+ClientTitle.Font = Enum.Font.SourceSansBold
+ClientTitle.TextSize = 14
+ClientTitle.Parent = ClientManagerFrame
+
+local ClientTitleCorner = Instance.new("UICorner")
+ClientTitleCorner.CornerRadius = UDim.new(0, 8)
+ClientTitleCorner.Parent = ClientTitle
+
+local CloneCountBox = Instance.new("TextBox")
+CloneCountBox.Size = UDim2.new(1, -10, 0, 28)
+CloneCountBox.Position = UDim2.new(0, 5, 0, 45)
+CloneCountBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+CloneCountBox.BorderSizePixel = 0
+CloneCountBox.Text = "7"
+CloneCountBox.PlaceholderText = "Nhập số lượng Client cần clone..."
+CloneCountBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloneCountBox.Font = Enum.Font.SourceSansBold
+CloneCountBox.TextSize = 13
+CloneCountBox.ClearTextOnFocus = false
+CloneCountBox.Parent = ClientManagerFrame
+
+local CloneCountCorner = Instance.new("UICorner")
+CloneCountCorner.CornerRadius = UDim.new(0, 4)
+CloneCountCorner.Parent = CloneCountBox
+
+local CloneBtn = Instance.new("TextButton")
+CloneBtn.Size = UDim2.new(1, -10, 0, 30)
+CloneBtn.Position = UDim2.new(0, 5, 0, 80)
+CloneBtn.BackgroundColor3 = Color3.fromRGB(50, 130, 90)
+CloneBtn.Text = "🚀 DUPLICATE CLIENTS"
+CloneBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloneBtn.Font = Enum.Font.SourceSansBold
+CloneBtn.TextSize = 13
+CloneBtn.Parent = ClientManagerFrame
+
+local CloneBtnCorner = Instance.new("UICorner")
+CloneBtnCorner.CornerRadius = UDim.new(0, 4)
+CloneBtnCorner.Parent = CloneBtn
+
+local ClonedScrollingFrame = Instance.new("ScrollingFrame")
+ClonedScrollingFrame.Size = UDim2.new(1, -10, 1, -120)
+ClonedScrollingFrame.Position = UDim2.new(0, 5, 0, 115)
+ClonedScrollingFrame.BackgroundTransparency = 1
+ClonedScrollingFrame.BorderSizePixel = 0
+ClonedScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ClonedScrollingFrame.ScrollBarThickness = 4
+ClonedScrollingFrame.Parent = ClientManagerFrame
+
+local ClonedUIListLayout = Instance.new("UIListLayout")
+ClonedUIListLayout.Parent = ClonedScrollingFrame
+ClonedUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ClonedUIListLayout.Padding = UDim.new(0, 5)
+
+ClonedUIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ClonedScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, ClonedUIListLayout.AbsoluteContentSize.Y)
+end)
+
+local clonedClientsList = {}
+
+local function refreshClonedUI()
+    for _, child in pairs(ClonedScrollingFrame:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+
+    for i, clientScript in ipairs(clonedClientsList) do
+        if clientScript and clientScript.Parent then
+            local itemFrame = Instance.new("Frame")
+            itemFrame.Size = UDim2.new(1, 0, 0, 30)
+            itemFrame.BackgroundTransparency = 1
+            itemFrame.Parent = ClonedScrollingFrame
+
+            local statusBtn = Instance.new("TextButton")
+            statusBtn.Size = UDim2.new(1, 0, 1, 0)
+            statusBtn.BackgroundColor3 = clientScript.Disabled and Color3.fromRGB(150, 50, 50) or Color3.fromRGB(50, 130, 70)
+            statusBtn.Text = string.format("Client [%d] - Disabled: %s", i, tostring(clientScript.Disabled))
+            statusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            statusBtn.Font = Enum.Font.SourceSansBold
+            statusBtn.TextSize = 12
+            statusBtn.Parent = itemFrame
+
+            local statusCorner = Instance.new("UICorner")
+            statusCorner.CornerRadius = UDim.new(0, 4)
+            statusCorner.Parent = statusBtn
+
+            statusBtn.MouseButton1Click:Connect(function()
+                clientScript.Disabled = not clientScript.Disabled
+                refreshClonedUI()
+            end)
+        end
+    end
+end
+
+CloneBtn.MouseButton1Click:Connect(function()
+    local count = tonumber(CloneCountBox.Text)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local originalClient = char:FindFirstChild("Client") -- Tìm script Client trong nhân vật[cite: 3]
+
+    if count and count > 0 and originalClient then
+        clonedClientsList = {}
+        for i = 1, count do
+            local clone = originalClient:Clone()
+            clone.Name = "Client_Clone_" .. i
+            clone.Parent = char
+            table.insert(clonedClientsList, clone)
+        end
+        refreshClonedUI()
+    end
+end)
+
 -- KHUNG ĐỒNG HỒ TÁCH BIỆT
 local TimeFrame = Instance.new("Frame")
 TimeFrame.Size = UDim2.new(1, 0, 0, 30)
@@ -411,7 +544,6 @@ local KillAuraKStatusLabel, KKeyBtn, updateKKey = createFeatureButton(100, "KILL
 KillAuraKStatusLabel.Text = "KILL AURA K: OFF"
 KillAuraKStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
--- Nút bật tắt HitNeck J
 local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(130, "HITNECK J", "ToggleHitNeckJ")
 HitNeckStatusLabel.Text = "HITNECK J: OFF"
 HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
@@ -425,6 +557,11 @@ local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(190, "CUSTOM MAC
 MacroMenuBtn.Text = "CUSTOM MACROS [F6]"
 MacroMenuBtn.TextColor3 = Color3.fromRGB(220, 150, 255)
 MacroMenuBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
+
+local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(220, "CLIENT MANAGER", "ToggleClientMenu")
+ClientMenuBtn.Text = "CLIENT MANAGER [F7]"
+ClientMenuBtn.TextColor3 = Color3.fromRGB(150, 220, 255)
+ClientMenuBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 90)
 
 local function updateAbilityVisuals()
     if abilityActive then
@@ -465,7 +602,7 @@ end
 -- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 220)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 255)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -515,7 +652,7 @@ end)
 -- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DangerInputFrame.Position = UDim2.new(0, 5, 0, 260)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 295)
 DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DangerInputFrame.BorderSizePixel = 0
 DangerInputFrame.Parent = MainFrame
@@ -565,7 +702,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 300)
+SearchBox.Position = UDim2.new(0, 5, 0, 335)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -584,7 +721,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 330)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 365)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -597,8 +734,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -365)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 360)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -400)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 395)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -659,7 +796,7 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- HÀM THỰC THI CHUỘT TRÁI (HOẠT ĐỘNG CHUẨN XÁC)
+-- HÀM THỰC THI CHUỘT TRÁI
 local function performAttacks()
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
@@ -713,7 +850,7 @@ local function performAttacks()
         end
     end
 
-    -- 3. Kill Aura HitNeck (Đã sửa nhắm vào Head chuẩn xác, không bị kẹt)
+    -- 3. Kill Aura HitNeck
     if hitNeckActive and (tick() - lastHitNeckTime >= hitNeckCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -737,7 +874,7 @@ local function performAttacks()
         end
     end
 
-    -- 4. Các Macro Tùy Chỉnh do bạn tự thêm
+    -- 4. Các Macro Tùy Chỉnh
     for _, macro in ipairs(CustomMacros) do
         if macro.Active and (tick() - macro.LastTime >= macro.Cooldown) then
             for pName, isTargeted in pairs(targets) do
@@ -824,6 +961,10 @@ MacroMenuBtn.MouseButton1Click:Connect(function()
     MacroFrame.Visible = not MacroFrame.Visible
 end)
 
+ClientMenuBtn.MouseButton1Click:Connect(function()
+    ClientManagerFrame.Visible = not ClientManagerFrame.Visible
+end)
+
 -- Xử lý bàn phím & đổi phím
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -844,6 +985,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateJKey()
                 updateF5Key()
                 updateF6Key()
+                updateF7Key()
             end
             return
         end
@@ -857,6 +999,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             TeamFrame.Visible = not TeamFrame.Visible
         elseif input.KeyCode == Keybinds.ToggleMacroMenu then
             MacroFrame.Visible = not MacroFrame.Visible
+        elseif input.KeyCode == Keybinds.ToggleClientMenu then
+            ClientManagerFrame.Visible = not ClientManagerFrame.Visible
         elseif input.KeyCode == Keybinds.SelectAll then
             toggleSelectAll()
         elseif input.KeyCode == Keybinds.ToggleAbilityH then
@@ -882,7 +1026,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 ----------------------------------------------------------------
--- 2. HỆ THỐNG ESP & PHÁT HIỆN NGUY HIỂM
+-- 2. HỆ THỐNG ESP & TỰ ĐỘNG THÊM TARGET MỚI
 ----------------------------------------------------------------
 
 local function updateESPForCharacter(player, character)
@@ -914,6 +1058,12 @@ end
 
 local function setupPlayerESP(player)
     if player == LocalPlayer then return end
+    
+    -- Tự động thêm vào danh sách targets nếu chưa có và chưa nằm trong team safe
+    if not teamSafeList[player.Name] then
+        targets[player.Name] = true
+    end
+
     player.CharacterAdded:Connect(function(char)
         updateESPForCharacter(player, char)
     end)
@@ -988,7 +1138,11 @@ local function buildButtons()
     end
 end
 
-Players.PlayerAdded:Connect(buildButtons)
+Players.PlayerAdded:Connect(function(p)
+    setupPlayerESP(p)
+    buildButtons()
+end)
+
 Players.PlayerRemoving:Connect(function(player)
     targets[player.Name] = nil
     teamSafeList[player.Name] = nil
@@ -998,6 +1152,13 @@ buildButtons()
 
 task.spawn(function()
     while true do
+        -- Tự động quét kiểm tra nếu có người chơi mới vào mà chưa được thêm vào targets
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and targets[p.Name] == nil and not teamSafeList[p.Name] then
+                targets[p.Name] = true
+            end
+        end
+
         local myCharacter = LocalPlayer.Character
         local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
         
