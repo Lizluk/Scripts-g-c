@@ -26,7 +26,11 @@ local dangerDetectDistance = 100 -- Tầm phát hiện nguy hiểm (ESP & Cảnh
 local searchFilterText = ""
 local teamSearchFilterText = ""
 
--- Bảng lưu trữ phím tắt (Thêm ToggleClientMenu F7)
+-- Biến lưu số lượng Client muốn tự động clone khi hồi sinh
+local savedCloneCount = 0
+local clonedClientsList = {}
+
+-- Bảng lưu trữ phím tắt
 local Keybinds = {
     ToggleMenu = Enum.KeyCode.P,
     ToggleTeamMenu = Enum.KeyCode.F5,
@@ -326,7 +330,7 @@ AddMacroBtn.MouseButton1Click:Connect(function()
 end)
 
 ----------------------------------------------------------------
--- 1.2 KHUNG QUẢN LÝ CLIENT CLONE (F7)
+-- 1.2 KHUNG QUẢN LÝ CLIENT CLONE (F7) & AUTO RE-DUPLICATE
 ----------------------------------------------------------------
 local ClientManagerFrame = Instance.new("Frame")
 ClientManagerFrame.Size = UDim2.new(0, 280, 0, 400)
@@ -360,7 +364,7 @@ CloneCountBox.Size = UDim2.new(1, -10, 0, 28)
 CloneCountBox.Position = UDim2.new(0, 5, 0, 45)
 CloneCountBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 CloneCountBox.BorderSizePixel = 0
-CloneCountBox.Text = "7"
+CloneCountBox.Text = "4"
 CloneCountBox.PlaceholderText = "Nhập số lượng Client cần clone..."
 CloneCountBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloneCountBox.Font = Enum.Font.SourceSansBold
@@ -404,8 +408,6 @@ ClonedUIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(funct
     ClonedScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, ClonedUIListLayout.AbsoluteContentSize.Y)
 end)
 
-local clonedClientsList = {}
-
 local function refreshClonedUI()
     for _, child in pairs(ClonedScrollingFrame:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
@@ -439,21 +441,39 @@ local function refreshClonedUI()
     end
 end
 
-CloneBtn.MouseButton1Click:Connect(function()
+-- Hàm thực hiện duplicate thực tế
+local function executeDuplicate()
     local count = tonumber(CloneCountBox.Text)
+    if count and count > 0 then
+        savedCloneCount = count
+    end
+    
+    if savedCloneCount <= 0 then return end
+
     local char = LocalPlayer.Character
     if not char then return end
-    local originalClient = char:FindFirstChild("Client") -- Tìm script Client trong nhân vật[cite: 3]
+    local originalClient = char:WaitForChild("Client", 3) -- Tìm script Client trong nhân vật[cite: 3]
 
-    if count and count > 0 and originalClient then
+    if originalClient then
         clonedClientsList = {}
-        for i = 1, count do
+        for i = 1, savedCloneCount do
             local clone = originalClient:Clone()
             clone.Name = "Client_Clone_" .. i
             clone.Parent = char
             table.insert(clonedClientsList, clone)
         end
         refreshClonedUI()
+    end
+end
+
+CloneBtn.MouseButton1Click:Connect(executeDuplicate)
+
+-- Tự động duplicate lại khi nhân vật chết hoặc hồi sinh (CharacterAdded)
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    newChar:WaitForChild("HumanoidRootPart", 5)
+    task.wait(0.5) -- Đợi nhân vật load ổn định
+    if savedCloneCount > 0 then
+        executeDuplicate()
     end
 end)
 
@@ -1059,7 +1079,6 @@ end
 local function setupPlayerESP(player)
     if player == LocalPlayer then return end
     
-    -- Tự động thêm vào danh sách targets nếu chưa có và chưa nằm trong team safe
     if not teamSafeList[player.Name] then
         targets[player.Name] = true
     end
@@ -1152,7 +1171,6 @@ buildButtons()
 
 task.spawn(function()
     while true do
-        -- Tự động quét kiểm tra nếu có người chơi mới vào mà chưa được thêm vào targets
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and targets[p.Name] == nil and not teamSafeList[p.Name] then
                 targets[p.Name] = true
