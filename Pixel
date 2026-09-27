@@ -19,9 +19,8 @@ local abilityActive = false
 local killAuraKActive = false 
 local killAuraNoActive = false 
 local killAuraStompActive = false 
-local killAuraQuetzGrabActive = false 
+local killAuraQuetzGrabActive = false -- Trạng thái Kill Aura QuetzGrab mới
 local hitNeckActive = false 
-local infStaminaActive = false -- Trạng thái Inf Stamina
 local closestPlayerName = "" 
 
 -- Biến cấu hình số lần spam lệnh khi click/gọi (Mặc định là 1)
@@ -38,7 +37,7 @@ local teamSearchFilterText = ""
 local savedCloneCount = 0
 local clonedClientsList = {}
 
--- Bảng lưu trữ phím tắt (Thêm Inf Stamina với phím B)
+-- Bảng lưu trữ phím tắt (Thêm QuetzGrab với phím N)
 local Keybinds = {
     ToggleMenu = Enum.KeyCode.P,
     ToggleTeamMenu = Enum.KeyCode.F5,
@@ -49,9 +48,8 @@ local Keybinds = {
     ToggleKillAuraK = Enum.KeyCode.K,
     ToggleKillAuraNo = Enum.KeyCode.L,
     ToggleKillAuraStomp = Enum.KeyCode.M,
-    ToggleKillAuraQuetzGrab = Enum.KeyCode.N,
+    ToggleKillAuraQuetzGrab = Enum.KeyCode.N, -- Phím tắt mặc định cho QuetzGrab là N
     ToggleHitNeckJ = Enum.KeyCode.J,
-    ToggleInfStamina = Enum.KeyCode.B, -- Phím tắt mặc định cho Inf Stamina là B
     SelectAll = Enum.KeyCode.T,
 }
 
@@ -104,9 +102,9 @@ ScreenGui.Name = "PlayerStatsUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
--- KHUNG MENU CHÍNH
+-- KHUNG MENU CHÍNH (Tăng chiều cao lên một chút để chứa các nút mới)
 MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 1010)
+MainFrame.Size = UDim2.new(0, 230, 0, 970)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -599,22 +597,17 @@ local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(220, "HITNEC
 HitNeckStatusLabel.Text = "HITNECK J: OFF"
 HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
--- Nút cho tính năng Inf Stamina (Cut & Paste Energy đúng đường dẫn)
-local InfStaminaStatusLabel, BKeyBtn, updateBKey = createFeatureButton(250, "INF STAMINA B", "ToggleInfStamina")
-InfStaminaStatusLabel.Text = "INF STAMINA: OFF"
-InfStaminaStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-
-local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(280, "TEAM LIST", "ToggleTeamMenu")
+local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(250, "TEAM LIST", "ToggleTeamMenu")
 TeamMenuBtn.Text = "TEAM LIST"
 TeamMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
 
-local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(310, "CUSTOM MACROS", "ToggleMacroMenu")
+local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(280, "CUSTOM MACROS", "ToggleMacroMenu")
 MacroMenuBtn.Text = "CUSTOM MACROS [F6]"
 MacroMenuBtn.TextColor3 = Color3.fromRGB(220, 150, 255)
 MacroMenuBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
 
-local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(340, "CLIENT MANAGER", "ToggleClientMenu")
+local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(310, "CLIENT MANAGER", "ToggleClientMenu")
 ClientMenuBtn.Text = "CLIENT MANAGER [F7]"
 ClientMenuBtn.TextColor3 = Color3.fromRGB(150, 220, 255)
 ClientMenuBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 90)
@@ -691,22 +684,10 @@ local function updateHitNeckVisuals()
     end
 end
 
-local function updateInfStaminaVisuals()
-    if infStaminaActive then
-        InfStaminaStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 160, 140)
-        InfStaminaStatusLabel.Text = "INF STAMINA: ACTIVE"
-        InfStaminaStatusLabel.TextColor3 = Color3.fromRGB(200, 255, 255)
-    else
-        InfStaminaStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        InfStaminaStatusLabel.Text = "INF STAMINA: OFF"
-        InfStaminaStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-    end
-end
-
 -- Ô NHẬP SỐ LƯỢNG LỆNH GỌI (BURST COUNT)
 local BurstInputFrame = Instance.new("Frame")
 BurstInputFrame.Size = UDim2.new(1, -10, 0, 35)
-BurstInputFrame.Position = UDim2.new(0, 5, 0, 375)
+BurstInputFrame.Position = UDim2.new(0, 5, 0, 345)
 BurstInputFrame.BackgroundColor3 = Color3.fromRGB(45, 35, 50)
 BurstInputFrame.BorderSizePixel = 0
 BurstInputFrame.Parent = MainFrame
@@ -757,7 +738,7 @@ end)
 -- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 415)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 385)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -807,7 +788,7 @@ end)
 -- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DangerInputFrame.Position = UDim2.new(0, 5, 0, 455)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 425)
 DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DangerInputFrame.BorderSizePixel = 0
 DangerInputFrame.Parent = MainFrame
@@ -857,7 +838,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 495)
+SearchBox.Position = UDim2.new(0, 5, 0, 465)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -876,7 +857,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 525)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 495)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -889,8 +870,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -560)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 555)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -530)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 525)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -951,7 +932,7 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- HÀM THỰC THI ATTACK (KILL AURA)
+-- HÀM THỰC THI (HỖ TRỢ BURST LOOP THEO SỐ LƯỢNG Ô NHẬP)
 local function performAttacks()
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
@@ -1061,7 +1042,7 @@ local function performAttacks()
         end
     end
 
-    -- 5. Kill Aura QuetzGrab
+    -- 5. Kill Aura QuetzGrab (Sử dụng AbilityHit với "QuetzGrab" và Head của mục tiêu)
     if killAuraQuetzGrabActive and (tick() - lastKillAuraQuetzGrabTime >= killAuraQuetzGrabCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -1143,32 +1124,6 @@ local function performAttacks()
     end
 end
 
--- Vòng lặp tự động Cut và Paste lại file Energy đúng đường dẫn workspace.Soniaca351.CreatureInfo.Survival.Energy
-task.spawn(function()
-    while true do
-        if infStaminaActive then
-            pcall(function()
-                local soniaca = workspace:FindFirstChild("Soniaca351")
-                if soniaca then
-                    local creatureInfo = soniaca:FindFirstChild("CreatureInfo")
-                    if creatureInfo then
-                        local survival = creatureInfo:FindFirstChild("Survival")
-                        if survival then
-                            local energy = survival:FindFirstChild("Energy")
-                            if energy then
-                                -- Cut và Paste lại đúng vị trí cũ trong Survival[cite: 3]
-                                energy.Parent = nil
-                                energy.Parent = survival
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-        task.wait(0.2) -- Tần suất thực hiện
-    end
-end)
-
 -- Vòng lặp Ability Pounce tự động
 task.spawn(function()
     while true do
@@ -1237,11 +1192,6 @@ HitNeckStatusLabel.MouseButton1Click:Connect(function()
     updateHitNeckVisuals()
 end)
 
-InfStaminaStatusLabel.MouseButton1Click:Connect(function()
-    infStaminaActive = not infStaminaActive
-    updateInfStaminaVisuals()
-end)
-
 TeamMenuBtn.MouseButton1Click:Connect(function()
     TeamFrame.Visible = not TeamFrame.Visible
 end)
@@ -1275,7 +1225,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateStompKey()
                 updateQuetzGrabKey()
                 updateJKey()
-                updateBKey()
                 updateF5Key()
                 updateF6Key()
                 updateF7Key()
@@ -1314,9 +1263,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         elseif input.KeyCode == Keybinds.ToggleHitNeckJ then
             hitNeckActive = not hitNeckActive
             updateHitNeckVisuals()
-        elseif input.KeyCode == Keybinds.ToggleInfStamina then
-            infStaminaActive = not infStaminaActive
-            updateInfStaminaVisuals()
         elseif input.KeyCode == Keybinds.ToggleKillAuraQ then
             killAuraActive = not killAuraActive
             if killAuraActive then
