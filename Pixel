@@ -21,7 +21,7 @@ local killAuraNoActive = false
 local killAuraStompActive = false 
 local killAuraQuetzGrabActive = false 
 local hitNeckActive = false 
-local infStaminaActive = false -- Trạng thái Inf Stamina mới
+local infStaminaActive = false -- Trạng thái Inf Stamina
 local closestPlayerName = "" 
 
 -- Biến cấu hình số lần spam lệnh khi click/gọi (Mặc định là 1)
@@ -104,7 +104,7 @@ ScreenGui.Name = "PlayerStatsUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
--- KHUNG MENU CHÍNH (Tăng chiều cao lên một chút để chứa nút Inf Stamina mới)
+-- KHUNG MENU CHÍNH
 MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 230, 0, 1010)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
@@ -599,7 +599,7 @@ local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(220, "HITNEC
 HitNeckStatusLabel.Text = "HITNECK J: OFF"
 HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
--- Nút mới cho tính năng Inf Stamina (Cut & Paste Energy)
+-- Nút cho tính năng Inf Stamina (Cut & Paste Energy đúng đường dẫn)
 local InfStaminaStatusLabel, BKeyBtn, updateBKey = createFeatureButton(250, "INF STAMINA B", "ToggleInfStamina")
 InfStaminaStatusLabel.Text = "INF STAMINA: OFF"
 InfStaminaStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
@@ -1143,30 +1143,29 @@ local function performAttacks()
     end
 end
 
--- Vòng lặp tự động thực hiện hành động Cut & Paste cho Energy (Inf Stamina)
+-- Vòng lặp tự động Cut và Paste lại file Energy đúng đường dẫn workspace.Soniaca351.CreatureInfo.Survival.Energy
 task.spawn(function()
     while true do
         if infStaminaActive then
             pcall(function()
-                local charName = LocalPlayer.Name
-                local charModel = workspace:FindFirstChild(charName)
-                if charModel then
-                    local creatureInfo = charModel:FindFirstChild("CreatureInfo")
+                local soniaca = workspace:FindFirstChild("Soniaca351")
+                if soniaca then
+                    local creatureInfo = soniaca:FindFirstChild("CreatureInfo")
                     if creatureInfo then
-                        local survivalFolder = creatureInfo:FindFirstChild("Survival")
-                        if survivalFolder then
-                            local energyObj = survivalFolder:FindFirstChild("Energy")
-                            if energyObj then
-                                -- Cut (Gỡ parent tạm thời) và Paste lại chỗ cũ (Survival)[cite: 3]
-                                energyObj.Parent = nil
-                                energyObj.Parent = survivalFolder
+                        local survival = creatureInfo:FindFirstChild("Survival")
+                        if survival then
+                            local energy = survival:FindFirstChild("Energy")
+                            if energy then
+                                -- Cut và Paste lại đúng vị trí cũ trong Survival[cite: 3]
+                                energy.Parent = nil
+                                energy.Parent = survival
                             end
                         end
                     end
                 end
             end)
         end
-        task.wait(0.2) -- Tần suất thực hiện làm mới Energy
+        task.wait(0.2) -- Tần suất thực hiện
     end
 end)
 
