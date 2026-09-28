@@ -499,7 +499,7 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
 end)
 
 ----------------------------------------------------------------
--- 1.3 KHUNG QUẢN LÝ ENERGY DUPLICATE (F8) - ĐÃ CẬP NHẬT TỰ ĐỘNG CHẠY KHI BẤM NÚT
+-- 1.3 KHUNG QUẢN LÝ ENERGY DUPLICATE (F8) - GIỮ NGUYÊN TÊN ENERGY
 ----------------------------------------------------------------
 local EnergyManagerFrame = Instance.new("Frame")
 EnergyManagerFrame.Size = UDim2.new(0, 280, 0, 350)
@@ -610,32 +610,25 @@ local function refreshEnergyUI()
     end
 end
 
--- Hàm thực thi duplicate Energy trực tiếp theo yêu cầu của bạn
 local function executeDuplicateEnergy()
     local char = LocalPlayer.Character
     local soniaca = char and char:FindFirstChild("Soniaca351") or workspace:FindFirstChild("Soniaca351")
     local creatureInfo = soniaca and soniaca:FindFirstChild("CreatureInfo")
     local survival = creatureInfo and creatureInfo:FindFirstChild("Survival")
-    local originalEnergy = survival and survival:FindFirstChild("Energy")
+    local energy = survival and survival:FindFirstChild("Energy")
 
-    if originalEnergy and survival then
-        -- 1. Nhân bản (Duplicate) thành một bản sao mới
-        local duplicatedEnergy = originalEnergy:Clone()
-        duplicatedEnergy.Name = "Energy"
-        duplicatedEnergy.Parent = survival
-        
-        -- 2. Xóa đối tượng gốc đi
-        originalEnergy:Destroy()
-        
-        table.insert(clonedEnergyList, duplicatedEnergy)
+    if energy and survival then
+        local clone = energy:Clone()
+        -- Giữ nguyên tên là "Energy" y hệt file gốc
+        clone.Name = "Energy"
+        clone.Parent = survival
+        table.insert(clonedEnergyList, clone)
         refreshEnergyUI()
-        print("⚡ Đã duplicate thành công và xóa file gốc Energy!")
     else
-        print("❌ Không tìm thấy đường dẫn Workspace.Soniaca351.CreatureInfo.Survival.Energy gốc!")
+        print("❌ Không tìm thấy đường dẫn Workspace.Soniaca351.CreatureInfo.Survival.Energy để duplicate!")
     end
 end
 
--- Gắn sự kiện click trực tiếp để chạy lệnh
 DuplicateEnergyBtn.MouseButton1Click:Connect(executeDuplicateEnergy)
 
 -- KHUNG ĐỒNG HỒ TÁCH BIỆT
