@@ -19,7 +19,7 @@ local abilityActive = false
 local killAuraKActive = false 
 local killAuraNoActive = false 
 local killAuraStompActive = false 
-local killAuraQuetzGrabActive = false 
+local killAuraQuetzGrabActive = false -- Trạng thái Kill Aura QuetzGrab mới
 local hitNeckActive = false 
 local closestPlayerName = "" 
 
@@ -37,22 +37,18 @@ local teamSearchFilterText = ""
 local savedCloneCount = 0
 local clonedClientsList = {}
 
--- Biến lưu danh sách các phần Energy đã được duplicate
-local clonedEnergyList = {}
-
--- Bảng lưu trữ phím tắt (Thêm phím F8 cho Duplicate Energy)
+-- Bảng lưu trữ phím tắt (Thêm QuetzGrab với phím N)
 local Keybinds = {
     ToggleMenu = Enum.KeyCode.P,
     ToggleTeamMenu = Enum.KeyCode.F5,
     ToggleMacroMenu = Enum.KeyCode.F6,
     ToggleClientMenu = Enum.KeyCode.F7,
-    ToggleEnergyMenu = Enum.KeyCode.F8,
     ToggleKillAuraQ = Enum.KeyCode.Q,
     ToggleAbilityH = Enum.KeyCode.H,
     ToggleKillAuraK = Enum.KeyCode.K,
     ToggleKillAuraNo = Enum.KeyCode.L,
     ToggleKillAuraStomp = Enum.KeyCode.M,
-    ToggleKillAuraQuetzGrab = Enum.KeyCode.N,
+    ToggleKillAuraQuetzGrab = Enum.KeyCode.N, -- Phím tắt mặc định cho QuetzGrab là N
     ToggleHitNeckJ = Enum.KeyCode.J,
     SelectAll = Enum.KeyCode.T,
 }
@@ -106,7 +102,7 @@ ScreenGui.Name = "PlayerStatsUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
--- KHUNG MENU CHÍNH
+-- KHUNG MENU CHÍNH (Tăng chiều cao lên một chút để chứa các nút mới)
 MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 230, 0, 970)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
@@ -498,139 +494,6 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     end
 end)
 
-----------------------------------------------------------------
--- 1.3 KHUNG QUẢN LÝ ENERGY DUPLICATE (F8) - GIỮ NGUYÊN TÊN ENERGY
-----------------------------------------------------------------
-local EnergyManagerFrame = Instance.new("Frame")
-EnergyManagerFrame.Size = UDim2.new(0, 280, 0, 350)
-EnergyManagerFrame.Position = UDim2.new(0.48, 0, 0.2, 0)
-EnergyManagerFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-EnergyManagerFrame.BorderSizePixel = 0
-EnergyManagerFrame.Active = true
-EnergyManagerFrame.Draggable = true
-EnergyManagerFrame.Visible = false 
-EnergyManagerFrame.Parent = ScreenGui
-
-local EnergyFrameCorner = Instance.new("UICorner")
-EnergyFrameCorner.CornerRadius = UDim.new(0, 8)
-EnergyFrameCorner.Parent = EnergyManagerFrame
-
-local EnergyTitle = Instance.new("TextLabel")
-EnergyTitle.Size = UDim2.new(1, 0, 0, 35)
-EnergyTitle.BackgroundColor3 = Color3.fromRGB(90, 70, 40)
-EnergyTitle.Text = "ENERGY MANAGER [F8]"
-EnergyTitle.TextColor3 = Color3.fromRGB(255, 220, 150)
-EnergyTitle.Font = Enum.Font.SourceSansBold
-EnergyTitle.TextSize = 14
-EnergyTitle.Parent = EnergyManagerFrame
-
-local EnergyTitleCorner = Instance.new("UICorner")
-EnergyTitleCorner.CornerRadius = UDim.new(0, 8)
-EnergyTitleCorner.Parent = EnergyTitle
-
-local DuplicateEnergyBtn = Instance.new("TextButton")
-DuplicateEnergyBtn.Size = UDim2.new(1, -10, 0, 30)
-DuplicateEnergyBtn.Position = UDim2.new(0, 5, 0, 45)
-DuplicateEnergyBtn.BackgroundColor3 = Color3.fromRGB(150, 100, 40)
-DuplicateEnergyBtn.Text = "⚡ DUPLICATE ENERGY"
-DuplicateEnergyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-DuplicateEnergyBtn.Font = Enum.Font.SourceSansBold
-DuplicateEnergyBtn.TextSize = 13
-DuplicateEnergyBtn.Parent = EnergyManagerFrame
-
-local DuplicateEnergyCorner = Instance.new("UICorner")
-DuplicateEnergyCorner.CornerRadius = UDim.new(0, 4)
-DuplicateEnergyCorner.Parent = DuplicateEnergyBtn
-
-local EnergyScrollingFrame = Instance.new("ScrollingFrame")
-EnergyScrollingFrame.Size = UDim2.new(1, -10, 1, -85)
-EnergyScrollingFrame.Position = UDim2.new(0, 5, 0, 80)
-EnergyScrollingFrame.BackgroundTransparency = 1
-EnergyScrollingFrame.BorderSizePixel = 0
-EnergyScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-EnergyScrollingFrame.ScrollBarThickness = 4
-EnergyScrollingFrame.Parent = EnergyManagerFrame
-
-local EnergyUIListLayout = Instance.new("UIListLayout")
-EnergyUIListLayout.Parent = EnergyScrollingFrame
-EnergyUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-EnergyUIListLayout.Padding = UDim.new(0, 5)
-
-EnergyUIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    EnergyScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, EnergyUIListLayout.AbsoluteContentSize.Y)
-end)
-
-local function refreshEnergyUI()
-    for _, child in pairs(EnergyScrollingFrame:GetChildren()) do
-        if child:IsA("Frame") then child:Destroy() end
-    end
-
-    for i, energyObj in ipairs(clonedEnergyList) do
-        if energyObj and energyObj.Parent then
-            local itemFrame = Instance.new("Frame")
-            itemFrame.Size = UDim2.new(1, 0, 0, 30)
-            itemFrame.BackgroundTransparency = 1
-            itemFrame.Parent = EnergyScrollingFrame
-
-            local toggleBtn = Instance.new("TextButton")
-            toggleBtn.Size = UDim2.new(1, -65, 1, 0)
-            toggleBtn.BackgroundColor3 = energyObj.Parent == nil and Color3.fromRGB(100, 50, 50) or Color3.fromRGB(80, 110, 60)
-            toggleBtn.Text = string.format("Energy [%d]", i)
-            toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            toggleBtn.Font = Enum.Font.SourceSansBold
-            toggleBtn.TextSize = 12
-            toggleBtn.Parent = itemFrame
-
-            local toggleCorner = Instance.new("UICorner")
-            toggleCorner.CornerRadius = UDim.new(0, 4)
-            toggleCorner.Parent = toggleBtn
-
-            local delBtn = Instance.new("TextButton")
-            delBtn.Size = UDim2.new(0, 60, 1, 0)
-            delBtn.Position = UDim2.new(1, -60, 0, 0)
-            delBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
-            delBtn.Text = "XÓA"
-            delBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            delBtn.Font = Enum.Font.SourceSansBold
-            delBtn.TextSize = 12
-            delBtn.Parent = itemFrame
-
-            local delCorner = Instance.new("UICorner")
-            delCorner.CornerRadius = UDim.new(0, 4)
-            delCorner.Parent = delBtn
-
-            delBtn.MouseButton1Click:Connect(function()
-                pcall(function()
-                    energyObj:Destroy()
-                end)
-                table.remove(clonedEnergyList, i)
-                refreshEnergyUI()
-            end)
-        end
-    end
-end
-
-local function executeDuplicateEnergy()
-    local char = LocalPlayer.Character
-    local soniaca = char and char:FindFirstChild("Soniaca351") or workspace:FindFirstChild("Soniaca351")
-    local creatureInfo = soniaca and soniaca:FindFirstChild("CreatureInfo")
-    local survival = creatureInfo and creatureInfo:FindFirstChild("Survival")
-    local energy = survival and survival:FindFirstChild("Energy")
-
-    if energy and survival then
-        local clone = energy:Clone()
-        -- Giữ nguyên tên là "Energy" y hệt file gốc
-        clone.Name = "Energy"
-        clone.Parent = survival
-        table.insert(clonedEnergyList, clone)
-        refreshEnergyUI()
-    else
-        print("❌ Không tìm thấy đường dẫn Workspace.Soniaca351.CreatureInfo.Survival.Energy để duplicate!")
-    end
-end
-
-DuplicateEnergyBtn.MouseButton1Click:Connect(executeDuplicateEnergy)
-
 -- KHUNG ĐỒNG HỒ TÁCH BIỆT
 local TimeFrame = Instance.new("Frame")
 TimeFrame.Size = UDim2.new(1, 0, 0, 30)
@@ -749,11 +612,6 @@ ClientMenuBtn.Text = "CLIENT MANAGER [F7]"
 ClientMenuBtn.TextColor3 = Color3.fromRGB(150, 220, 255)
 ClientMenuBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 90)
 
-local EnergyMenuBtn, F8KeyBtn, updateF8Key = createFeatureButton(340, "ENERGY MANAGER", "ToggleEnergyMenu")
-EnergyMenuBtn.Text = "ENERGY MANAGER [F8]"
-EnergyMenuBtn.TextColor3 = Color3.fromRGB(255, 220, 150)
-EnergyMenuBtn.BackgroundColor3 = Color3.fromRGB(110, 80, 40)
-
 local function updateAbilityVisuals()
     if abilityActive then
         AbilityStatusLabel.BackgroundColor3 = Color3.fromRGB(120, 40, 180)
@@ -829,7 +687,7 @@ end
 -- Ô NHẬP SỐ LƯỢNG LỆNH GỌI (BURST COUNT)
 local BurstInputFrame = Instance.new("Frame")
 BurstInputFrame.Size = UDim2.new(1, -10, 0, 35)
-BurstInputFrame.Position = UDim2.new(0, 5, 0, 375)
+BurstInputFrame.Position = UDim2.new(0, 5, 0, 345)
 BurstInputFrame.BackgroundColor3 = Color3.fromRGB(45, 35, 50)
 BurstInputFrame.BorderSizePixel = 0
 BurstInputFrame.Parent = MainFrame
@@ -880,7 +738,7 @@ end)
 -- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 415)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 385)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -930,7 +788,7 @@ end)
 -- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DangerInputFrame.Position = UDim2.new(0, 5, 0, 455)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 425)
 DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DangerInputFrame.BorderSizePixel = 0
 DangerInputFrame.Parent = MainFrame
@@ -980,7 +838,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 495)
+SearchBox.Position = UDim2.new(0, 5, 0, 465)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -999,7 +857,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 525)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 495)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1012,8 +870,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -560)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 555)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -530)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 525)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -1184,7 +1042,7 @@ local function performAttacks()
         end
     end
 
-    -- 5. Kill Aura QuetzGrab
+    -- 5. Kill Aura QuetzGrab (Sử dụng AbilityHit với "QuetzGrab" và Head của mục tiêu)
     if killAuraQuetzGrabActive and (tick() - lastKillAuraQuetzGrabTime >= killAuraQuetzGrabCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -1346,10 +1204,6 @@ ClientMenuBtn.MouseButton1Click:Connect(function()
     ClientManagerFrame.Visible = not ClientManagerFrame.Visible
 end)
 
-EnergyMenuBtn.MouseButton1Click:Connect(function()
-    EnergyManagerFrame.Visible = not EnergyManagerFrame.Visible
-end)
-
 -- Xử lý bàn phím & đổi phím
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -1374,7 +1228,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateF5Key()
                 updateF6Key()
                 updateF7Key()
-                updateF8Key()
             end
             return
         end
@@ -1390,8 +1243,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             MacroFrame.Visible = not MacroFrame.Visible
         elseif input.KeyCode == Keybinds.ToggleClientMenu then
             ClientManagerFrame.Visible = not ClientManagerFrame.Visible
-        elseif input.KeyCode == Keybinds.ToggleEnergyMenu then
-            EnergyManagerFrame.Visible = not EnergyManagerFrame.Visible
         elseif input.KeyCode == Keybinds.SelectAll then
             toggleSelectAll()
         elseif input.KeyCode == Keybinds.ToggleAbilityH then
