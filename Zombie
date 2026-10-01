@@ -21,7 +21,7 @@ local killAuraKActive = false
 local killAuraNoActive = false 
 local killAuraStompActive = false 
 local killAuraQuetzGrabActive = false 
-local killAuraOuchiesActive = false -- Trạng thái Kill Aura C mới
+local killAuraOuchiesActive = false 
 local hitNeckActive = false 
 local closestPlayerName = "" 
 
@@ -39,7 +39,7 @@ local teamSearchFilterText = ""
 local savedCloneCount = 0
 local clonedClientsList = {}
 
--- Bảng lưu trữ phím tắt (Thêm ToggleKillAuraOuchies với phím C)
+-- Bảng lưu trữ phím tắt
 local Keybinds = {
     ToggleMenu = Enum.KeyCode.P,
     ToggleTeamMenu = Enum.KeyCode.F5,
@@ -107,7 +107,7 @@ ScreenGui.Name = "PlayerStatsUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
--- KHUNG MENU CHÍNH (Tăng chiều cao lên để chứa thêm nút mới)
+-- KHUNG MENU CHÍNH
 MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 230, 0, 1000)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
@@ -598,7 +598,6 @@ local KillAuraQuetzGrabStatusLabel, QuetzGrabKeyBtn, updateQuetzGrabKey = create
 KillAuraQuetzGrabStatusLabel.Text = "QUETZGRAB N: OFF"
 KillAuraQuetzGrabStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
--- Thêm nút Kill Aura Ouchies (Phím C)
 local KillAuraOuchiesStatusLabel, OuchiesKeyBtn, updateOuchiesKey = createFeatureButton(220, "KILL AURA C", "ToggleKillAuraOuchies")
 KillAuraOuchiesStatusLabel.Text = "KILL AURA C: OFF"
 KillAuraOuchiesStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
@@ -1090,11 +1089,14 @@ local function performAttacks()
         end
     end
 
-    -- 6. Kill Aura Ouchies (Phím C - Dùng SendOuchies)
+    -- 6. Kill Aura Ouchies (Phím C - Dùng SendOuchies trỏ vào workspace.GameFolder.Humans)
     if killAuraOuchiesActive and (tick() - lastKillAuraOuchiesTime >= killAuraOuchiesCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
-                local targetCharacter = workspace:FindFirstChild(pName)
+                local targetCharacter = workspace:FindFirstChild("GameFolder") 
+                    and workspace.GameFolder:FindFirstChild("Humans") 
+                    and workspace.GameFolder.Humans:FindFirstChild(pName)
+                
                 local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
                 
                 if targetRoot then
@@ -1493,7 +1495,7 @@ task.spawn(function()
                                         txt.TextColor3 = Color3.fromRGB(100, 255, 150)
                                     elseif targets[pName] and intDist <= dangerDetectDistance then
                                         dangerDetected = true
-                                        txt.Text = string.format("[⚠️️ NGUY HIỂM !] %s\n[%d m]", pName, intDist)
+                                        txt.Text = string.format("[⚠ NGUY HIỂM !] %s\n[%d m]", pName, intDist)
                                         txt.TextColor3 = Color3.fromRGB(255, 0, 0)
                                     elseif targets[pName] then
                                         txt.Text = string.format("[🎯 TARGET] %s\n[%d m]", pName, intDist)
