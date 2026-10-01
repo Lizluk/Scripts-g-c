@@ -1,4 +1,4 @@
--- Toàn bộ mã nguồn hoàn chỉnh đã tích hợp tính năng Kill Zombie (Click Chuột Trái):
+-- Toàn bộ mã nguồn hoàn chỉnh đã tích hợp tính năng Kill Zombie (Click hoặc Đè Giữ Chuột Trái bắn liên tục):
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -35,6 +35,9 @@ local burstCount = 1
 local maxDetectDistance = 50     
 local dangerDetectDistance = 100 
 local zombieDamage = 100
+
+-- Biến kiểm tra trạng thái đang đè chuột trái
+local isMouseDown = false
 
 local searchFilterText = ""
 local teamSearchFilterText = ""
@@ -93,7 +96,7 @@ local killAuraBombCooldown = 1.4
 local lastKillAuraBombTime = 0
 local killAuraGasCooldown = 1.4
 local lastKillAuraGasTime = 0
-local killAuraZombieCooldown = 0.1
+local killAuraZombieCooldown = 0.05 -- Tốc độ bắn liên tục khi đè chuột (giây)
 local lastKillAuraZombieTime = 0
 local hitNeckCooldown = 1.4
 local lastHitNeckTime = 0
@@ -1068,7 +1071,7 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- HÀM XỬ LÝ SỰ KIỆN GÂY SÁT THƯƠNG ZOMBIE KHI CLICK CHUỘT TRÁI
+-- HÀM XỬ LÝ SỰ KIỆN GÂY SÁT THƯƠNG ZOMBIE KHI CLICK / ĐÈ CHUỘT TRÁI
 local function performZombieAttack()
     if not killAuraZombieActive then return end
     
@@ -1085,7 +1088,7 @@ local function performZombieAttack()
             workspace:FindFirstChild("Enemies")
         }
         
-        -- Tìm zombie gần nhất trong phạm vi cho phép khi click chuột
+        -- Tìm zombie gần nhất trong phạm vi cho phép
         local closestZombie = nil
         local shortestDist = maxDetectDistance
 
@@ -1113,6 +1116,19 @@ local function performZombieAttack()
         end
     end)
 end
+
+-- Vòng lặp hỗ trợ đè chuột trái bắn liên tục
+task.spawn(function()
+    while true do
+        if isMouseDown and killAuraZombieActive then
+            if tick() - lastKillAuraZombieTime >= killAuraZombieCooldown then
+                performZombieAttack()
+                lastKillAuraZombieTime = tick()
+            end
+        end
+        task.wait(0.01)
+    end
+end)
 
 -- HÀM THỰC THI (CHO CÁC KILL AURA CÒN LẠI)
 local function performAttacks()
@@ -1465,12 +1481,13 @@ ClientMenuBtn.MouseButton1Click:Connect(function()
     ClientManagerFrame.Visible = not ClientManagerFrame.Visible
 end)
 
--- Xử lý bàn phím & chuột trái
+-- Xử lý sự kiện nhấn/giữ chuột trái (InputBegan & InputEnded)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isMouseDown = true
         if not gameProcessed then
             performAttacks()
-            performZombieAttack() -- Gọi lệnh tiêu diệt zombie khi click chuột trái nếu đang bật
+            performZombieAttack() -- Click đơn bình thường ngay lập tức khi nhấn
         end
         return
     end
@@ -1551,6 +1568,12 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
             end
         end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isMouseDown = false
     end
 end)
 
@@ -1815,7 +1838,6 @@ task.spawn(function()
 
             if teamSafeList[pName] then
                 TeamBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 80)
-                TeamBtn.Text = "🛡️ " + pName + " (IN TEAM)" -- Note: Lua uses .. for concatenation
                 TeamBtn.Text = "🛡️ " .. pName .. " (IN TEAM)"
                 TeamBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             else
