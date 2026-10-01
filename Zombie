@@ -1,3 +1,5 @@
+-- Toàn bộ mã nguồn hoàn chỉnh đã tích hợp tính năng Kill Zombie:
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -24,23 +26,30 @@ local killAuraStompActive = false
 local killAuraQuetzGrabActive = false 
 local killAuraOuchiesActive = false 
 local killAuraBombActive = false 
-local killAuraGasActive = false -- Thêm biến trạng thái Khí Gas
+local killAuraGasActive = false 
+local killAuraZombieActive = false -- Biến bật/tắt Kill Zombie
 local hitNeckActive = false 
 local closestPlayerName = "" 
 
--- Biến cấu hình số lượng spam lệnh khi click/gọi (Mặc định là 1)
 local burstCount = 1
-
--- Tách riêng 2 khoảng cách
-local maxDetectDistance = 50     -- Tầm đánh Kill Aura
-local dangerDetectDistance = 100 -- Tầm phát hiện nguy hiểm (ESP & Cảnh báo)
+local maxDetectDistance = 50     
+local dangerDetectDistance = 100 
 
 local searchFilterText = ""
 local teamSearchFilterText = ""
 
--- Biến lưu số lượng Client muốn tự động clone khi hồi sinh
 local savedCloneCount = 0
 local clonedClientsList = {}
+
+-- Cấu hình danh sách loại Zombie được phép tiêu diệt
+local allowedZombieTypes = {
+    ["Zombie"] = true,
+    ["Crawler"] = true,
+    ["Boomer"] = true,
+    ["Hazard"] = true,
+    ["Charger"] = true,
+    ["Tank"] = true,
+}
 
 -- Bảng lưu trữ phím tắt
 local Keybinds = {
@@ -56,14 +65,13 @@ local Keybinds = {
     ToggleKillAuraQuetzGrab = Enum.KeyCode.N,
     ToggleKillAuraOuchies = Enum.KeyCode.C, 
     ToggleKillAuraBomb = Enum.KeyCode.B, 
-    ToggleKillAuraGas = Enum.KeyCode.G, -- Thêm phím G cho Khí Gas
+    ToggleKillAuraGas = Enum.KeyCode.G, 
+    ToggleKillAuraZombie = Enum.KeyCode.V, -- Phím V cho Kill Zombie
     ToggleHitNeckJ = Enum.KeyCode.J,
     SelectAll = Enum.KeyCode.T,
 }
 
 local waitingForKey = nil
-
--- Thời gian khởi chạy Script
 local startTime = os.time()
 
 local attackCooldown = 1.4     
@@ -84,6 +92,8 @@ local killAuraBombCooldown = 1.4
 local lastKillAuraBombTime = 0
 local killAuraGasCooldown = 1.4
 local lastKillAuraGasTime = 0
+local killAuraZombieCooldown = 0.5
+local lastKillAuraZombieTime = 0
 local hitNeckCooldown = 1.4
 local lastHitNeckTime = 0
 local lastDangerSoundTime = 0
@@ -118,7 +128,7 @@ ScreenGui.Parent = guiParent
 
 -- KHUNG MENU CHÍNH
 MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 1060) -- Tăng chiều cao để chứa nút mới
+MainFrame.Size = UDim2.new(0, 230, 0, 1110) -- Mở rộng thêm chiều cao để chứa nút Zombie & Damage Box
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -615,26 +625,30 @@ local KillAuraBombStatusLabel, BombKeyBtn, updateBombKey = createFeatureButton(2
 KillAuraBombStatusLabel.Text = "BOMB B: OFF"
 KillAuraBombStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
--- Thêm nút Khí Gas (Gas G)
 local KillAuraGasStatusLabel, GasKeyBtn, updateGasKey = createFeatureButton(280, "KILL AURA GAS", "ToggleKillAuraGas")
 KillAuraGasStatusLabel.Text = "GAS G: OFF"
 KillAuraGasStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(310, "HITNECK J", "ToggleHitNeckJ")
+-- Thêm nút Kill Zombie V
+local KillAuraZombieStatusLabel, ZombieKeyBtn, updateZombieKey = createFeatureButton(310, "KILL ZOMBIE V", "ToggleKillAuraZombie")
+KillAuraZombieStatusLabel.Text = "ZOMBIE V: OFF"
+KillAuraZombieStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+
+local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(340, "HITNECK J", "ToggleHitNeckJ")
 HitNeckStatusLabel.Text = "HITNECK J: OFF"
 HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(340, "TEAM LIST", "ToggleTeamMenu")
+local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(370, "TEAM LIST", "ToggleTeamMenu")
 TeamMenuBtn.Text = "TEAM LIST"
 TeamMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
 
-local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(370, "CUSTOM MACROS", "ToggleMacroMenu")
+local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(400, "CUSTOM MACROS", "ToggleMacroMenu")
 MacroMenuBtn.Text = "CUSTOM MACROS [F6]"
 MacroMenuBtn.TextColor3 = Color3.fromRGB(220, 150, 255)
 MacroMenuBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
 
-local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(400, "CLIENT MANAGER", "ToggleClientMenu")
+local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(430, "CLIENT MANAGER", "ToggleClientMenu")
 ClientMenuBtn.Text = "CLIENT MANAGER [F7]"
 ClientMenuBtn.TextColor3 = Color3.fromRGB(150, 220, 255)
 ClientMenuBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 90)
@@ -735,6 +749,18 @@ local function updateKillAuraGasVisuals()
     end
 end
 
+local function updateKillAuraZombieVisuals()
+    if killAuraZombieActive then
+        KillAuraZombieStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+        KillAuraZombieStatusLabel.Text = "ZOMBIE V: ACTIVE"
+        KillAuraZombieStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
+    else
+        KillAuraZombieStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        KillAuraZombieStatusLabel.Text = "ZOMBIE V: OFF"
+        KillAuraZombieStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end
+
 local function updateHitNeckVisuals()
     if hitNeckActive then
         HitNeckStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 40, 100)
@@ -750,7 +776,7 @@ end
 -- Ô NHẬP SỐ LƯỢNG LỆNH GỌI (BURST COUNT)
 local BurstInputFrame = Instance.new("Frame")
 BurstInputFrame.Size = UDim2.new(1, -10, 0, 35)
-BurstInputFrame.Position = UDim2.new(0, 5, 0, 435) -- Dịch chuyển vị trí xuống dưới các nút mới
+BurstInputFrame.Position = UDim2.new(0, 5, 0, 465) 
 BurstInputFrame.BackgroundColor3 = Color3.fromRGB(45, 35, 50)
 BurstInputFrame.BorderSizePixel = 0
 BurstInputFrame.Parent = MainFrame
@@ -798,10 +824,60 @@ BurstBox.FocusLost:Connect(function()
     end
 end)
 
+-- Ô TÙY CHỈNH DAMAGE ZOMBIE
+local ZombieDamageFrame = Instance.new("Frame")
+ZombieDamageFrame.Size = UDim2.new(1, -10, 0, 35)
+ZombieDamageFrame.Position = UDim2.new(0, 5, 0, 505)
+ZombieDamageFrame.BackgroundColor3 = Color3.fromRGB(50, 35, 35)
+ZombieDamageFrame.BorderSizePixel = 0
+ZombieDamageFrame.Parent = MainFrame
+
+local ZombieDamageCorner = Instance.new("UICorner")
+ZombieDamageCorner.CornerRadius = UDim.new(0, 4)
+ZombieDamageCorner.Parent = ZombieDamageFrame
+
+local ZombieDamageLabel = Instance.new("TextLabel")
+ZombieDamageLabel.Size = UDim2.new(0, 120, 1, 0)
+ZombieDamageLabel.Position = UDim2.new(0, 5, 0, 0)
+ZombieDamageLabel.BackgroundTransparency = 1
+ZombieDamageLabel.Text = "Zombie Damage:"
+ZombieDamageLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+ZombieDamageLabel.Font = Enum.Font.SourceSansBold
+ZombieDamageLabel.TextSize = 12
+ZombieDamageLabel.TextXAlignment = Enum.TextXAlignment.Left
+ZombieDamageLabel.Parent = ZombieDamageFrame
+
+local ZombieDamageBox = Instance.new("TextBox")
+ZombieDamageBox.Size = UDim2.new(0, 65, 0, 23)
+ZombieDamageBox.Position = UDim2.new(1, -70, 0.5, -11)
+ZombieDamageBox.BackgroundColor3 = Color3.fromRGB(70, 50, 50)
+ZombieDamageBox.BorderSizePixel = 0
+ZombieDamageBox.Text = tostring(zombieDamage)
+ZombieDamageBox.TextColor3 = Color3.fromRGB(255, 150, 150)
+ZombieDamageBox.Font = Enum.Font.SourceSansBold
+ZombieDamageBox.TextSize = 13
+ZombieDamageBox.ClearTextOnFocus = false
+ZombieDamageBox.PlaceholderText = "Damage..."
+ZombieDamageBox.Parent = ZombieDamageFrame
+
+local ZombieBoxCorner = Instance.new("UICorner")
+ZombieBoxCorner.CornerRadius = UDim.new(0, 4)
+ZombieBoxCorner.Parent = ZombieDamageBox
+
+ZombieDamageBox.FocusLost:Connect(function()
+    local number = tonumber(ZombieDamageBox.Text)
+    if number and number >= 0 then
+        zombieDamage = number
+        ZombieDamageBox.Text = tostring(number)
+    else
+        ZombieDamageBox.Text = tostring(zombieDamage)
+    end
+end)
+
 -- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 475)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 545)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -851,7 +927,7 @@ end)
 -- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DangerInputFrame.Position = UDim2.new(0, 5, 0, 515)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 585)
 DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DangerInputFrame.BorderSizePixel = 0
 DangerInputFrame.Parent = MainFrame
@@ -901,7 +977,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 555)
+SearchBox.Position = UDim2.new(0, 5, 0, 625)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -920,7 +996,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 585)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 655)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -933,8 +1009,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -620)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 615)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -690)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 685)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -995,11 +1071,47 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- HÀM THỰC THI (HỖ TRỢ BURST LOOP THEO SỐ LƯỢNG Ô NHẬP)
+-- HÀM THỰC THI (BAO GỒM KILL ZOMBIE VÀ CÁC TÍNH NĂNG CŨ)
 local function performAttacks()
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
+
+    -- 0. Kill Zombie (Phím V - Sử dụng SendOuchies)
+    if killAuraZombieActive and (tick() - lastKillAuraZombieTime >= killAuraZombieCooldown) then
+        pcall(function()
+            local gameFolder = workspace:FindFirstChild("GameFolder")
+            -- Kiểm tra các thư mục chứa Zombie thường thấy trong game
+            local possibleFolders = {
+                gameFolder and gameFolder:FindFirstChild("Zombies"),
+                workspace:FindFirstChild("Zombies"),
+                gameFolder and gameFolder:FindFirstChild("AI"),
+                workspace:FindFirstChild("Enemies")
+            }
+            
+            for _, folder in pairs(possibleFolders) do
+                if folder then
+                    for _, zombie in pairs(folder:GetChildren()) do
+                        if allowedZombieTypes[zombie.Name] then
+                            local zRoot = zombie:FindFirstChild("HumanoidRootPart") or zombie:FindFirstChild("Torso") or zombie:FindFirstChild("Head")
+                            if zRoot then
+                                local dist = (myRoot.Position - zRoot.Position).Magnitude
+                                if dist <= maxDetectDistance then
+                                    if sendOuchiesRemote then
+                                        for i = 1, burstCount do
+                                            sendOuchiesRemote:FireServer(zombie, zombieDamage)
+                                        end
+                                    end
+                                    lastKillAuraZombieTime = tick()
+                                    return
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
 
     -- 1. Kill Aura Q
     if killAuraActive and (tick() - lastAttackTime >= attackCooldown) then
@@ -1131,7 +1243,7 @@ local function performAttacks()
         end
     end
 
-    -- 6. Kill Aura Ouchies (Phím C - Dùng SendOuchies trỏ vào workspace.GameFolder.Humans)
+    -- 6. Kill Aura Ouchies
     if killAuraOuchiesActive and (tick() - lastKillAuraOuchiesTime >= killAuraOuchiesCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -1159,7 +1271,7 @@ local function performAttacks()
         end
     end
 
-    -- 7. Kill Aura Bomb (Phím B - Tự động tìm CFrame của mục tiêu để thả BoomerExplosion)
+    -- 7. Kill Aura Bomb
     if killAuraBombActive and (tick() - lastKillAuraBombTime >= killAuraBombCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -1171,10 +1283,6 @@ local function performAttacks()
                     if currentDist <= maxDetectDistance then
                         pcall(function()
                             local remote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("ServerProjectile") or ReplicatedStorage:FindFirstChild("ServerProjectile")
-                            if not remote then
-                                remote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("ServerProjectile")
-                            end
-                            
                             if remote then
                                 local ohTable1 = {
                                     ["Where"] = targetRoot.CFrame,
@@ -1193,7 +1301,7 @@ local function performAttacks()
         end
     end
 
-    -- 7.1. Kill Aura Gas (Phím G - Tự động tìm CFrame của mục tiêu để thả GasDangerZone)
+    -- 7.1. Kill Aura Gas
     if killAuraGasActive and (tick() - lastKillAuraGasTime >= killAuraGasCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -1205,10 +1313,6 @@ local function performAttacks()
                     if currentDist <= maxDetectDistance then
                         pcall(function()
                             local remote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("ServerProjectile") or ReplicatedStorage:FindFirstChild("ServerProjectile")
-                            if not remote then
-                                remote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("ServerProjectile")
-                            end
-                            
                             if remote then
                                 local ohTableGas = {
                                     ["Where"] = targetRoot.CFrame,
@@ -1252,36 +1356,17 @@ local function performAttacks()
             end
         end
     end
-
-    -- 9. Các Macro Tùy Chỉnh
-    for _, macro in ipairs(CustomMacros) do
-        if macro.Active and (tick() - macro.LastTime >= macro.Cooldown) then
-            for pName, isTargeted in pairs(targets) do
-                if isTargeted and not teamSafeList[pName] then
-                    local targetCharacter = workspace:FindFirstChild(pName)
-                    local targetPart = targetCharacter and (targetCharacter:FindFirstChild(macro.Part) or targetCharacter:FindFirstChild("Head"))
-                    local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-                    
-                    if targetRoot and targetPart then
-                        local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
-                        if currentDist <= maxDetectDistance then
-                            pcall(function()
-                                local remote = ReplicatedStorage:FindFirstChild(macro.RemoteName)
-                                if remote then
-                                    for i = 1, burstCount do
-                                        remote:FireServer(macro.Action, targetPart)
-                                    end
-                                end
-                            end)
-                            macro.LastTime = tick()
-                            break
-                        end
-                    end
-                end
-            end
-        end
-    end
 end
+
+-- Vòng lặp liên tục cho Zombie Kill Aura chạy tự động
+task.spawn(function()
+    while true do
+        if killAuraZombieActive then
+            performAttacks()
+        end
+        task.wait(0.1)
+    end
+end)
 
 -- Vòng lặp Ability Pounce tự động
 task.spawn(function()
@@ -1361,6 +1446,11 @@ KillAuraGasStatusLabel.MouseButton1Click:Connect(function()
     updateKillAuraGasVisuals()
 end)
 
+KillAuraZombieStatusLabel.MouseButton1Click:Connect(function()
+    killAuraZombieActive = not killAuraZombieActive
+    updateKillAuraZombieVisuals()
+end)
+
 HitNeckStatusLabel.MouseButton1Click:Connect(function()
     hitNeckActive = not hitNeckActive
     updateHitNeckVisuals()
@@ -1401,6 +1491,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateOuchiesKey()
                 updateBombKey()
                 updateGasKey()
+                updateZombieKey()
                 updateJKey()
                 updateF5Key()
                 updateF6Key()
@@ -1446,6 +1537,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         elseif input.KeyCode == Keybinds.ToggleKillAuraGas then
             killAuraGasActive = not killAuraGasActive
             updateKillAuraGasVisuals()
+        elseif input.KeyCode == Keybinds.ToggleKillAuraZombie then
+            killAuraZombieActive = not killAuraZombieActive
+            updateKillAuraZombieVisuals()
         elseif input.KeyCode == Keybinds.ToggleHitNeckJ then
             hitNeckActive = not hitNeckActive
             updateHitNeckVisuals()
@@ -1530,7 +1624,6 @@ local function buildButtons()
         if player ~= LocalPlayer then
             local pName = player.Name
 
-            -- Nút Kill List
             local Btn = Instance.new("TextButton")
             Btn.Size = UDim2.new(1, 0, 0, 30)
             Btn.Font = Enum.Font.SourceSansBold
@@ -1549,7 +1642,6 @@ local function buildButtons()
             end)
             buttons[pName] = {Button = Btn}
 
-            -- Nút Team List
             local TeamBtn = Instance.new("TextButton")
             TeamBtn.Size = UDim2.new(1, 0, 0, 30)
             TeamBtn.Font = Enum.Font.SourceSansBold
