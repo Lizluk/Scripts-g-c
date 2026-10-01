@@ -12,6 +12,7 @@ local primaryAttackHitRemote = ReplicatedStorage:FindFirstChild("PrimaryAttackHi
 local abilityHitRemote = ReplicatedStorage:FindFirstChild("AbilityHit")
 local stompHitRemote = ReplicatedStorage:FindFirstChild("StompHit")
 local sendOuchiesRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("SendOuchies") or ReplicatedStorage:FindFirstChild("SendOuchies")
+local serverProjectileRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("ServerProjectile") or ReplicatedStorage:FindFirstChild("ServerProjectile")
 
 local targets = {} 
 local teamSafeList = {} 
@@ -22,10 +23,11 @@ local killAuraNoActive = false
 local killAuraStompActive = false 
 local killAuraQuetzGrabActive = false 
 local killAuraOuchiesActive = false 
+local killAuraBombActive = false -- Trạng thái Bom
 local hitNeckActive = false 
 local closestPlayerName = "" 
 
--- Biến cấu hình số lần spam lệnh khi click/gọi (Mặc định là 1)
+-- Biến cấu hình số lượng spam lệnh khi click/gọi (Mặc định là 1)
 local burstCount = 1
 
 -- Tách riêng 2 khoảng cách
@@ -51,7 +53,8 @@ local Keybinds = {
     ToggleKillAuraNo = Enum.KeyCode.L,
     ToggleKillAuraStomp = Enum.KeyCode.M,
     ToggleKillAuraQuetzGrab = Enum.KeyCode.N,
-    ToggleKillAuraOuchies = Enum.KeyCode.C, -- Phím tắt mặc định cho Kill Aura C là C
+    ToggleKillAuraOuchies = Enum.KeyCode.C, 
+    ToggleKillAuraBomb = Enum.KeyCode.B, -- Phím tắt cho ném bom
     ToggleHitNeckJ = Enum.KeyCode.J,
     SelectAll = Enum.KeyCode.T,
 }
@@ -75,6 +78,8 @@ local killAuraQuetzGrabCooldown = 1.4
 local lastKillAuraQuetzGrabTime = 0
 local killAuraOuchiesCooldown = 1.4
 local lastKillAuraOuchiesTime = 0
+local killAuraBombCooldown = 1.4
+local lastKillAuraBombTime = 0
 local hitNeckCooldown = 1.4
 local lastHitNeckTime = 0
 local lastDangerSoundTime = 0
@@ -109,7 +114,7 @@ ScreenGui.Parent = guiParent
 
 -- KHUNG MENU CHÍNH
 MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 1000)
+MainFrame.Size = UDim2.new(0, 230, 0, 1030)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -602,21 +607,25 @@ local KillAuraOuchiesStatusLabel, OuchiesKeyBtn, updateOuchiesKey = createFeatur
 KillAuraOuchiesStatusLabel.Text = "KILL AURA C: OFF"
 KillAuraOuchiesStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(250, "HITNECK J", "ToggleHitNeckJ")
+local KillAuraBombStatusLabel, BombKeyBtn, updateBombKey = createFeatureButton(250, "KILL AURA BOMB", "ToggleKillAuraBomb")
+KillAuraBombStatusLabel.Text = "BOMB B: OFF"
+KillAuraBombStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+
+local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(280, "HITNECK J", "ToggleHitNeckJ")
 HitNeckStatusLabel.Text = "HITNECK J: OFF"
 HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(280, "TEAM LIST", "ToggleTeamMenu")
+local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(310, "TEAM LIST", "ToggleTeamMenu")
 TeamMenuBtn.Text = "TEAM LIST"
 TeamMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
 
-local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(310, "CUSTOM MACROS", "ToggleMacroMenu")
+local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(340, "CUSTOM MACROS", "ToggleMacroMenu")
 MacroMenuBtn.Text = "CUSTOM MACROS [F6]"
 MacroMenuBtn.TextColor3 = Color3.fromRGB(220, 150, 255)
 MacroMenuBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
 
-local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(340, "CLIENT MANAGER", "ToggleClientMenu")
+local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(370, "CLIENT MANAGER", "ToggleClientMenu")
 ClientMenuBtn.Text = "CLIENT MANAGER [F7]"
 ClientMenuBtn.TextColor3 = Color3.fromRGB(150, 220, 255)
 ClientMenuBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 90)
@@ -693,6 +702,18 @@ local function updateKillAuraOuchiesVisuals()
     end
 end
 
+local function updateKillAuraBombVisuals()
+    if killAuraBombActive then
+        KillAuraBombStatusLabel.BackgroundColor3 = Color3.fromRGB(200, 100, 50)
+        KillAuraBombStatusLabel.Text = "BOMB B: ACTIVE"
+        KillAuraBombStatusLabel.TextColor3 = Color3.fromRGB(255, 220, 150)
+    else
+        KillAuraBombStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        KillAuraBombStatusLabel.Text = "BOMB B: OFF"
+        KillAuraBombStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end
+
 local function updateHitNeckVisuals()
     if hitNeckActive then
         HitNeckStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 40, 100)
@@ -708,7 +729,7 @@ end
 -- Ô NHẬP SỐ LƯỢNG LỆNH GỌI (BURST COUNT)
 local BurstInputFrame = Instance.new("Frame")
 BurstInputFrame.Size = UDim2.new(1, -10, 0, 35)
-BurstInputFrame.Position = UDim2.new(0, 5, 0, 375)
+BurstInputFrame.Position = UDim2.new(0, 5, 0, 405)
 BurstInputFrame.BackgroundColor3 = Color3.fromRGB(45, 35, 50)
 BurstInputFrame.BorderSizePixel = 0
 BurstInputFrame.Parent = MainFrame
@@ -759,7 +780,7 @@ end)
 -- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 415)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 445)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -809,7 +830,7 @@ end)
 -- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DangerInputFrame.Position = UDim2.new(0, 5, 0, 455)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 485)
 DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DangerInputFrame.BorderSizePixel = 0
 DangerInputFrame.Parent = MainFrame
@@ -859,7 +880,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 495)
+SearchBox.Position = UDim2.new(0, 5, 0, 525)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -878,7 +899,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 525)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 555)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -891,8 +912,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -560)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 555)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -590)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 585)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -1117,7 +1138,36 @@ local function performAttacks()
         end
     end
 
-    -- 7. Kill Aura HitNeck
+    -- 7. Kill Aura Bomb (Phím B - Tự động tìm CFrame của mục tiêu để thả BoomerExplosion)
+    if killAuraBombActive and (tick() - lastKillAuraBombTime >= killAuraBombCooldown) then
+        for pName, isTargeted in pairs(targets) do
+            if isTargeted and not teamSafeList[pName] then
+                local targetCharacter = workspace:FindFirstChild(pName)
+                local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot then
+                    local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                    if currentDist <= maxDetectDistance then
+                        pcall(function()
+                            if serverProjectileRemote then
+                                local ohTable1 = {
+                                    ["Where"] = targetRoot.CFrame,
+                                    ["Projectile"] = "BoomerExplosion"
+                                }
+                                for i = 1, burstCount do
+                                    serverProjectileRemote:FireServer(ohTable1)
+                                end
+                            end
+                        end)
+                        lastKillAuraBombTime = tick()
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    -- 8. Kill Aura HitNeck
     if hitNeckActive and (tick() - lastHitNeckTime >= hitNeckCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -1143,7 +1193,7 @@ local function performAttacks()
         end
     end
 
-    -- 8. Các Macro Tùy Chỉnh
+    -- 9. Các Macro Tùy Chỉnh
     for _, macro in ipairs(CustomMacros) do
         if macro.Active and (tick() - macro.LastTime >= macro.Cooldown) then
             for pName, isTargeted in pairs(targets) do
@@ -1241,6 +1291,11 @@ KillAuraOuchiesStatusLabel.MouseButton1Click:Connect(function()
     updateKillAuraOuchiesVisuals()
 end)
 
+KillAuraBombStatusLabel.MouseButton1Click:Connect(function()
+    killAuraBombActive = not killAuraBombActive
+    updateKillAuraBombVisuals()
+end)
+
 HitNeckStatusLabel.MouseButton1Click:Connect(function()
     hitNeckActive = not hitNeckActive
     updateHitNeckVisuals()
@@ -1279,6 +1334,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateStompKey()
                 updateQuetzGrabKey()
                 updateOuchiesKey()
+                updateBombKey()
                 updateJKey()
                 updateF5Key()
                 updateF6Key()
@@ -1318,6 +1374,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         elseif input.KeyCode == Keybinds.ToggleKillAuraOuchies then
             killAuraOuchiesActive = not killAuraOuchiesActive
             updateKillAuraOuchiesVisuals()
+        elseif input.KeyCode == Keybinds.ToggleKillAuraBomb then
+            killAuraBombActive = not killAuraBombActive
+            updateKillAuraBombVisuals()
         elseif input.KeyCode == Keybinds.ToggleHitNeckJ then
             hitNeckActive = not hitNeckActive
             updateHitNeckVisuals()
