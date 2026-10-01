@@ -24,6 +24,7 @@ local killAuraStompActive = false
 local killAuraQuetzGrabActive = false 
 local killAuraOuchiesActive = false 
 local killAuraBombActive = false 
+local killAuraGasActive = false -- Thêm biến trạng thái Khí Gas
 local hitNeckActive = false 
 local closestPlayerName = "" 
 
@@ -55,6 +56,7 @@ local Keybinds = {
     ToggleKillAuraQuetzGrab = Enum.KeyCode.N,
     ToggleKillAuraOuchies = Enum.KeyCode.C, 
     ToggleKillAuraBomb = Enum.KeyCode.B, 
+    ToggleKillAuraGas = Enum.KeyCode.G, -- Thêm phím G cho Khí Gas
     ToggleHitNeckJ = Enum.KeyCode.J,
     SelectAll = Enum.KeyCode.T,
 }
@@ -80,6 +82,8 @@ local killAuraOuchiesCooldown = 1.4
 local lastKillAuraOuchiesTime = 0
 local killAuraBombCooldown = 1.4
 local lastKillAuraBombTime = 0
+local killAuraGasCooldown = 1.4
+local lastKillAuraGasTime = 0
 local hitNeckCooldown = 1.4
 local lastHitNeckTime = 0
 local lastDangerSoundTime = 0
@@ -114,7 +118,7 @@ ScreenGui.Parent = guiParent
 
 -- KHUNG MENU CHÍNH
 MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 1030)
+MainFrame.Size = UDim2.new(0, 230, 0, 1060) -- Tăng chiều cao để chứa nút mới
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -611,21 +615,26 @@ local KillAuraBombStatusLabel, BombKeyBtn, updateBombKey = createFeatureButton(2
 KillAuraBombStatusLabel.Text = "BOMB B: OFF"
 KillAuraBombStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(280, "HITNECK J", "ToggleHitNeckJ")
+-- Thêm nút Khí Gas (Gas G)
+local KillAuraGasStatusLabel, GasKeyBtn, updateGasKey = createFeatureButton(280, "KILL AURA GAS", "ToggleKillAuraGas")
+KillAuraGasStatusLabel.Text = "GAS G: OFF"
+KillAuraGasStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+
+local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(310, "HITNECK J", "ToggleHitNeckJ")
 HitNeckStatusLabel.Text = "HITNECK J: OFF"
 HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(310, "TEAM LIST", "ToggleTeamMenu")
+local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(340, "TEAM LIST", "ToggleTeamMenu")
 TeamMenuBtn.Text = "TEAM LIST"
 TeamMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 TeamMenuBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 70)
 
-local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(340, "CUSTOM MACROS", "ToggleMacroMenu")
+local MacroMenuBtn, F6KeyBtn, updateF6Key = createFeatureButton(370, "CUSTOM MACROS", "ToggleMacroMenu")
 MacroMenuBtn.Text = "CUSTOM MACROS [F6]"
 MacroMenuBtn.TextColor3 = Color3.fromRGB(220, 150, 255)
 MacroMenuBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
 
-local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(370, "CLIENT MANAGER", "ToggleClientMenu")
+local ClientMenuBtn, F7KeyBtn, updateF7Key = createFeatureButton(400, "CLIENT MANAGER", "ToggleClientMenu")
 ClientMenuBtn.Text = "CLIENT MANAGER [F7]"
 ClientMenuBtn.TextColor3 = Color3.fromRGB(150, 220, 255)
 ClientMenuBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 90)
@@ -714,6 +723,18 @@ local function updateKillAuraBombVisuals()
     end
 end
 
+local function updateKillAuraGasVisuals()
+    if killAuraGasActive then
+        KillAuraGasStatusLabel.BackgroundColor3 = Color3.fromRGB(50, 180, 100)
+        KillAuraGasStatusLabel.Text = "GAS G: ACTIVE"
+        KillAuraGasStatusLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
+    else
+        KillAuraGasStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        KillAuraGasStatusLabel.Text = "GAS G: OFF"
+        KillAuraGasStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    end
+end
+
 local function updateHitNeckVisuals()
     if hitNeckActive then
         HitNeckStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 40, 100)
@@ -729,7 +750,7 @@ end
 -- Ô NHẬP SỐ LƯỢNG LỆNH GỌI (BURST COUNT)
 local BurstInputFrame = Instance.new("Frame")
 BurstInputFrame.Size = UDim2.new(1, -10, 0, 35)
-BurstInputFrame.Position = UDim2.new(0, 5, 0, 405)
+BurstInputFrame.Position = UDim2.new(0, 5, 0, 435) -- Dịch chuyển vị trí xuống dưới các nút mới
 BurstInputFrame.BackgroundColor3 = Color3.fromRGB(45, 35, 50)
 BurstInputFrame.BorderSizePixel = 0
 BurstInputFrame.Parent = MainFrame
@@ -780,7 +801,7 @@ end)
 -- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DistanceInputFrame.Position = UDim2.new(0, 5, 0, 445)
+DistanceInputFrame.Position = UDim2.new(0, 5, 0, 475)
 DistanceInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DistanceInputFrame.BorderSizePixel = 0
 DistanceInputFrame.Parent = MainFrame
@@ -830,7 +851,7 @@ end)
 -- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DangerInputFrame.Position = UDim2.new(0, 5, 0, 485)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 515)
 DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DangerInputFrame.BorderSizePixel = 0
 DangerInputFrame.Parent = MainFrame
@@ -880,7 +901,7 @@ end)
 -- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 525)
+SearchBox.Position = UDim2.new(0, 5, 0, 555)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -899,7 +920,7 @@ SearchCorner.Parent = SearchBox
 -- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 555)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 585)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -912,8 +933,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -590)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 585)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -620)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 615)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -1172,6 +1193,40 @@ local function performAttacks()
         end
     end
 
+    -- 7.1. Kill Aura Gas (Phím G - Tự động tìm CFrame của mục tiêu để thả GasDangerZone)
+    if killAuraGasActive and (tick() - lastKillAuraGasTime >= killAuraGasCooldown) then
+        for pName, isTargeted in pairs(targets) do
+            if isTargeted and not teamSafeList[pName] then
+                local targetCharacter = workspace:FindFirstChild(pName) or (workspace:FindFirstChild("GameFolder") and workspace.GameFolder:FindFirstChild("Humans") and workspace.GameFolder.Humans:FindFirstChild(pName))
+                local targetRoot = targetCharacter and (targetCharacter:FindFirstChild("HumanoidRootPart") or targetCharacter:FindFirstChild("Torso") or targetCharacter:FindFirstChild("Head"))
+                
+                if targetRoot then
+                    local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
+                    if currentDist <= maxDetectDistance then
+                        pcall(function()
+                            local remote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("ServerProjectile") or ReplicatedStorage:FindFirstChild("ServerProjectile")
+                            if not remote then
+                                remote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("ServerProjectile")
+                            end
+                            
+                            if remote then
+                                local ohTableGas = {
+                                    ["Where"] = targetRoot.CFrame,
+                                    ["Projectile"] = "GasDangerZone"
+                                }
+                                for i = 1, burstCount do
+                                    remote:FireServer(ohTableGas)
+                                end
+                            end
+                        end)
+                        lastKillAuraGasTime = tick()
+                        break
+                    end
+                end
+            end
+        end
+    end
+
     -- 8. Kill Aura HitNeck
     if hitNeckActive and (tick() - lastHitNeckTime >= hitNeckCooldown) then
         for pName, isTargeted in pairs(targets) do
@@ -1301,6 +1356,11 @@ KillAuraBombStatusLabel.MouseButton1Click:Connect(function()
     updateKillAuraBombVisuals()
 end)
 
+KillAuraGasStatusLabel.MouseButton1Click:Connect(function()
+    killAuraGasActive = not killAuraGasActive
+    updateKillAuraGasVisuals()
+end)
+
 HitNeckStatusLabel.MouseButton1Click:Connect(function()
     hitNeckActive = not hitNeckActive
     updateHitNeckVisuals()
@@ -1340,6 +1400,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateQuetzGrabKey()
                 updateOuchiesKey()
                 updateBombKey()
+                updateGasKey()
                 updateJKey()
                 updateF5Key()
                 updateF6Key()
@@ -1382,6 +1443,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         elseif input.KeyCode == Keybinds.ToggleKillAuraBomb then
             killAuraBombActive = not killAuraBombActive
             updateKillAuraBombVisuals()
+        elseif input.KeyCode == Keybinds.ToggleKillAuraGas then
+            killAuraGasActive = not killAuraGasActive
+            updateKillAuraGasVisuals()
         elseif input.KeyCode == Keybinds.ToggleHitNeckJ then
             hitNeckActive = not hitNeckActive
             updateHitNeckVisuals()
