@@ -23,7 +23,7 @@ local killAuraNoActive = false
 local killAuraStompActive = false 
 local killAuraQuetzGrabActive = false 
 local killAuraOuchiesActive = false 
-local killAuraBombActive = false -- Trạng thái Bom
+local killAuraBombActive = false 
 local hitNeckActive = false 
 local closestPlayerName = "" 
 
@@ -54,7 +54,7 @@ local Keybinds = {
     ToggleKillAuraStomp = Enum.KeyCode.M,
     ToggleKillAuraQuetzGrab = Enum.KeyCode.N,
     ToggleKillAuraOuchies = Enum.KeyCode.C, 
-    ToggleKillAuraBomb = Enum.KeyCode.B, -- Phím tắt cho ném bom
+    ToggleKillAuraBomb = Enum.KeyCode.B, 
     ToggleHitNeckJ = Enum.KeyCode.J,
     SelectAll = Enum.KeyCode.T,
 }
@@ -1142,20 +1142,25 @@ local function performAttacks()
     if killAuraBombActive and (tick() - lastKillAuraBombTime >= killAuraBombCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
-                local targetCharacter = workspace:FindFirstChild(pName)
-                local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+                local targetCharacter = workspace:FindFirstChild(pName) or (workspace:FindFirstChild("GameFolder") and workspace.GameFolder:FindFirstChild("Humans") and workspace.GameFolder.Humans:FindFirstChild(pName))
+                local targetRoot = targetCharacter and (targetCharacter:FindFirstChild("HumanoidRootPart") or targetCharacter:FindFirstChild("Torso") or targetCharacter:FindFirstChild("Head"))
                 
                 if targetRoot then
                     local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
                     if currentDist <= maxDetectDistance then
                         pcall(function()
-                            if serverProjectileRemote then
+                            local remote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("ServerProjectile") or ReplicatedStorage:FindFirstChild("ServerProjectile")
+                            if not remote then
+                                remote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("ServerProjectile")
+                            end
+                            
+                            if remote then
                                 local ohTable1 = {
                                     ["Where"] = targetRoot.CFrame,
                                     ["Projectile"] = "BoomerExplosion"
                                 }
                                 for i = 1, burstCount do
-                                    serverProjectileRemote:FireServer(ohTable1)
+                                    remote:FireServer(ohTable1)
                                 end
                             end
                         end)
