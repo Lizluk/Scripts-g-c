@@ -1,4 +1,4 @@
--- Toàn bộ mã nguồn hoàn chỉnh đã tích hợp tính năng Kill Zombie:
+-- Toàn bộ mã nguồn hoàn chỉnh đã tích hợp tính năng Kill Zombie (Click Chuột Trái):
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -27,13 +27,14 @@ local killAuraQuetzGrabActive = false
 local killAuraOuchiesActive = false 
 local killAuraBombActive = false 
 local killAuraGasActive = false 
-local killAuraZombieActive = false -- Biến bật/tắt Kill Zombie
+local killAuraZombieActive = false -- Biến bật/tắt Kill Zombie qua chuột trái
 local hitNeckActive = false 
 local closestPlayerName = "" 
 
 local burstCount = 1
 local maxDetectDistance = 50     
 local dangerDetectDistance = 100 
+local zombieDamage = 100
 
 local searchFilterText = ""
 local teamSearchFilterText = ""
@@ -66,7 +67,7 @@ local Keybinds = {
     ToggleKillAuraOuchies = Enum.KeyCode.C, 
     ToggleKillAuraBomb = Enum.KeyCode.B, 
     ToggleKillAuraGas = Enum.KeyCode.G, 
-    ToggleKillAuraZombie = Enum.KeyCode.V, -- Phím V cho Kill Zombie
+    ToggleKillAuraZombie = Enum.KeyCode.V, -- Phím V chuyển đổi trạng thái Kill Zombie
     ToggleHitNeckJ = Enum.KeyCode.J,
     SelectAll = Enum.KeyCode.T,
 }
@@ -92,7 +93,7 @@ local killAuraBombCooldown = 1.4
 local lastKillAuraBombTime = 0
 local killAuraGasCooldown = 1.4
 local lastKillAuraGasTime = 0
-local killAuraZombieCooldown = 0.5
+local killAuraZombieCooldown = 0.1
 local lastKillAuraZombieTime = 0
 local hitNeckCooldown = 1.4
 local lastHitNeckTime = 0
@@ -128,7 +129,7 @@ ScreenGui.Parent = guiParent
 
 -- KHUNG MENU CHÍNH
 MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 1110) -- Mở rộng thêm chiều cao để chứa nút Zombie & Damage Box
+MainFrame.Size = UDim2.new(0, 230, 0, 1110)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -369,9 +370,7 @@ AddMacroBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-----------------------------------------------------------------
--- 1.2 KHUNG QUẢN LÝ CLIENT CLONE (F7) & AUTO RE-DUPLICATE
-----------------------------------------------------------------
+-- KHUNG QUẢN LÝ CLIENT CLONE (F7)
 local ClientManagerFrame = Instance.new("Frame")
 ClientManagerFrame.Size = UDim2.new(0, 280, 0, 400)
 ClientManagerFrame.Position = UDim2.new(0.24, 0, 0.7, 0)
@@ -503,8 +502,6 @@ local function executeDuplicate()
             table.insert(clonedClientsList, clone)
         end
         refreshClonedUI()
-    else
-        print("❌ Không tìm thấy object 'Client' để duplicate!")
     end
 end
 
@@ -629,7 +626,7 @@ local KillAuraGasStatusLabel, GasKeyBtn, updateGasKey = createFeatureButton(280,
 KillAuraGasStatusLabel.Text = "GAS G: OFF"
 KillAuraGasStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
--- Thêm nút Kill Zombie V
+-- Nút Kill Zombie V (Click chuột trái để kích hoạt khi bật)
 local KillAuraZombieStatusLabel, ZombieKeyBtn, updateZombieKey = createFeatureButton(310, "KILL ZOMBIE V", "ToggleKillAuraZombie")
 KillAuraZombieStatusLabel.Text = "ZOMBIE V: OFF"
 KillAuraZombieStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
@@ -1071,47 +1068,57 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- HÀM THỰC THI (BAO GỒM KILL ZOMBIE VÀ CÁC TÍNH NĂNG CŨ)
-local function performAttacks()
+-- HÀM XỬ LÝ SỰ KIỆN GÂY SÁT THƯƠNG ZOMBIE KHI CLICK CHUỘT TRÁI
+local function performZombieAttack()
+    if not killAuraZombieActive then return end
+    
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
 
-    -- 0. Kill Zombie (Phím V - Sử dụng SendOuchies)
-    if killAuraZombieActive and (tick() - lastKillAuraZombieTime >= killAuraZombieCooldown) then
-        pcall(function()
-            local gameFolder = workspace:FindFirstChild("GameFolder")
-            -- Kiểm tra các thư mục chứa Zombie thường thấy trong game
-            local possibleFolders = {
-                gameFolder and gameFolder:FindFirstChild("Zombies"),
-                workspace:FindFirstChild("Zombies"),
-                gameFolder and gameFolder:FindFirstChild("AI"),
-                workspace:FindFirstChild("Enemies")
-            }
-            
-            for _, folder in pairs(possibleFolders) do
-                if folder then
-                    for _, zombie in pairs(folder:GetChildren()) do
-                        if allowedZombieTypes[zombie.Name] then
-                            local zRoot = zombie:FindFirstChild("HumanoidRootPart") or zombie:FindFirstChild("Torso") or zombie:FindFirstChild("Head")
-                            if zRoot then
-                                local dist = (myRoot.Position - zRoot.Position).Magnitude
-                                if dist <= maxDetectDistance then
-                                    if sendOuchiesRemote then
-                                        for i = 1, burstCount do
-                                            sendOuchiesRemote:FireServer(zombie, zombieDamage)
-                                        end
-                                    end
-                                    lastKillAuraZombieTime = tick()
-                                    return
-                                end
+    pcall(function()
+        local gameFolder = workspace:FindFirstChild("GameFolder")
+        local possibleFolders = {
+            gameFolder and gameFolder:FindFirstChild("Zombies"),
+            workspace:FindFirstChild("Zombies"),
+            gameFolder and gameFolder:FindFirstChild("AI"),
+            workspace:FindFirstChild("Enemies")
+        }
+        
+        -- Tìm zombie gần nhất trong phạm vi cho phép khi click chuột
+        local closestZombie = nil
+        local shortestDist = maxDetectDistance
+
+        for _, folder in pairs(possibleFolders) do
+            if folder then
+                for _, zombie in pairs(folder:GetChildren()) do
+                    if allowedZombieTypes[zombie.Name] then
+                        local zRoot = zombie:FindFirstChild("HumanoidRootPart") or zombie:FindFirstChild("Torso") or zombie:FindFirstChild("Head")
+                        if zRoot then
+                            local dist = (myRoot.Position - zRoot.Position).Magnitude
+                            if dist <= shortestDist then
+                                shortestDist = dist
+                                closestZombie = zombie
                             end
                         end
                     end
                 end
             end
-        end)
-    end
+        end
+
+        if closestZombie and sendOuchiesRemote then
+            for i = 1, burstCount do
+                sendOuchiesRemote:FireServer(closestZombie, zombieDamage)
+            end
+        end
+    end)
+end
+
+-- HÀM THỰC THI (CHO CÁC KILL AURA CÒN LẠI)
+local function performAttacks()
+    local myCharacter = LocalPlayer.Character
+    local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
 
     -- 1. Kill Aura Q
     if killAuraActive and (tick() - lastAttackTime >= attackCooldown) then
@@ -1358,16 +1365,6 @@ local function performAttacks()
     end
 end
 
--- Vòng lặp liên tục cho Zombie Kill Aura chạy tự động
-task.spawn(function()
-    while true do
-        if killAuraZombieActive then
-            performAttacks()
-        end
-        task.wait(0.1)
-    end
-end)
-
 -- Vòng lặp Ability Pounce tự động
 task.spawn(function()
     while true do
@@ -1468,11 +1465,12 @@ ClientMenuBtn.MouseButton1Click:Connect(function()
     ClientManagerFrame.Visible = not ClientManagerFrame.Visible
 end)
 
--- Xử lý bàn phím & đổi phím
+-- Xử lý bàn phím & chuột trái
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         if not gameProcessed then
             performAttacks()
+            performZombieAttack() -- Gọi lệnh tiêu diệt zombie khi click chuột trái nếu đang bật
         end
         return
     end
@@ -1817,6 +1815,7 @@ task.spawn(function()
 
             if teamSafeList[pName] then
                 TeamBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 80)
+                TeamBtn.Text = "🛡️ " + pName + " (IN TEAM)" -- Note: Lua uses .. for concatenation
                 TeamBtn.Text = "🛡️ " .. pName .. " (IN TEAM)"
                 TeamBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             else
