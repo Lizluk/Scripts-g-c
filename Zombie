@@ -1,4 +1,4 @@
--- Toàn bộ mã nguồn hoàn chỉnh đã tích hợp MedkitHeal, ApplyVest, DroppableMedkit và Kill Zombie:
+-- Toàn bộ mã nguồn hoàn chỉnh đã sửa lỗi Remote SendCharacterEffect cho Heal Self (Z) và Apply Vest (U):
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -9,7 +9,7 @@ local SoundService = game:GetService("SoundService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Remote mặc định
+-- Remote mặc định và Sửa lỗi đường dẫn SendCharacterEffect
 local primaryAttackHitRemote = ReplicatedStorage:FindFirstChild("PrimaryAttackHit")
 local abilityHitRemote = ReplicatedStorage:FindFirstChild("AbilityHit")
 local stompHitRemote = ReplicatedStorage:FindFirstChild("StompHit")
@@ -137,7 +137,7 @@ ScreenGui.Name = "PlayerStatsUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
--- KHUNG MENU CHÍNH (Đã tăng chiều cao để chứa nút Hồi Máu & Mặc Giáp)
+-- KHUNG MENU CHÍNH
 MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 230, 0, 1200)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
@@ -807,23 +807,27 @@ local function updateHitNeckVisuals()
     end
 end
 
--- Hàm kích hoạt Hồi Máu
+-- Hàm kích hoạt Hồi Máu (Đã cấu hình đúng chuẩn lệnh của bạn)
 local function triggerHealSelf()
     pcall(function()
-        if sendCharacterEffectRemote then
+        local remote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("SendCharacterEffect") 
+            or ReplicatedStorage:FindFirstChild("SendCharacterEffect")
+        if remote then
             for i = 1, burstCount do
-                sendCharacterEffectRemote:FireServer(math.huge, "MedkitHeal")
+                remote:FireServer(math.huge, "MedkitHeal")
             end
         end
     end)
 end
 
--- Hàm kích hoạt Mặc Giáp
+-- Hàm kích hoạt Mặc Giáp (Đã cấu hình đúng chuẩn lệnh của bạn)
 local function triggerVestSelf()
     pcall(function()
-        if sendCharacterEffectRemote then
+        local remote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("SendCharacterEffect") 
+            or ReplicatedStorage:FindFirstChild("SendCharacterEffect")
+        if remote then
             for i = 1, burstCount do
-                sendCharacterEffectRemote:FireServer(math.huge, "ApplyVest")
+                remote:FireServer(math.huge, "ApplyVest")
             end
         end
     end)
