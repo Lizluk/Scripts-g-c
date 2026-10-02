@@ -1,4 +1,4 @@
--- Toàn bộ mã nguồn hoàn chỉnh: Đã tách riêng MedkitHeal và ApplyVest thành 2 nút và 2 phím tắt độc lập
+-- Toàn bộ mã nguồn hoàn chỉnh đã tích hợp MedkitHeal, ApplyVest, DroppableMedkit và Kill Zombie:
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -30,8 +30,6 @@ local killAuraBombActive = false
 local killAuraGasActive = false 
 local killAuraMedkitActive = false 
 local killAuraZombieActive = false 
-local medkitHealActive = false -- Biến bật/tắt riêng MedkitHeal
-local applyVestActive = false   -- Biến bật/tắt riêng ApplyVest
 local hitNeckActive = false 
 local closestPlayerName = "" 
 
@@ -74,11 +72,11 @@ local Keybinds = {
     ToggleKillAuraOuchies = Enum.KeyCode.C, 
     ToggleKillAuraBomb = Enum.KeyCode.B, 
     ToggleKillAuraGas = Enum.KeyCode.G, 
-    ToggleKillAuraMedkitDrop = Enum.KeyCode.X, 
+    ToggleKillAuraMedkit = Enum.KeyCode.X, 
     ToggleKillAuraZombie = Enum.KeyCode.V,
-    ToggleMedkitHealZ = Enum.KeyCode.Z, -- Phím Z cho Hồi máu
-    ToggleApplyVestX = Enum.KeyCode.V, -- Phím X tạm thời cho Mặc giáp (hoặc tùy chỉnh)
     ToggleHitNeckJ = Enum.KeyCode.J,
+    HealSelf = Enum.KeyCode.Z, -- Phím tắt tự hồi máu
+    VestSelf = Enum.KeyCode.U, -- Phím tắt tự mặc giáp
     SelectAll = Enum.KeyCode.T,
 }
 
@@ -103,14 +101,10 @@ local killAuraBombCooldown = 1.4
 local lastKillAuraBombTime = 0
 local killAuraGasCooldown = 1.4
 local lastKillAuraGasTime = 0
-local killAuraMedkitTime = 1.4
+local killAuraMedkitCooldown = 1.4
 local lastKillAuraMedkitTime = 0
 local killAuraZombieCooldown = 0.05
 local lastKillAuraZombieTime = 0
-local medkitHealCooldown = 1.0
-local lastMedkitHealTime = 0
-local applyVestCooldown = 1.0
-local lastApplyVestTime = 0
 local hitNeckCooldown = 1.4
 local lastHitNeckTime = 0
 local lastDangerSoundTime = 0
@@ -143,7 +137,7 @@ ScreenGui.Name = "PlayerStatsUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
--- KHUNG MENU CHÍNH (Tăng chiều cao để chứa thêm nút riêng biệt)
+-- KHUNG MENU CHÍNH (Đã tăng chiều cao để chứa nút Hồi Máu & Mặc Giáp)
 MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 230, 0, 1200)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
@@ -642,27 +636,29 @@ local KillAuraGasStatusLabel, GasKeyBtn, updateGasKey = createFeatureButton(280,
 KillAuraGasStatusLabel.Text = "GAS G: OFF"
 KillAuraGasStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local KillAuraMedkitStatusLabel, MedkitKeyBtn, updateMedkitKey = createFeatureButton(310, "MEDKIT X", "ToggleKillAuraMedkitDrop")
-KillAuraMedkitStatusLabel.Text = "MEDKIT DROP: OFF"
+local KillAuraMedkitStatusLabel, MedkitKeyBtn, updateMedkitKey = createFeatureButton(310, "MEDKIT X", "ToggleKillAuraMedkit")
+KillAuraMedkitStatusLabel.Text = "MEDKIT X: OFF"
 KillAuraMedkitStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
 local KillAuraZombieStatusLabel, ZombieKeyBtn, updateZombieKey = createFeatureButton(340, "KILL ZOMBIE V", "ToggleKillAuraZombie")
 KillAuraZombieStatusLabel.Text = "ZOMBIE V: OFF"
 KillAuraZombieStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
--- Nút RIÊNG: Medkit Heal (Phím Z)
-local MedkitHealStatusLabel, ZKeyBtn, updateZKey = createFeatureButton(370, "MEDKIT HEAL Z", "ToggleMedkitHealZ")
-MedkitHealStatusLabel.Text = "MEDKIT HEAL Z: OFF"
-MedkitHealStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-
--- Nút RIÊNG: Apply Vest (Phím V hoặc bạn đổi tùy ý)
-local ApplyVestStatusLabel, XKeyBtn, updateXKey = createFeatureButton(400, "APPLY VEST X", "ToggleApplyVestX")
-ApplyVestStatusLabel.Text = "APPLY VEST X: OFF"
-ApplyVestStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-
-local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(430, "HITNECK J", "ToggleHitNeckJ")
+local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(370, "HITNECK J", "ToggleHitNeckJ")
 HitNeckStatusLabel.Text = "HITNECK J: OFF"
 HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+
+-- Nút Tự Hồi Máu Z
+local HealSelfBtn, ZKeyBtn, updateZKey = createFeatureButton(400, "HEAL SELF Z", "HealSelf")
+HealSelfBtn.Text = "❤️ HEAL SELF"
+HealSelfBtn.TextColor3 = Color3.fromRGB(255, 100, 150)
+HealSelfBtn.BackgroundColor3 = Color3.fromRGB(100, 40, 60)
+
+-- Nút Tự Mặc Giáp U
+local VestSelfBtn, UKeyBtn, updateUKey = createFeatureButton(430, "APPLY VEST U", "VestSelf")
+VestSelfBtn.Text = "🛡️ APPLY VEST"
+VestSelfBtn.TextColor3 = Color3.fromRGB(100, 200, 255)
+VestSelfBtn.BackgroundColor3 = Color3.fromRGB(40, 80, 110)
 
 local TeamMenuBtn, F5KeyBtn, updateF5Key = createFeatureButton(460, "TEAM LIST", "ToggleTeamMenu")
 TeamMenuBtn.Text = "TEAM LIST"
@@ -778,11 +774,11 @@ end
 local function updateKillAuraMedkitVisuals()
     if killAuraMedkitActive then
         KillAuraMedkitStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 50, 120)
-        KillAuraMedkitStatusLabel.Text = "MEDKIT DROP: ACTIVE"
+        KillAuraMedkitStatusLabel.Text = "MEDKIT X: ACTIVE"
         KillAuraMedkitStatusLabel.TextColor3 = Color3.fromRGB(255, 180, 220)
     else
         KillAuraMedkitStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        KillAuraMedkitStatusLabel.Text = "MEDKIT DROP: OFF"
+        KillAuraMedkitStatusLabel.Text = "MEDKIT X: OFF"
         KillAuraMedkitStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
     end
 end
@@ -799,30 +795,6 @@ local function updateKillAuraZombieVisuals()
     end
 end
 
-local function updateMedkitHealVisuals()
-    if medkitHealActive then
-        MedkitHealStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 150, 180)
-        MedkitHealStatusLabel.Text = "MEDKIT HEAL Z: ACTIVE"
-        MedkitHealStatusLabel.TextColor3 = Color3.fromRGB(200, 255, 255)
-    else
-        MedkitHealStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        MedkitHealStatusLabel.Text = "MEDKIT HEAL Z: OFF"
-        MedkitHealStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-    end
-end
-
-local function updateApplyVestVisuals()
-    if applyVestActive then
-        ApplyVestStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 120, 40)
-        ApplyVestStatusLabel.Text = "APPLY VEST X: ACTIVE"
-        ApplyVestStatusLabel.TextColor3 = Color3.fromRGB(255, 220, 150)
-    else
-        ApplyVestStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        ApplyVestStatusLabel.Text = "APPLY VEST X: OFF"
-        ApplyVestStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-    end
-end
-
 local function updateHitNeckVisuals()
     if hitNeckActive then
         HitNeckStatusLabel.BackgroundColor3 = Color3.fromRGB(180, 40, 100)
@@ -834,6 +806,31 @@ local function updateHitNeckVisuals()
         HitNeckStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
     end
 end
+
+-- Hàm kích hoạt Hồi Máu
+local function triggerHealSelf()
+    pcall(function()
+        if sendCharacterEffectRemote then
+            for i = 1, burstCount do
+                sendCharacterEffectRemote:FireServer(math.huge, "MedkitHeal")
+            end
+        end
+    end)
+end
+
+-- Hàm kích hoạt Mặc Giáp
+local function triggerVestSelf()
+    pcall(function()
+        if sendCharacterEffectRemote then
+            for i = 1, burstCount do
+                sendCharacterEffectRemote:FireServer(math.huge, "ApplyVest")
+            end
+        end
+    end)
+end
+
+HealSelfBtn.MouseButton1Click:Connect(triggerHealSelf)
+VestSelfBtn.MouseButton1Click:Connect(triggerVestSelf)
 
 -- Ô NHẬP SỐ LƯỢNG LỆNH GỌI (BURST COUNT)
 local BurstInputFrame = Instance.new("Frame")
@@ -1120,7 +1117,7 @@ local function toggleSelectAll()
 
     if selectedCount == otherPlayersCount and otherPlayersCount > 0 then
         targets = {}
-        SelectAllBtn.Text = "☑️️ SELECT ALL PLAYERS"
+        SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
     else
         for _, p in pairs(allPlayers) do
             if p ~= LocalPlayer and not teamSafeList[p.Name] then
@@ -1132,56 +1129,6 @@ local function toggleSelectAll()
 end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
-
--- HÀM RIÊNG 1: TỰ ĐỘNG GỌI HỒI MÁU (MedkitHeal)
-local function performMedkitHeal()
-    if not medkitHealActive then return end
-    pcall(function()
-        if sendCharacterEffectRemote then
-            for i = 1, burstCount do
-                sendCharacterEffectRemote:FireServer(math.huge, "MedkitHeal")
-            end
-        end
-    end)
-end
-
--- Vòng lặp riêng cho Medkit Heal
-task.spawn(function()
-    while true do
-        if medkitHealActive then
-            if tick() - lastMedkitHealTime >= medkitHealCooldown then
-                performMedkitHeal()
-                lastMedkitHealTime = tick()
-            end
-        end
-        task.wait(0.1)
-    end
-end)
-
--- HÀM RIÊNG 2: TỰ ĐỘNG GỌI MẶC GIÁP (ApplyVest)
-local function performApplyVest()
-    if not applyVestActive then return end
-    pcall(function()
-        if sendCharacterEffectRemote then
-            for i = 1, burstCount do
-                sendCharacterEffectRemote:FireServer(math.huge, "ApplyVest")
-            end
-        end
-    end)
-end
-
--- Vòng lặp riêng cho Apply Vest
-task.spawn(function()
-    while true do
-        if applyVestActive then
-            if tick() - lastApplyVestTime >= applyVestCooldown then
-                performApplyVest()
-                lastApplyVestTime = tick()
-            end
-        end
-        task.wait(0.1)
-    end
-end)
 
 -- HÀM XỬ LÝ SỰ KIỆN GÂY SÁT THƯƠNG ZOMBIE KHI CLICK / ĐÈ CHUỘT TRÁI
 local function performZombieAttack()
@@ -1610,16 +1557,6 @@ KillAuraZombieStatusLabel.MouseButton1Click:Connect(function()
     updateKillAuraZombieVisuals()
 end)
 
-MedkitHealStatusLabel.MouseButton1Click:Connect(function()
-    medkitHealActive = not medkitHealActive
-    updateMedkitHealVisuals()
-end)
-
-ApplyVestStatusLabel.MouseButton1Click:Connect(function()
-    applyVestActive = not applyVestActive
-    updateApplyVestVisuals()
-end)
-
 HitNeckStatusLabel.MouseButton1Click:Connect(function()
     hitNeckActive = not hitNeckActive
     updateHitNeckVisuals()
@@ -1664,9 +1601,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 updateGasKey()
                 updateMedkitKey()
                 updateZombieKey()
-                updateZKey()
-                updateXKey()
                 updateJKey()
+                updateZKey()
+                updateUKey()
                 updateF5Key()
                 updateF6Key()
                 updateF7Key()
@@ -1711,21 +1648,19 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         elseif input.KeyCode == Keybinds.ToggleKillAuraGas then
             killAuraGasActive = not killAuraGasActive
             updateKillAuraGasVisuals()
-        elseif input.KeyCode == Keybinds.ToggleKillAuraMedkitDrop then
+        elseif input.KeyCode == Keybinds.ToggleKillAuraMedkit then
             killAuraMedkitActive = not killAuraMedkitActive
             updateKillAuraMedkitVisuals()
         elseif input.KeyCode == Keybinds.ToggleKillAuraZombie then
             killAuraZombieActive = not killAuraZombieActive
             updateKillAuraZombieVisuals()
-        elseif input.KeyCode == Keybinds.ToggleMedkitHealZ then
-            medkitHealActive = not medkitHealActive
-            updateMedkitHealVisuals()
-        elseif input.KeyCode == Keybinds.ToggleApplyVestX then
-            applyVestActive = not applyVestActive
-            updateApplyVestVisuals()
         elseif input.KeyCode == Keybinds.ToggleHitNeckJ then
             hitNeckActive = not hitNeckActive
             updateHitNeckVisuals()
+        elseif input.KeyCode == Keybinds.HealSelf then
+            triggerHealSelf()
+        elseif input.KeyCode == Keybinds.VestSelf then
+            triggerVestSelf()
         elseif input.KeyCode == Keybinds.ToggleKillAuraQ then
             killAuraActive = not killAuraActive
             if killAuraActive then
