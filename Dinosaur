@@ -13,6 +13,7 @@ local abilityHitRemote = ReplicatedStorage:FindFirstChild("AbilityHit")
 local stompHitRemote = ReplicatedStorage:FindFirstChild("StompHit")
 local pounceAttackRemote = ReplicatedStorage:FindFirstChild("SpecialAttackRemoteEvent_PounceAttack")
 local attackHandlerRemote = ReplicatedStorage:FindFirstChild("AttackHandlerRemoteEvent")
+local regularAttackRemote = ReplicatedStorage:FindFirstChild("SpecialAttackRemoteEvent_RegularAttack")
 
 local targets = {} 
 local teamSafeList = {} 
@@ -575,8 +576,8 @@ local KillAuraKStatusLabel, KKeyBtn, updateKKey = createFeatureButton(100, "KILL
 KillAuraKStatusLabel.Text = "KILL AURA K: OFF"
 KillAuraKStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local KillAuraNoStatusLabel, NoKeyBtn, updateNoKey = createFeatureButton(130, "KILL AURA NO", "ToggleKillAuraNo")
-KillAuraNoStatusLabel.Text = "KILL AURA NO: OFF"
+local KillAuraNoStatusLabel, NoKeyBtn, updateNoKey = createFeatureButton(130, "KILL AURA L", "ToggleKillAuraNo")
+KillAuraNoStatusLabel.Text = "KILL AURA L: OFF"
 KillAuraNoStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
 local KillAuraStompStatusLabel, StompKeyBtn, updateStompKey = createFeatureButton(160, "KILL AURA STOMP", "ToggleKillAuraStomp")
@@ -633,11 +634,11 @@ end
 local function updateKillAuraNoVisuals()
     if killAuraNoActive then
         KillAuraNoStatusLabel.BackgroundColor3 = Color3.fromRGB(30, 100, 180)
-        KillAuraNoStatusLabel.Text = "KILL AURA NO: ACTIVE"
+        KillAuraNoStatusLabel.Text = "KILL AURA L: ACTIVE"
         KillAuraNoStatusLabel.TextColor3 = Color3.fromRGB(150, 220, 255)
     else
         KillAuraNoStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        KillAuraNoStatusLabel.Text = "KILL AURA NO: OFF"
+        KillAuraNoStatusLabel.Text = "KILL AURA L: OFF"
         KillAuraNoStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
     end
 end
@@ -926,7 +927,7 @@ local function performAttacks()
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
 
-    -- 1. Kill Aura Q (Đã thay đổi sang AttackHandlerRemoteEvent với Humanoid của mục tiêu)
+    -- 1. Kill Aura Q (AttackHandlerRemoteEvent)
     if killAuraActive and (tick() - lastAttackTime >= attackCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -952,7 +953,7 @@ local function performAttacks()
         end
     end
 
-    -- 2. Kill Aura K (Sử dụng SpecialAttackRemoteEvent_PounceAttack với Humanoid và Capsule_Leg R)
+    -- 2. Kill Aura K (SpecialAttackRemoteEvent_PounceAttack)
     if killAuraKActive and (tick() - lastKillAuraKTime >= killAuraKCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -980,21 +981,21 @@ local function performAttacks()
         end
     end
 
-    -- 3. Kill Aura No
+    -- 3. Kill Aura L (Đã thay đổi sang SpecialAttackRemoteEvent_RegularAttack với Humanoid của mục tiêu)
     if killAuraNoActive and (tick() - lastKillAuraNoTime >= killAuraNoCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
                 local targetCharacter = workspace:FindFirstChild(pName)
-                local targetHead = targetCharacter and targetCharacter:FindFirstChild("Head")
+                local targetHumanoid = targetCharacter and targetCharacter:FindFirstChild("Humanoid")
                 local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
                 
-                if targetRoot and targetHead then
+                if targetRoot and targetHumanoid then
                     local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
                     if currentDist <= maxDetectDistance then
                         pcall(function()
-                            if abilityHitRemote then
+                            if regularAttackRemote then
                                 for i = 1, burstCount do
-                                    abilityHitRemote:FireServer("No", targetHead)
+                                    regularAttackRemote:FireServer(targetHumanoid)
                                 end
                             end
                         end)
