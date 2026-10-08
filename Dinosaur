@@ -12,6 +12,7 @@ local primaryAttackHitRemote = ReplicatedStorage:FindFirstChild("PrimaryAttackHi
 local abilityHitRemote = ReplicatedStorage:FindFirstChild("AbilityHit")
 local stompHitRemote = ReplicatedStorage:FindFirstChild("StompHit")
 local pounceAttackRemote = ReplicatedStorage:FindFirstChild("SpecialAttackRemoteEvent_PounceAttack")
+local attackHandlerRemote = ReplicatedStorage:FindFirstChild("AttackHandlerRemoteEvent")
 
 local targets = {} 
 local teamSafeList = {} 
@@ -20,7 +21,7 @@ local abilityActive = false
 local killAuraKActive = false 
 local killAuraNoActive = false 
 local killAuraStompActive = false 
-local killAuraQuetzGrabActive = false -- Trạng thái Kill Aura QuetzGrab mới
+local killAuraQuetzGrabActive = false 
 local hitNeckActive = false 
 local closestPlayerName = "" 
 
@@ -38,7 +39,7 @@ local teamSearchFilterText = ""
 local savedCloneCount = 0
 local clonedClientsList = {}
 
--- Bảng lưu trữ phím tắt (Thêm QuetzGrab với phím N)
+-- Bảng lưu trữ phím tắt
 local Keybinds = {
     ToggleMenu = Enum.KeyCode.P,
     ToggleTeamMenu = Enum.KeyCode.F5,
@@ -49,7 +50,7 @@ local Keybinds = {
     ToggleKillAuraK = Enum.KeyCode.K,
     ToggleKillAuraNo = Enum.KeyCode.L,
     ToggleKillAuraStomp = Enum.KeyCode.M,
-    ToggleKillAuraQuetzGrab = Enum.KeyCode.N, -- Phím tắt mặc định cho QuetzGrab là N
+    ToggleKillAuraQuetzGrab = Enum.KeyCode.N,
     ToggleHitNeckJ = Enum.KeyCode.J,
     SelectAll = Enum.KeyCode.T,
 }
@@ -103,7 +104,6 @@ ScreenGui.Name = "PlayerStatsUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
--- KHUNG MENU CHÍNH (Tăng chiều cao lên một chút để chứa các nút mới)
 MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 230, 0, 970)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
@@ -117,7 +117,6 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 8)
 UICorner.Parent = MainFrame
 
--- KHUNG QUẢN LÝ TEAM (F5)
 local TeamFrame = Instance.new("Frame")
 TeamFrame.Size = UDim2.new(0, 220, 0, 450)
 TeamFrame.Position = UDim2.new(0.24, 0, 0.2, 0)
@@ -185,7 +184,6 @@ TeamSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     teamSearchFilterText = string.lower(TeamSearchBox.Text)
 end)
 
--- KHUNG QUẢN LÝ MACRO TÙY CHỈNH (F6)
 local MacroFrame = Instance.new("Frame")
 MacroFrame.Size = UDim2.new(0, 280, 0, 420)
 MacroFrame.Position = UDim2.new(0.24, 0, 0.45, 0)
@@ -346,9 +344,6 @@ AddMacroBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-----------------------------------------------------------------
--- 1.2 KHUNG QUẢN LÝ CLIENT CLONE (F7) & AUTO RE-DUPLICATE
-----------------------------------------------------------------
 local ClientManagerFrame = Instance.new("Frame")
 ClientManagerFrame.Size = UDim2.new(0, 280, 0, 400)
 ClientManagerFrame.Position = UDim2.new(0.24, 0, 0.7, 0)
@@ -495,7 +490,6 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     end
 end)
 
--- KHUNG ĐỒNG HỒ TÁCH BIỆT
 local TimeFrame = Instance.new("Frame")
 TimeFrame.Size = UDim2.new(1, 0, 0, 30)
 TimeFrame.Position = UDim2.new(0, 0, 1, 8)
@@ -530,7 +524,6 @@ local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 8)
 TitleCorner.Parent = MainFrame
 
--- TẠO CÁC NÚT TÍNH NĂNG CHÍNH VÀ ĐỔI PHÍM
 local function createFeatureButton(posY, defaultText, keyKey)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -10, 0, 25)
@@ -685,7 +678,6 @@ local function updateHitNeckVisuals()
     end
 end
 
--- Ô NHẬP SỐ LƯỢNG LỆNH GỌI (BURST COUNT)
 local BurstInputFrame = Instance.new("Frame")
 BurstInputFrame.Size = UDim2.new(1, -10, 0, 35)
 BurstInputFrame.Position = UDim2.new(0, 5, 0, 345)
@@ -736,7 +728,6 @@ BurstBox.FocusLost:Connect(function()
     end
 end)
 
--- Ô 1: HẠN MỨC KHOẢNG CÁCH KILL AURA
 local DistanceInputFrame = Instance.new("Frame")
 DistanceInputFrame.Size = UDim2.new(1, -10, 0, 35)
 DistanceInputFrame.Position = UDim2.new(0, 5, 0, 385)
@@ -786,7 +777,6 @@ DistanceBox.FocusLost:Connect(function()
     end
 end)
 
--- Ô 2: HẠN MỨC PHÁT HIỆN NGUY HIỂM & ESP
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
 DangerInputFrame.Position = UDim2.new(0, 5, 0, 425)
@@ -836,7 +826,6 @@ DangerBox.FocusLost:Connect(function()
     end
 end)
 
--- Ô TÌM KIẾM TÊN
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
 SearchBox.Position = UDim2.new(0, 5, 0, 465)
@@ -855,7 +844,6 @@ local SearchCorner = Instance.new("UICorner")
 SearchCorner.CornerRadius = UDim.new(0, 4)
 SearchCorner.Parent = SearchBox
 
--- NÚT CHỌN TẤT CẢ
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
 SelectAllBtn.Position = UDim2.new(0, 5, 0, 495)
@@ -892,7 +880,6 @@ SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     searchFilterText = string.lower(SearchBox.Text)
 end)
 
--- Vòng lặp đếm giờ
 task.spawn(function()
     while true do
         local elapsed = os.time() - startTime
@@ -933,27 +920,27 @@ end
 
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
--- HÀM THỰC THI (HỖ TRỢ BURST LOOP THEO SỐ LƯỢNG Ô NHẬP)
+-- HÀM THỰC THI
 local function performAttacks()
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
     if not myRoot then return end
 
-    -- 1. Kill Aura Q
+    -- 1. Kill Aura Q (Đã thay đổi sang AttackHandlerRemoteEvent với Humanoid của mục tiêu)
     if killAuraActive and (tick() - lastAttackTime >= attackCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
                 local targetCharacter = workspace:FindFirstChild(pName)
-                local targetHead = targetCharacter and targetCharacter:FindFirstChild("Head")
+                local targetHumanoid = targetCharacter and targetCharacter:FindFirstChild("Humanoid")
                 local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
                 
-                if targetRoot and targetHead then
+                if targetRoot and targetHumanoid then
                     local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
                     if currentDist <= maxDetectDistance then
                         pcall(function()
-                            if primaryAttackHitRemote then
+                            if attackHandlerRemote then
                                 for i = 1, burstCount do
-                                    primaryAttackHitRemote:FireServer("Left", targetHead)
+                                    attackHandlerRemote:FireServer(targetHumanoid)
                                 end
                             end
                         end)
@@ -965,7 +952,7 @@ local function performAttacks()
         end
     end
 
-    -- 2. Kill Aura K (Đã thay đổi theo yêu cầu sử dụng SpecialAttackRemoteEvent_PounceAttack)
+    -- 2. Kill Aura K (Sử dụng SpecialAttackRemoteEvent_PounceAttack với Humanoid và Capsule_Leg R)
     if killAuraKActive and (tick() - lastKillAuraKTime >= killAuraKCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -973,7 +960,7 @@ local function performAttacks()
                 local targetHumanoid = targetCharacter and targetCharacter:FindFirstChild("Humanoid")
                 local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
                 local targetColliderParts = targetCharacter and targetCharacter:FindFirstChild("RagdollColliderParts")
-                local targetCapsule = targetColliderParts and targetColliderParts:FindFirstChild("Capsule_Tail.001")
+                local targetCapsule = targetColliderParts and targetColliderParts:FindFirstChild("Capsule_Leg R")
                 
                 if targetRoot and targetHumanoid and targetCapsule then
                     local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
@@ -1127,7 +1114,6 @@ local function performAttacks()
     end
 end
 
--- Vòng lặp Ability Pounce tự động
 task.spawn(function()
     while true do
         if abilityActive then
@@ -1207,7 +1193,6 @@ ClientMenuBtn.MouseButton1Click:Connect(function()
     ClientManagerFrame.Visible = not ClientManagerFrame.Visible
 end)
 
--- Xử lý bàn phím & đổi phím
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         if not gameProcessed then
@@ -1279,10 +1264,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
-----------------------------------------------------------------
--- 2. HỆ THỐNG ESP & TỰ ĐỘNG THÊM TARGET MỚI
-----------------------------------------------------------------
-
 local function updateESPForCharacter(player, character)
     if not character or player == LocalPlayer then return end
     local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 5)
@@ -1347,7 +1328,6 @@ local function buildButtons()
         if player ~= LocalPlayer then
             local pName = player.Name
 
-            -- Nút Kill List
             local Btn = Instance.new("TextButton")
             Btn.Size = UDim2.new(1, 0, 0, 30)
             Btn.Font = Enum.Font.SourceSansBold
@@ -1366,7 +1346,6 @@ local function buildButtons()
             end)
             buttons[pName] = {Button = Btn}
 
-            -- Nút Team List
             local TeamBtn = Instance.new("TextButton")
             TeamBtn.Size = UDim2.new(1, 0, 0, 30)
             TeamBtn.Font = Enum.Font.SourceSansBold
