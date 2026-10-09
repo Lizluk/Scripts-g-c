@@ -1,0 +1,53 @@
+-- Tạo ScreenGui nếu chưa có
+local players = game:GetService("Players")
+local player = players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "StaminaLockGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+-- Tạo một nhãn nhỏ hiển thị trạng thái (tuỳ chọn)
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(0, 200, 0, 40)
+statusLabel.Position = UDim2.new(0, 20, 0, 20)
+statusLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+statusLabel.TextColor3 = Color3.fromRGB(0, 255, 128)
+statusLabel.TextScaled = true
+statusLabel.Font = Enum.Font.SourceSansBold
+statusLabel.Text = "Stamina Lock: ON (100)"
+statusLabel.Parent = screenGui
+
+-- Thêm góc bo tròn cho đẹp
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.Parent = statusLabel
+
+-- Vòng lặp liên tục kiểm tra và ép Stamina trong Attributes về 100
+local runService = game:GetService("RunService")
+
+runService.RenderStepped:Connect(function()
+	local character = player.Character
+	if character then
+		-- Kiểm tra xem nhân vật có sử dụng Attribute tên là "Stamina" hoặc tương tự không
+		-- Bạn có thể đổi tên chữ "Stamina" bên dưới cho khớp với trò chơi bạn đang chơi
+		local currentStamina = character:GetAttribute("Stamina")
+		
+		if currentStamina ~= nil then
+			if currentStamina < 100 then
+				character:SetAttribute("Stamina", 100)
+			end
+		end
+		
+		-- Trường hợp Attribute nằm trong Humanoid
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			local humStamina = humanoid:GetAttribute("Stamina")
+			if humStamina ~= nil and humStamina < 100 then
+				humanoid:SetAttribute("Stamina", 100)
+			end
+		end
+	end
+end)
