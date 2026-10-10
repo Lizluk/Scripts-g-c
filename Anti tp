@@ -1,0 +1,67 @@
+--[[
+	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+]]
+local players = game:GetService('Players')
+local lplr = players.LocalPlayer
+local lastCF, stop, heartbeatConnection
+
+local function start()
+    heartbeatConnection = game:GetService('RunService').Heartbeat:Connect(function()
+        if stop then
+            return 
+        end 
+        local rootPart = lplr.Character and lplr.Character:FindFirstChildOfClass('Humanoid') and lplr.Character:FindFirstChildOfClass('Humanoid').RootPart
+        if rootPart then
+            lastCF = rootPart.CFrame
+        end
+    end)
+    
+    local humanoid = lplr.Character:FindFirstChildOfClass('Humanoid')
+    local rootPart = humanoid and humanoid.RootPart
+    
+    if rootPart then
+        rootPart:GetPropertyChangedSignal('CFrame'):Connect(function()
+            if stop or not lastCF then return end
+            stop = true
+            
+            -- Chỉ giữ lại Position cũ, cho phép phần xoay (Rotation) thay đổi tự do theo camera
+            local currentCF = rootPart.CFrame
+            local fixedCF = CFrame.new(lastCF.Position) * CFrame.Angles(currentCF:ToEulerAnglesXYZ())
+            rootPart.CFrame = fixedCF
+            
+            game:GetService('RunService').Heartbeat:Wait()
+            stop = false
+        end)
+    end
+    
+    if humanoid then
+        humanoid.Died:Connect(function()
+            if heartbeatConnection then
+                heartbeatConnection:Disconnect()
+            end
+        end)
+    end
+end
+
+lplr.CharacterAdded:Connect(function(character)
+    local humanoid, rootPart
+    repeat 
+        game:GetService('RunService').Heartbeat:Wait() 
+        humanoid = character:FindFirstChildOfClass('Humanoid')
+    until humanoid
+    repeat 
+        game:GetService('RunService').Heartbeat:Wait() 
+        rootPart = humanoid.RootPart
+    until rootPart
+    start()
+end)
+
+lplr.CharacterRemoving:Connect(function()
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
+    end
+end)
+
+if lplr.Character then
+    start()
+end
