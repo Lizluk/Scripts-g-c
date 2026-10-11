@@ -24,15 +24,15 @@ local killAuraNoActive = false
 local killAuraStompActive = false 
 local killAuraQuetzGrabActive = false 
 local hitNeckActive = false 
-local mimicActive = false -- Trạng thái bám theo (F2)
+local mimicActive = false -- Trạng thái bám theo ra phía sau liên tục (F2)
+local lockedTargetPlayer = nil -- Biến lưu trữ cố định một người duy nhất đang bị bám theo
 local closestPlayerName = "" 
 
 -- Biến cấu hình số lần spam lệnh khi click/gọi (Mặc định là 1)
 local burstCount = 1
 
--- Tách riêng khoảng cách & Tốc độ kéo bám sau
-local maxDetectDistance = 50     -- Tầm đánh Kill Aura & Khoảng cách tối đa để bám
-local pullSpeed = 15             -- TÙY CHỈNH TỐC ĐỘ KÉO (Số càng lớn kéo càng nhanh và mượt)
+-- Tách riêng 2 khoảng cách
+local maxDetectDistance = 50     -- Tầm đánh Kill Aura & Khoảng cách bám theo tối đa
 local dangerDetectDistance = 100 -- Tầm phát hiện nguy hiểm (ESP & Cảnh báo)
 
 local searchFilterText = ""
@@ -48,7 +48,7 @@ local Keybinds = {
     ToggleTeamMenu = Enum.KeyCode.F5,
     ToggleMacroMenu = Enum.KeyCode.F6,
     ToggleClientMenu = Enum.KeyCode.F7,
-    ToggleMimicF2 = Enum.KeyCode.F2, -- Phím tắt chế độ bám sau lưng
+    ToggleMimicF2 = Enum.KeyCode.F2, -- Phím tắt chế độ bám sau lưng một người cố định
     ToggleKillAuraQ = Enum.KeyCode.Q,
     ToggleAbilityH = Enum.KeyCode.H,
     ToggleKillAuraK = Enum.KeyCode.K,
@@ -567,8 +567,8 @@ local function createFeatureButton(posY, defaultText, keyKey)
     return btn, keyBtn, updateKeyText
 end
 
-local MimicStatusLabel, F2KeyBtn, updateF2Key = createFeatureButton(40, "SMOOTH PULL F2", "ToggleMimicF2")
-MimicStatusLabel.Text = "SMOOTH PULL F2: OFF"
+local MimicStatusLabel, F2KeyBtn, updateF2Key = createFeatureButton(40, "AUTO BEHIND F2", "ToggleMimicF2")
+MimicStatusLabel.Text = "AUTO BEHIND F2: OFF"
 MimicStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
 local StatusLabel, QKeyBtn, updateQKey = createFeatureButton(70, "KILL AURA Q", "ToggleKillAuraQ")
@@ -617,11 +617,11 @@ ClientMenuBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 90)
 local function updateMimicVisuals()
     if mimicActive then
         MimicStatusLabel.BackgroundColor3 = Color3.fromRGB(30, 140, 180)
-        MimicStatusLabel.Text = "SMOOTH PULL F2: ACTIVE"
+        MimicStatusLabel.Text = "AUTO BEHIND F2: ACTIVE"
         MimicStatusLabel.TextColor3 = Color3.fromRGB(150, 255, 255)
     else
         MimicStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        MimicStatusLabel.Text = "SMOOTH PULL F2: OFF"
+        MimicStatusLabel.Text = "AUTO BEHIND F2: OFF"
         MimicStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
     end
 end
@@ -941,57 +941,64 @@ end
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
 ----------------------------------------------------------------
--- TÍNH NĂNG F2: KÉO MƯỢT (LERP) RA SAU LƯNG TRONG TẦM KILL AURA
+-- TÍNH NĂNG F2: KHÓA VÀ CHỈ BÁM THEO MỘT NGƯỜI DUY NHẤT ĐANG Ở GẦN
 ----------------------------------------------------------------
-RunService.RenderStepped:Connect(function(dt)
-    if mimicActive then
-        local myChar = LocalPlayer.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        local myHumanoid = myChar and myChar:FindFirstChild("Humanoid")
+task.spawn(function()
+    while true do
+        if mimicActive then
+            local myChar = LocalPlayer.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local myHumanoid = myChar and myChar:FindFirstChild("Humanoid")
 
-        if myRoot and myHumanoid then
-            local targetPlayer = nil
-            local shortestDist = math.huge
+            if myRoot and myHumanoid then
+                -- Nếu chưa khóa mục tiêu nào, tìm người gần nhất trong tầm Kill Aura để khóa cứng
+                if not lockedTargetPlayer or not lockedTargetPlayer.Character or not lockedTargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local shortestDist = math.huge
+                    local bestTarget = nil
 
-            -- Tìm mục tiêu gần nhất
-            for pName, _ in pairs(targets) do
-                if not teamSafeList[pName] then
-                    local p = Players:FindFirstChild(pName)
-                    if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                        local dist = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
-                        if dist < shortestDist then
-                            shortestDist = dist
-                            targetPlayer = p
+                    for pName, _ in pairs(targets) do
+                        if not teamSafeList[pName] then
+                            local p = Players:FindFirstChild(pName)
+                            if p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                                local dist = (myRoot.Position - p.Character.HumanoidRootPart.Position).Magnitude
+                                if dist <= maxDetectDistance and dist < shortestDist then
+                                    shortestDist = dist
+                                    bestTarget = p
+                                end
+                            end
                         end
+                    end
+                    lockedTargetPlayer = bestTarget
+                end
+
+                -- Nếu đã khóa được mục tiêu, chỉ bám theo đúng người này liên tục
+                if lockedTargetPlayer and lockedTargetPlayer.Character then
+                    local tChar = lockedTargetPlayer.Character
+                    local tRoot = tChar:FindFirstChild("HumanoidRootPart")
+
+                    if tRoot then
+                        local lookVector = tRoot.CFrame.LookVector
+                        local targetPos = tRoot.Position - (lookVector * 3)
+                        
+                        -- Raycast giữ sát mặt đất
+                        local rayParams = RaycastParams.new()
+                        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                        rayParams.FilterDescendantsInstances = {myChar, tChar}
+                        local groundRay = workspace:Raycast(tRoot.Position + Vector3.new(0, 5, 0), Vector3.new(0, -30, 0), rayParams)
+                        
+                        local groundY = groundRay and groundRay.Position.Y or tRoot.Position.Y
+                        local localHipHeight = myHumanoid.HipHeight or 2
+                        targetPos = Vector3.new(targetPos.X, groundY + localHipHeight, targetPos.Z)
+
+                        myRoot.CFrame = CFrame.new(targetPos, targetPos + tRoot.CFrame.LookVector)
                     end
                 end
             end
-
-            -- Chỉ kéo bám theo nếu mục tiêu nằm trong giới hạn `maxDetectDistance`
-            if targetPlayer and targetPlayer.Character and shortestDist <= maxDetectDistance then
-                local tChar = targetPlayer.Character
-                local tRoot = tChar:FindFirstChild("HumanoidRootPart")
-
-                if tRoot then
-                    local lookVector = tRoot.CFrame.LookVector
-                    local desiredPos = tRoot.Position - (lookVector * 3)
-                    
-                    -- Raycast chống bay cao khi bám khủng long to
-                    local rayParams = RaycastParams.new()
-                    rayParams.FilterType = Enum.RaycastFilterType.Exclude
-                    rayParams.FilterDescendantsInstances = {myChar, tChar}
-                    local groundRay = workspace:Raycast(tRoot.Position + Vector3.new(0, 5, 0), Vector3.new(0, -30, 0), rayParams)
-                    
-                    local groundY = groundRay and groundRay.Position.Y or tRoot.Position.Y
-                    local localHipHeight = myHumanoid.HipHeight or 2
-                    desiredPos = Vector3.new(desiredPos.X, groundY + localHipHeight, desiredPos.Z)
-
-                    -- Kéo mượt (Lerp) vị trí và hướng nhìn tới sau lưng mục tiêu theo tốc độ `pullSpeed`
-                    local targetCFrame = CFrame.new(desiredPos, desiredPos + tRoot.CFrame.LookVector)
-                    myRoot.CFrame = myRoot.CFrame:Lerp(targetCFrame, math.clamp(pullSpeed * dt, 0, 1))
-                end
-            end
+        else
+            -- Khi bấm tắt F2, giải phóng khóa mục tiêu
+            lockedTargetPlayer = nil
         end
+        task.wait(0.03)
     end
 end)
 
