@@ -1089,15 +1089,17 @@ local function performAttacks()
                 local targetHumanoid = targetCharacter and targetCharacter:FindFirstChild("Humanoid")
                 local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
                 local targetColliderParts = targetCharacter and targetCharacter:FindFirstChild("RagdollColliderParts")
-                local targetCapsule = targetColliderParts and targetColliderParts:FindFirstChild("Capsule_Leg R")
                 
-                if targetRoot and targetHumanoid and targetCapsule then
+                -- Tìm Capsule_Leg R hoặc Capsule_Neck 1 làm mục tiêu bộ phận phụ
+                local targetPart = targetColliderParts and (targetColliderParts:FindFirstChild("Capsule_Neck 1") or targetColliderParts:FindFirstChild("Capsule_Leg R"))
+                
+                if targetRoot and targetHumanoid and targetPart then
                     local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
                     if currentDist <= maxDetectDistance then
                         pcall(function()
                             if pounceAttackRemote then
                                 for i = 1, burstCount do
-                                    pounceAttackRemote:FireServer(targetHumanoid, targetCapsule)
+                                    pounceAttackRemote:FireServer(targetHumanoid, targetPart)
                                 end
                             end
                         end)
