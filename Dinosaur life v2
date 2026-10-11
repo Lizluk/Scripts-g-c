@@ -24,16 +24,17 @@ local killAuraNoActive = false
 local killAuraStompActive = false 
 local killAuraQuetzGrabActive = false 
 local hitNeckActive = false 
-local mimicActive = false -- Trạng thái bám theo ra phía sau liên tục (F2)
-local lockedTargetPlayer = nil -- Biến lưu trữ cố định một người duy nhất đang bị bám theo
+local mimicActive = false 
+local lockedTargetPlayer = nil 
 local closestPlayerName = "" 
 
 -- Biến cấu hình số lần spam lệnh khi click/gọi (Mặc định là 1)
 local burstCount = 1
 
--- Tách riêng 2 khoảng cách
-local maxDetectDistance = 50     -- Tầm đánh Kill Aura & Khoảng cách bám theo tối đa
+-- Tách riêng khoảng cách
+local maxDetectDistance = 50     -- Tầm đánh Kill Aura & Tìm mục tiêu
 local dangerDetectDistance = 100 -- Tầm phát hiện nguy hiểm (ESP & Cảnh báo)
+local mimicOffsetDistance = 3    -- Khoảng cách bám phía sau (Có thể nhập số âm để lùi lại)
 
 local searchFilterText = ""
 local teamSearchFilterText = ""
@@ -48,7 +49,7 @@ local Keybinds = {
     ToggleTeamMenu = Enum.KeyCode.F5,
     ToggleMacroMenu = Enum.KeyCode.F6,
     ToggleClientMenu = Enum.KeyCode.F7,
-    ToggleMimicF2 = Enum.KeyCode.F2, -- Phím tắt chế độ bám sau lưng một người cố định
+    ToggleMimicF2 = Enum.KeyCode.F2, 
     ToggleKillAuraQ = Enum.KeyCode.Q,
     ToggleAbilityH = Enum.KeyCode.H,
     ToggleKillAuraK = Enum.KeyCode.K,
@@ -109,7 +110,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = guiParent
 
 MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 230, 0, 1000)
+MainFrame.Size = UDim2.new(0, 230, 0, 1040)
 MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 MainFrame.BorderSizePixel = 0
@@ -797,9 +798,58 @@ DistanceBox.FocusLost:Connect(function()
     end
 end)
 
+local OffsetInputFrame = Instance.new("Frame")
+OffsetInputFrame.Size = UDim2.new(1, -10, 0, 35)
+OffsetInputFrame.Position = UDim2.new(0, 5, 0, 455)
+OffsetInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+OffsetInputFrame.BorderSizePixel = 0
+OffsetInputFrame.Parent = MainFrame
+
+local OffsetInputCorner = Instance.new("UICorner")
+OffsetInputCorner.CornerRadius = UDim.new(0, 4)
+OffsetInputCorner.Parent = OffsetInputFrame
+
+local OffsetLabel = Instance.new("TextLabel")
+OffsetLabel.Size = UDim2.new(0, 120, 1, 0)
+OffsetLabel.Position = UDim2.new(0, 5, 0, 0)
+OffsetLabel.BackgroundTransparency = 1
+OffsetLabel.Text = "Khoảng cách bám:"
+OffsetLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+OffsetLabel.Font = Enum.Font.SourceSansBold
+OffsetLabel.TextSize = 12
+OffsetLabel.TextXAlignment = Enum.TextXAlignment.Left
+OffsetLabel.Parent = OffsetInputFrame
+
+local OffsetBox = Instance.new("TextBox")
+OffsetBox.Size = UDim2.new(0, 65, 0, 23)
+OffsetBox.Position = UDim2.new(1, -70, 0.5, -11)
+OffsetBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+OffsetBox.BorderSizePixel = 0
+OffsetBox.Text = tostring(mimicOffsetDistance)
+OffsetBox.TextColor3 = Color3.fromRGB(255, 200, 100)
+OffsetBox.Font = Enum.Font.SourceSansBold
+OffsetBox.TextSize = 13
+OffsetBox.ClearTextOnFocus = false
+OffsetBox.PlaceholderText = "Mét..."
+OffsetBox.Parent = OffsetInputFrame
+
+local OffsetBoxCorner = Instance.new("UICorner")
+OffsetBoxCorner.CornerRadius = UDim.new(0, 4)
+OffsetBoxCorner.Parent = OffsetBox
+
+OffsetBox.FocusLost:Connect(function()
+    local number = tonumber(OffsetBox.Text)
+    if number then
+        mimicOffsetDistance = number
+        OffsetBox.Text = tostring(number)
+    else
+        OffsetBox.Text = tostring(mimicOffsetDistance)
+    end
+end)
+
 local DangerInputFrame = Instance.new("Frame")
 DangerInputFrame.Size = UDim2.new(1, -10, 0, 35)
-DangerInputFrame.Position = UDim2.new(0, 5, 0, 455)
+DangerInputFrame.Position = UDim2.new(0, 5, 0, 495)
 DangerInputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 DangerInputFrame.BorderSizePixel = 0
 DangerInputFrame.Parent = MainFrame
@@ -848,7 +898,7 @@ end)
 
 local SearchBox = Instance.new("TextBox")
 SearchBox.Size = UDim2.new(1, -10, 0, 25)
-SearchBox.Position = UDim2.new(0, 5, 0, 495)
+SearchBox.Position = UDim2.new(0, 5, 0, 535)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 SearchBox.BorderSizePixel = 0
 SearchBox.Text = ""
@@ -866,7 +916,7 @@ SearchCorner.Parent = SearchBox
 
 local SelectAllBtn = Instance.new("TextButton")
 SelectAllBtn.Size = UDim2.new(1, -10, 0, 25)
-SelectAllBtn.Position = UDim2.new(0, 5, 0, 525)
+SelectAllBtn.Position = UDim2.new(0, 5, 0, 565)
 SelectAllBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 150)
 SelectAllBtn.Text = "☑️ SELECT ALL PLAYERS"
 SelectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -879,8 +929,8 @@ SelectAllCorner.CornerRadius = UDim.new(0, 4)
 SelectAllCorner.Parent = SelectAllBtn
 
 local ScrollingFrame = Instance.new("ScrollingFrame")
-ScrollingFrame.Size = UDim2.new(1, -10, 1, -560)
-ScrollingFrame.Position = UDim2.new(0, 5, 0, 555)
+ScrollingFrame.Size = UDim2.new(1, -10, 1, -600)
+ScrollingFrame.Position = UDim2.new(0, 5, 0, 595)
 ScrollingFrame.BackgroundTransparency = 1
 ScrollingFrame.BorderSizePixel = 0
 ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -941,7 +991,7 @@ end
 SelectAllBtn.MouseButton1Click:Connect(toggleSelectAll)
 
 ----------------------------------------------------------------
--- TÍNH NĂNG F2: KHÓA VÀ CHỈ BÁM THEO MỘT NGƯỜI DUY NHẤT ĐANG Ở GẦN
+-- TÍNH NĂNG F2: BÁM SAU LƯNG VỚI KHOẢNG CÁCH TÙY CHỈNH (HỖ TRỢ SỐ ÂM)
 ----------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -951,7 +1001,6 @@ task.spawn(function()
             local myHumanoid = myChar and myChar:FindFirstChild("Humanoid")
 
             if myRoot and myHumanoid then
-                -- Nếu chưa khóa mục tiêu nào, tìm người gần nhất trong tầm Kill Aura để khóa cứng
                 if not lockedTargetPlayer or not lockedTargetPlayer.Character or not lockedTargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
                     local shortestDist = math.huge
                     local bestTarget = nil
@@ -971,16 +1020,15 @@ task.spawn(function()
                     lockedTargetPlayer = bestTarget
                 end
 
-                -- Nếu đã khóa được mục tiêu, chỉ bám theo đúng người này liên tục
                 if lockedTargetPlayer and lockedTargetPlayer.Character then
                     local tChar = lockedTargetPlayer.Character
                     local tRoot = tChar:FindFirstChild("HumanoidRootPart")
 
                     if tRoot then
                         local lookVector = tRoot.CFrame.LookVector
-                        local targetPos = tRoot.Position - (lookVector * 3)
+                        -- Sử dụng biến mimicOffsetDistance (cho phép số âm để lùi lại hoặc tiến sát)
+                        local targetPos = tRoot.Position - (lookVector * mimicOffsetDistance)
                         
-                        -- Raycast giữ sát mặt đất
                         local rayParams = RaycastParams.new()
                         rayParams.FilterType = Enum.RaycastFilterType.Exclude
                         rayParams.FilterDescendantsInstances = {myChar, tChar}
@@ -995,7 +1043,6 @@ task.spawn(function()
                 end
             end
         else
-            -- Khi bấm tắt F2, giải phóng khóa mục tiêu
             lockedTargetPlayer = nil
         end
         task.wait(0.03)
