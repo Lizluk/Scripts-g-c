@@ -1081,30 +1081,22 @@ local function performAttacks()
         end
     end
 
-    -- 2. Kill Aura K (SpecialAttackRemoteEvent_PounceAttack) - Hỗ trợ nhiều bộ phận & string kết hợp
+    -- 2. Kill Aura K (SpecialAttackRemoteEvent_PounceAttack) - Đã thay mới hoàn toàn bằng 2 lệnh của bạn
     if killAuraKActive and (tick() - lastKillAuraKTime >= killAuraKCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
                 local targetCharacter = workspace:FindFirstChild(pName)
                 local targetHumanoid = targetCharacter and targetCharacter:FindFirstChild("Humanoid")
                 local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-                local targetColliderParts = targetCharacter and targetCharacter:FindFirstChild("RagdollColliderParts")
                 
-                -- Ưu tiên tìm các phần theo danh sách lệnh đã tích hợp
-                local targetPart = targetColliderParts and (
-                    targetColliderParts:FindFirstChild("Capsule_Neck 1") or 
-                    targetColliderParts:FindFirstChild("Capsule_Leg R") or 
-                    targetColliderParts:FindFirstChild("Capsule_L Foot") or 
-                    targetColliderParts:FindFirstChild("Capsule_Wrist R")
-                )
-                
-                if targetRoot and targetHumanoid and targetPart then
+                if targetRoot and targetHumanoid then
                     local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
                     if currentDist <= maxDetectDistance then
                         pcall(function()
                             if pounceAttackRemote then
                                 for i = 1, burstCount do
-                                    pounceAttackRemote:FireServer(targetHumanoid, targetPart)
+                                    pounceAttackRemote:FireServer(targetHumanoid, "Capsule_R Tibia")
+                                    pounceAttackRemote:FireServer(targetHumanoid, "Capsule_Wrist R")
                                 end
                             end
                         end)
