@@ -593,8 +593,8 @@ local KillAuraStompStatusLabel, StompKeyBtn, updateStompKey = createFeatureButto
 KillAuraStompStatusLabel.Text = "KILL AURA STOMP: OFF"
 KillAuraStompStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
-local KillAuraQuetzGrabStatusLabel, QuetzGrabKeyBtn, updateQuetzGrabKey = createFeatureButton(220, "QUETZGRAB N", "ToggleKillAuraQuetzGrab")
-KillAuraQuetzGrabStatusLabel.Text = "QUETZGRAB N: OFF"
+local KillAuraQuetzGrabStatusLabel, QuetzGrabKeyBtn, updateQuetzGrabKey = createFeatureButton(220, "CARNO N", "ToggleKillAuraQuetzGrab")
+KillAuraQuetzGrabStatusLabel.Text = "CARNO N: OFF"
 KillAuraQuetzGrabStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
 local HitNeckStatusLabel, JKeyBtn, updateJKey = createFeatureButton(250, "HITNECK J", "ToggleHitNeckJ")
@@ -679,11 +679,11 @@ end
 local function updateKillAuraQuetzGrabVisuals()
     if killAuraQuetzGrabActive then
         KillAuraQuetzGrabStatusLabel.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
-        KillAuraQuetzGrabStatusLabel.Text = "QUETZGRAB N: ACTIVE"
+        KillAuraQuetzGrabStatusLabel.Text = "CARNO N: ACTIVE"
         KillAuraQuetzGrabStatusLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
     else
         KillAuraQuetzGrabStatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        KillAuraQuetzGrabStatusLabel.Text = "QUETZGRAB N: OFF"
+        KillAuraQuetzGrabStatusLabel.Text = "CARNO N: OFF"
         KillAuraQuetzGrabStatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
     end
 end
@@ -1109,7 +1109,7 @@ local function performAttacks()
         end
     end
 
-    -- 3. Kill Aura L (SpecialAttackRemoteEvent_ChargedAttack) - Đã cập nhật lệnh mới
+    -- 3. Kill Aura L (SpecialAttackRemoteEvent_ChargedAttack)
     if killAuraNoActive and (tick() - lastKillAuraNoTime >= killAuraNoCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -1161,21 +1161,21 @@ local function performAttacks()
         end
     end
 
-    -- 5. Kill Aura QuetzGrab
+    -- 5. Carno N (SpecialAttackRemoteEvent_ChargedAttack với tham số Carno)
     if killAuraQuetzGrabActive and (tick() - lastKillAuraQuetzGrabTime >= killAuraQuetzGrabCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
                 local targetCharacter = workspace:FindFirstChild(pName)
-                local targetHead = targetCharacter and targetCharacter:FindFirstChild("Head")
+                local targetHumanoid = targetCharacter and targetCharacter:FindFirstChild("Humanoid")
                 local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
                 
-                if targetRoot and targetHead then
+                if targetRoot and targetHumanoid then
                     local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
                     if currentDist <= maxDetectDistance then
                         pcall(function()
-                            if abilityHitRemote then
+                            if chargedAttackRemote then
                                 for i = 1, burstCount do
-                                    abilityHitRemote:FireServer("QuetzGrab", targetHead)
+                                    chargedAttackRemote:FireServer(targetHumanoid, 1)
                                 end
                             end
                         end)
