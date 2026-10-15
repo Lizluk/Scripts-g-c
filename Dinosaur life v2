@@ -12,6 +12,7 @@ local primaryAttackHitRemote = ReplicatedStorage:FindFirstChild("PrimaryAttackHi
 local abilityHitRemote = ReplicatedStorage:FindFirstChild("AbilityHit")
 local stompHitRemote = ReplicatedStorage:FindFirstChild("StompHit")
 local pounceAttackRemote = ReplicatedStorage:FindFirstChild("SpecialAttackRemoteEvent_PounceAttack")
+local chargedAttackRemote = ReplicatedStorage:FindFirstChild("SpecialAttackRemoteEvent_ChargedAttack")
 local attackHandlerRemote = ReplicatedStorage:FindFirstChild("AttackHandlerRemoteEvent")
 local regularAttackRemote = ReplicatedStorage:FindFirstChild("SpecialAttackRemoteEvent_RegularAttack")
 
@@ -1081,7 +1082,7 @@ local function performAttacks()
         end
     end
 
-    -- 2. Kill Aura K (SpecialAttackRemoteEvent_PounceAttack) - Đã thay mới hoàn toàn bằng 2 lệnh của bạn
+    -- 2. Kill Aura K (SpecialAttackRemoteEvent_PounceAttack)
     if killAuraKActive and (tick() - lastKillAuraKTime >= killAuraKCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -1108,7 +1109,7 @@ local function performAttacks()
         end
     end
 
-    -- 3. Kill Aura L (SpecialAttackRemoteEvent_RegularAttack)
+    -- 3. Kill Aura L (SpecialAttackRemoteEvent_ChargedAttack) - Đã cập nhật lệnh mới
     if killAuraNoActive and (tick() - lastKillAuraNoTime >= killAuraNoCooldown) then
         for pName, isTargeted in pairs(targets) do
             if isTargeted and not teamSafeList[pName] then
@@ -1120,9 +1121,9 @@ local function performAttacks()
                     local currentDist = (myRoot.Position - targetRoot.Position).Magnitude
                     if currentDist <= maxDetectDistance then
                         pcall(function()
-                            if regularAttackRemote then
+                            if chargedAttackRemote then
                                 for i = 1, burstCount do
-                                    regularAttackRemote:FireServer(targetHumanoid)
+                                    chargedAttackRemote:FireServer(targetHumanoid, 1)
                                 end
                             end
                         end)
