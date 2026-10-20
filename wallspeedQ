@@ -1,7 +1,7 @@
 local localPlayer = game:GetService("Players").LocalPlayer
 local uis = game:GetService("UserInputService")
 local isRunning = false 
-local multiplier = 0.2 
+local multiplier = 0.4 
 task.spawn(function()
     local hint = Instance.new("Hint", workspace)
     hint.Text = "Speed Loaded by LSJiqueue!"
