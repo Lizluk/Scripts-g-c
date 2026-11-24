@@ -50,7 +50,7 @@ statusLabel.Font = Enum.Font.SourceSansBold
 statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 statusLabel.TextSize = 15
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-statusLabel.Text = "[J] Third Person: OFF"
+statusLabel.Text = "[U] Third Person: OFF"
 statusLabel.Parent = frame
 
 local zoomLabel = Instance.new("TextLabel")
@@ -88,10 +88,10 @@ hideHintLabel.Parent = frame
 
 local function updateUI()
     if isThirdPerson then
-        statusLabel.Text = "[J] Third Person: ON"
+        statusLabel.Text = "[U] Third Person: ON"
         statusLabel.TextColor3 = Color3.fromRGB(85, 255, 127)
     else
-        statusLabel.Text = "[J] Third Person: OFF"
+        statusLabel.Text = "[U] Third Person: OFF"
         statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     end
     zoomLabel.Text = "Zoom: " .. string.format("%.1f", currentZoom) .. " studs"
@@ -163,7 +163,7 @@ end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.J then
+    if input.KeyCode == Enum.KeyCode.U then
         toggleThirdPerson()
     elseif input.KeyCode == Enum.KeyCode.K then
         isMenuVisible = not isMenuVisible
