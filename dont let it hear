@@ -1,0 +1,310 @@
+-- Water Walk + Auto-Save GUI
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+
+local player = Players.LocalPlayer
+local configFile = "WaterWalk_Config.json"
+
+-- Cấu hình mặc định
+local config = {
+	enabled = true,
+	offsetY = -1.1,
+	showPad = false,
+	padSize = 12
+}
+
+-- Hàm lưu & tải cấu hình
+local function saveConfig()
+	if writefile then
+		pcall(function()
+			writefile(configFile, HttpService:JSONEncode(config))
+		end)
+	end
+end
+
+local function loadConfig()
+	if isfile and readfile and isfile(configFile) then
+		local ok, data = pcall(function()
+			return HttpService:JSONDecode(readfile(configFile))
+		end)
+		if ok and type(data) == "table" then
+			for k, v in pairs(data) do
+				if config[k] ~= nil then
+					config[k] = v
+				end
+			end
+		end
+	end
+end
+
+loadConfig()
+
+-- Xóa GUI/Pad cũ nếu chạy lại script
+local existingGui = (gethui and gethui():FindFirstChild("WaterWalkGui")) or CoreGui:FindFirstChild("WaterWalkGui")
+if existingGui then existingGui:Destroy() end
+local oldPad = workspace:FindFirstChild("WaterWalkPad")
+if oldPad then oldPad:Destroy() end
+
+-- Tạo tấm đỡ vô hình
+local pad = Instance.new("Part")
+pad.Name = "WaterWalkPad"
+pad.Anchored = true
+pad.CanCollide = config.enabled
+pad.Transparency = config.showPad and 0.5 or 1
+pad.Color = Color3.fromRGB(0, 170, 255)
+pad.Material = Enum.Material.SmoothPlastic
+pad.Size = Vector3.new(config.padSize, 1, config.padSize)
+pad.Parent = workspace
+
+-- Tạo GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "WaterWalkGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = (gethui and gethui()) or CoreGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 230, 0, 225)
+mainFrame.Position = UDim2.new(0.03, 0, 0.35, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(24, 26, 32)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.Parent = mainFrame
+
+local uiStroke = Instance.new("UIStroke")
+uiStroke.Color = Color3.fromRGB(55, 60, 75)
+uiStroke.Thickness = 1.2
+uiStroke.Parent = mainFrame
+
+-- Thanh tiêu đề
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -35, 0, 32)
+title.Position = UDim2.new(0, 10, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "Water Walk Settings"
+title.TextColor3 = Color3.fromRGB(240, 240, 245)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 13
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = mainFrame
+
+-- Nút thu gọn GUI
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 24, 0, 24)
+minBtn.Position = UDim2.new(1, -28, 0, 4)
+minBtn.BackgroundColor3 = Color3.fromRGB(40, 44, 54)
+minBtn.Text = "-"
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 14
+minBtn.Parent = mainFrame
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
+
+local content = Instance.new("Frame")
+content.Size = UDim2.new(1, -20, 1, -40)
+content.Position = UDim2.new(0, 10, 0, 34)
+content.BackgroundTransparency = 1
+content.Parent = mainFrame
+
+local minimized = false
+minBtn.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	content.Visible = not minimized
+	mainFrame.Size = minimized and UDim2.new(0, 230, 0, 32) or UDim2.new(0, 230, 0, 225)
+	minBtn.Text = minimized and "+" or "-"
+end)
+
+-- Helper tạo nút
+local function makeBtn(text, pos, size, color)
+	local btn = Instance.new("TextButton")
+	btn.Size = size
+	btn.Position = pos
+	btn.BackgroundColor3 = color or Color3.fromRGB(42, 46, 58)
+	btn.Text = text
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.GothamSemibold
+	btn.TextSize = 12
+	btn.Parent = content
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+	return btn
+end
+
+-- 1. Nút Bật/Tắt Water Walk (Phím G)
+local toggleBtn = makeBtn("", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 32))
+local function refreshToggleUI()
+	toggleBtn.Text = config.enabled and "Trạng thái: BẬT (Phím G)" or "Trạng thái: TẮT (Phím G)"
+	toggleBtn.BackgroundColor3 = config.enabled and Color3.fromRGB(35, 130, 85) or Color3.fromRGB(150, 50, 55)
+end
+refreshToggleUI()
+
+toggleBtn.MouseButton1Click:Connect(function()
+	config.enabled = not config.enabled
+	refreshToggleUI()
+	saveConfig()
+end)
+
+-- 2. Chỉnh độ cao Offset Y
+local offsetLabel = Instance.new("TextLabel")
+offsetLabel.Size = UDim2.new(1, 0, 0, 22)
+offsetLabel.Position = UDim2.new(0, 0, 0, 40)
+offsetLabel.BackgroundTransparency = 1
+offsetLabel.TextColor3 = Color3.fromRGB(210, 215, 225)
+offsetLabel.Font = Enum.Font.Gotham
+offsetLabel.TextSize = 12
+offsetLabel.TextXAlignment = Enum.TextXAlignment.Left
+offsetLabel.Parent = content
+
+local function refreshOffsetUI()
+	offsetLabel.Text = string.format("Độ cao (Offset Y): %.2f", config.offsetY)
+end
+refreshOffsetUI()
+
+local downBig = makeBtn("-0.5", UDim2.new(0, 0, 0, 64), UDim2.new(0.23, 0, 0, 28))
+local downSmall = makeBtn("-0.1", UDim2.new(0.256, 0, 0, 64), UDim2.new(0.23, 0, 0, 28))
+local upSmall = makeBtn("+0.1", UDim2.new(0.513, 0, 0, 64), UDim2.new(0.23, 0, 0, 28))
+local upBig = makeBtn("+0.5", UDim2.new(0.77, 0, 0, 64), UDim2.new(0.23, 0, 0, 28))
+
+local function changeOffset(delta)
+	config.offsetY = math.floor((config.offsetY + delta) * 100 + 0.5) / 100
+	refreshOffsetUI()
+	saveConfig()
+end
+
+downBig.MouseButton1Click:Connect(function() changeOffset(-0.5) end)
+downSmall.MouseButton1Click:Connect(function() changeOffset(-0.1) end)
+upSmall.MouseButton1Click:Connect(function() changeOffset(0.1) end)
+upBig.MouseButton1Click:Connect(function() changeOffset(0.5) end)
+
+-- 3. Chỉnh kích thước tấm đỡ (Pad Size)
+local sizeLabel = Instance.new("TextLabel")
+sizeLabel.Size = UDim2.new(1, 0, 0, 22)
+sizeLabel.Position = UDim2.new(0, 0, 0, 100)
+sizeLabel.BackgroundTransparency = 1
+sizeLabel.TextColor3 = Color3.fromRGB(210, 215, 225)
+sizeLabel.Font = Enum.Font.Gotham
+sizeLabel.TextSize = 12
+sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
+sizeLabel.Parent = content
+
+local function refreshSizeUI()
+	sizeLabel.Text = string.format("Kích thước sàn: %d x %d", config.padSize, config.padSize)
+	pad.Size = Vector3.new(config.padSize, 1, config.padSize)
+end
+refreshSizeUI()
+
+local sizeDown = makeBtn("- Thu nhỏ", UDim2.new(0, 0, 0, 124), UDim2.new(0.48, 0, 0, 28))
+local sizeUp = makeBtn("+ Mở rộng", UDim2.new(0.52, 0, 0, 124), UDim2.new(0.48, 0, 0, 28))
+
+sizeDown.MouseButton1Click:Connect(function()
+	config.padSize = math.max(4, config.padSize - 2)
+	refreshSizeUI()
+	saveConfig()
+end)
+
+sizeUp.MouseButton1Click:Connect(function()
+	config.padSize = math.min(40, config.padSize + 2)
+	refreshSizeUI()
+	saveConfig()
+end)
+
+-- 4. Hiện / Ẩn tấm đỡ để dễ căn
+local visBtn = makeBtn("", UDim2.new(0, 0, 0, 160), UDim2.new(1, 0, 0, 28))
+local function refreshVisUI()
+	visBtn.Text = config.showPad and "Hiển thị sàn đỡ: HIỆN" or "Hiển thị sàn đỡ: TÀNG HÌNH"
+	pad.Transparency = config.showPad and 0.5 or 1
+end
+refreshVisUI()
+
+visBtn.MouseButton1Click:Connect(function()
+	config.showPad = not config.showPad
+	refreshVisUI()
+	saveConfig()
+end)
+
+-- Phím tắt bàn phím (G bật/tắt, [ hạ thấp, ] nâng cao, RightShift ẩn/hiện GUI)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.G then
+		config.enabled = not config.enabled
+		refreshToggleUI()
+		saveConfig()
+	elseif input.KeyCode == Enum.KeyCode.LeftBracket then
+		changeOffset(-0.1)
+	elseif input.KeyCode == Enum.KeyCode.RightBracket then
+		changeOffset(0.1)
+	elseif input.KeyCode == Enum.KeyCode.RightShift then
+		screenGui.Enabled = not screenGui.Enabled
+	end
+end)
+
+-- Quét mực nước Terrain
+local function getWaterSurfaceY(pos: Vector3): number?
+	local terrain = workspace:FindFirstChildOfClass("Terrain")
+	if not terrain then return nil end
+
+	local minX = math.floor((pos.X - 4) / 4) * 4
+	local maxX = math.floor((pos.X + 4) / 4) * 4
+	local minZ = math.floor((pos.Z - 4) / 4) * 4
+	local maxZ = math.floor((pos.Z + 4) / 4) * 4
+
+	local minBound = Vector3.new(minX, math.floor((pos.Y - 20) / 4) * 4, minZ)
+	local maxBound = Vector3.new(maxX, math.floor((pos.Y + 6) / 4) * 4, maxZ)
+
+	local region = Region3.new(minBound, maxBound):ExpandToGrid(4)
+	local materials, _ = terrain:ReadVoxels(region, 4)
+	local size = materials.Size
+
+	local highestWaterTop: number? = nil
+	for x = 1, size.X do
+		for y = size.Y, 1, -1 do
+			for z = 1, size.Z do
+				if materials[x][y][z] == Enum.Material.Water then
+					local voxelTopY = region.CFrame.Position.Y - (region.Size.Y / 2) + (y * 4)
+					if not highestWaterTop or voxelTopY > highestWaterTop then
+						highestWaterTop = voxelTopY
+					end
+					break
+				end
+			end
+		end
+	end
+
+	return highestWaterTop
+end
+
+-- Vòng lặp cập nhật vị trí sàn đỡ
+RunService.Heartbeat:Connect(function()
+	if not pad or not pad.Parent then
+		pad.Parent = workspace
+	end
+
+	if not config.enabled then
+		pad.CanCollide = false
+		pad.Position = Vector3.new(0, -5000, 0)
+		return
+	end
+
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		pad.CanCollide = false
+		return
+	end
+
+	local waterY = getWaterSurfaceY(root.Position)
+	if waterY and root.Position.Y >= waterY - 4 then
+		local targetTopY = waterY + config.offsetY
+		pad.CanCollide = true
+		pad.Position = Vector3.new(root.Position.X, targetTopY - (pad.Size.Y / 2), root.Position.Z)
+	else
+		pad.CanCollide = false
+		pad.Position = Vector3.new(0, -5000, 0)
+	end
+end)
