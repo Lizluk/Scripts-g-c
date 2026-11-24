@@ -1,0 +1,189 @@
+-- Roblox Third Person Toggle (Tự xoay nhân vật theo hướng chuột + Di chuyển chuột tự do)
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local isThirdPerson = false
+local isMenuVisible = true
+local currentZoom = 22.5
+local minZoom = 5
+local maxZoom = 80
+local zoomStep = 2.5
+
+-- Góc xoay camera
+local yaw = 0
+local pitch = -0.2
+local sensitivity = 0.0035
+
+-- Xóa GUI cũ nếu chạy lại
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+if playerGui:FindFirstChild("CustomThirdPersonGui") then
+    playerGui.CustomThirdPersonGui:Destroy()
+end
+
+-- Tạo GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CustomThirdPersonGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 215, 0, 88)
+frame.Position = UDim2.new(0, 20, 1, -110)
+frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+frame.BackgroundTransparency = 0.3
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.Parent = frame
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -10, 0, 22)
+statusLabel.Position = UDim2.new(0, 8, 0, 5)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Font = Enum.Font.SourceSansBold
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.TextSize = 15
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Text = "[J] Third Person: OFF"
+statusLabel.Parent = frame
+
+local zoomLabel = Instance.new("TextLabel")
+zoomLabel.Size = UDim2.new(1, -10, 0, 20)
+zoomLabel.Position = UDim2.new(0, 8, 0, 27)
+zoomLabel.BackgroundTransparency = 1
+zoomLabel.Font = Enum.Font.SourceSans
+zoomLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+zoomLabel.TextSize = 14
+zoomLabel.TextXAlignment = Enum.TextXAlignment.Left
+zoomLabel.Text = "Zoom: " .. currentZoom .. " studs"
+zoomLabel.Parent = frame
+
+local scrollHintLabel = Instance.new("TextLabel")
+scrollHintLabel.Size = UDim2.new(1, -10, 0, 18)
+scrollHintLabel.Position = UDim2.new(0, 8, 0, 46)
+scrollHintLabel.BackgroundTransparency = 1
+scrollHintLabel.Font = Enum.Font.SourceSansBold
+scrollHintLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+scrollHintLabel.TextSize = 13
+scrollHintLabel.TextXAlignment = Enum.TextXAlignment.Left
+scrollHintLabel.Text = "[Scroll] Đổi khoảng cách"
+scrollHintLabel.Parent = frame
+
+local hideHintLabel = Instance.new("TextLabel")
+hideHintLabel.Size = UDim2.new(1, -10, 0, 18)
+hideHintLabel.Position = UDim2.new(0, 8, 0, 64)
+hideHintLabel.BackgroundTransparency = 1
+hideHintLabel.Font = Enum.Font.SourceSansBold
+hideHintLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+hideHintLabel.TextSize = 13
+hideHintLabel.TextXAlignment = Enum.TextXAlignment.Left
+hideHintLabel.Text = "[K] Ẩn/Hiện Menu này"
+hideHintLabel.Parent = frame
+
+local function updateUI()
+    if isThirdPerson then
+        statusLabel.Text = "[J] Third Person: ON"
+        statusLabel.TextColor3 = Color3.fromRGB(85, 255, 127)
+    else
+        statusLabel.Text = "[J] Third Person: OFF"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+    zoomLabel.Text = "Zoom: " .. string.format("%.1f", currentZoom) .. " studs"
+end
+
+local function toggleThirdPerson()
+    isThirdPerson = not isThirdPerson
+    local char = localPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+    if isThirdPerson then
+        local x, y, _ = camera.CFrame:ToEulerAnglesYXZ()
+        yaw = y
+        pitch = math.clamp(x, -1.35, 1.35)
+
+        RunService:BindToRenderStep("LizlukThirdPersonOverride", Enum.RenderPriority.Camera.Value + 1, function()
+            if not isThirdPerson then return end
+            local currentChar = localPlayer.Character
+            local hrp = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+            local currentHum = currentChar and currentChar:FindFirstChildOfClass("Humanoid")
+            if not hrp or not currentHum then return end
+
+            -- Khóa chuột ở giữa màn hình để di chuyển chuột là xoay góc nhìn ngay (không cần đè chuột phải)
+            UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+
+            -- Hiện rõ toàn bộ cơ thể nhân vật
+            for _, part in ipairs(currentChar:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.LocalTransparencyModifier = 0
+                end
+            end
+
+            -- Xoay nhân vật trực tiếp theo hướng ngang (yaw) của chuột
+            currentHum.AutoRotate = false
+            hrp.CFrame = CFrame.new(hrp.Position) * CFrame.fromEulerAnglesYXZ(0, yaw, 0)
+
+            -- Tính vị trí camera phía sau lưng nhân vật
+            local focusPos = hrp.Position + Vector3.new(0, 2.2, 0)
+            local rotCFrame = CFrame.fromEulerAnglesYXZ(pitch, yaw, 0)
+            local desiredDir = -rotCFrame.LookVector
+
+            -- Raycast tránh xuyên tường
+            local rayParams = RaycastParams.new()
+            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+            rayParams.FilterDescendantsInstances = {currentChar}
+
+            local rayResult = workspace:Raycast(focusPos, desiredDir * currentZoom, rayParams)
+            local finalDist = currentZoom
+            if rayResult then
+                finalDist = math.max(1.5, (rayResult.Position - focusPos).Magnitude - 0.6)
+            end
+
+            local camPos = focusPos + (desiredDir * finalDist)
+            camera.CameraType = Enum.CameraType.Scriptable
+            camera.CFrame = CFrame.lookAt(camPos, focusPos)
+        end)
+    else
+        RunService:UnbindFromRenderStep("LizlukThirdPersonOverride")
+        if hum then
+            hum.AutoRotate = true
+        end
+        camera.CameraType = Enum.CameraType.Custom
+        localPlayer.CameraMinZoomDistance = 0.5
+        localPlayer.CameraMaxZoomDistance = 0.5
+        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+    end
+    updateUI()
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.J then
+        toggleThirdPerson()
+    elseif input.KeyCode == Enum.KeyCode.K then
+        isMenuVisible = not isMenuVisible
+        frame.Visible = isMenuVisible
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    if isThirdPerson and input.UserInputType == Enum.UserInputType.MouseMovement then
+        -- Di chuyển chuột tự do để xoay cả camera lẫn nhân vật
+        yaw = yaw - (input.Delta.X * sensitivity)
+        pitch = math.clamp(pitch - (input.Delta.Y * sensitivity), -1.35, 1.35)
+    elseif isThirdPerson and input.UserInputType == Enum.UserInputType.MouseWheel then
+        if input.Position.Z > 0 then
+            currentZoom = math.clamp(currentZoom - zoomStep, minZoom, maxZoom)
+        else
+            currentZoom = math.clamp(currentZoom + zoomStep, minZoom, maxZoom)
+        end
+        updateUI()
+    end
+end)
