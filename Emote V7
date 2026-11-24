@@ -1,0 +1,3097 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- Cấu hình chung
+local SMOOTHNESS = 0.16
+local TILT_ANGLE = 25
+local MIN_SCAN_DIST = 10
+local MAX_SCAN_DIST = 25
+local FLOOR_OFFSET_Y = 3.2
+local MULTI_TAP_WINDOW = 0.42
+local RUN_SPEED_THRESHOLD = 18
+
+-- Tên các file lưu dữ liệu tự động trên máy
+local PRESET_FILE = "ProSurfFlightPresets.json"
+local EMOTE_FILE = "ProSurfEmoteList.json"
+local CONFIG_FILE = "ProSurfActiveConfig.json"
+local ANIM_PACKS_FILE = "ProSurfSavedAnimPacks.json"
+local ACTIVE_ANIM_PACK_FILE = "ProSurfActiveAnimPack.json"
+
+-- Cấu hình toàn bộ phím có thể tùy chỉnh
+local DEFAULT_KEYBINDS = {
+	toggleFly = "G",
+	toggleHover = "H",
+	cycleStand = "X",
+	upOrStyle = "Space",
+	down = "LeftControl",
+	forward = "W",
+	backward = "S",
+	left = "A",
+	right = "D",
+	cycleEmote = "C",
+	stopEmotes = "F1",
+	cycleAnimPack = "V",
+	stopAnimPack = "F2",
+}
+
+local keybinds = {
+	toggleFly = DEFAULT_KEYBINDS.toggleFly,
+	toggleHover = DEFAULT_KEYBINDS.toggleHover,
+	cycleStand = DEFAULT_KEYBINDS.cycleStand,
+	upOrStyle = DEFAULT_KEYBINDS.upOrStyle,
+	down = DEFAULT_KEYBINDS.down,
+	forward = DEFAULT_KEYBINDS.forward,
+	backward = DEFAULT_KEYBINDS.backward,
+	left = DEFAULT_KEYBINDS.left,
+	right = DEFAULT_KEYBINDS.right,
+	cycleEmote = DEFAULT_KEYBINDS.cycleEmote,
+	stopEmotes = DEFAULT_KEYBINDS.stopEmotes,
+	cycleAnimPack = DEFAULT_KEYBINDS.cycleAnimPack,
+	stopAnimPack = DEFAULT_KEYBINDS.stopAnimPack,
+}
+
+local listeningAction = nil
+
+local function cloneKeybinds(src)
+	local out = {}
+	for k, defaultVal in pairs(DEFAULT_KEYBINDS) do
+		local val = src and src[k]
+		if type(val) == "string" and Enum.KeyCode[val] then
+			out[k] = val
+		else
+			out[k] = defaultVal
+		end
+	end
+	return out
+end
+
+local function isBindPressed(actionName)
+	local codeName = keybinds[actionName]
+	local kc = codeName and Enum.KeyCode[codeName]
+	if not kc then return false end
+	return UserInputService:IsKeyDown(kc)
+end
+
+-- Dữ liệu 3 kiểu bay hiện tại
+local flightStyles = {
+	{ name = "Kiểu 1", animId = "", speed = 65 },
+	{ name = "Kiểu 2", animId = "", speed = 95 },
+	{ name = "Kiểu 3", animId = "", speed = 130 },
+}
+
+-- Dữ liệu 2 kiểu đứng khi bấm phím chuyển đứng
+local standStyles = {
+	{ name = "Đứng 1", animId = "", speed = 75 },
+	{ name = "Đứng 2", animId = "", speed = 75 },
+}
+
+-- Dữ liệu Anim Changer hiện tại
+local currentAnimPack = {
+	idle1 = "",
+	idle2 = "",
+	extraIdles = {},
+	walk = "",
+	run = "",
+	jump = "",
+	fall = "",
+}
+local currentPackName = "Pack hiện tại"
+local savedAnimPacks = {}
+local animChangerActive = false
+local animHeartbeatConn = nil
+local activePackCycleIndex = 0
+local originalAnimateIds = {}
+
+-- Trạng thái ID Finder (Quét ID)
+local scannerEnabled = false
+local scannedIds = {}
+local seenScannedIds = {}
+local scanCounter = 0
+local scannerConn = nil
+local lastScanTick = 0
+
+-- Danh sách emote không giới hạn cho phím C
+local emoteList = {}
+local activeEmoteIndex = 0
+local currentEmoteTrack = nil
+local currentEmoteId = ""
+
+-- Danh sách các bộ bay đã lưu
+local savedPresets = {}
+local activeStyleIndex = 1
+local isStandMode = false
+local activeStandIndex = 1
+
+local currentAnimTrack = nil
+local currentAnimId = ""
+
+-- Biến trạng thái bay
+local isFlying = false
+local isHovering = false
+local bodyGyro = nil
+local bodyVelocity = nil
+local flightConnection = nil
+local animKeepConnection = nil
+local invisibleFloor = nil
+
+-- Biến đếm bấm phím chuyển kiểu 1 / 2 / 3 lần
+local styleTapCount = 0
+local styleTapTimer = nil
+
+local function normalizeAnimId(rawText)
+	local cleaned = tostring(rawText or ""):gsub("%s+", "")
+	if cleaned == "" then return "" end
+	if string.find(cleaned, "^rbxassetid://") then
+		return cleaned
+	end
+	local digits = cleaned:match("%d+")
+	if digits then
+		return "rbxassetid://" .. digits
+	end
+	return cleaned
+end
+
+local function extractNumericId(rawText)
+	return tostring(rawText or ""):match("%d+")
+end
+
+local function copyToClipboardSafe(text)
+	local str = tostring(text or "")
+	if str == "" then return false end
+	local fn = (typeof(setclipboard) == "function" and setclipboard)
+		or (typeof(toclipboard) == "function" and toclipboard)
+		or (typeof(set_clipboard) == "function" and set_clipboard)
+	if fn then
+		local ok = pcall(fn, str)
+		if ok then return true end
+	end
+	return false
+end
+
+local function deepCopyStyles(src)
+	if type(src) ~= "table" then
+		return {
+			{ name = "Kiểu 1", animId = "", speed = 65 },
+			{ name = "Kiểu 2", animId = "", speed = 95 },
+			{ name = "Kiểu 3", animId = "", speed = 130 },
+		}
+	end
+	local copy = {}
+	for i = 1, 3 do
+		local item = src[i] or {}
+		copy[i] = {
+			name = item.name or ("Kiểu " .. i),
+			animId = item.animId or "",
+			speed = tonumber(item.speed) or 65,
+		}
+	end
+	return copy
+end
+
+local function deepCopyStandStyles(src)
+	if type(src) ~= "table" then
+		return {
+			{ name = "Đứng 1", animId = "", speed = 75 },
+			{ name = "Đứng 2", animId = "", speed = 75 },
+		}
+	end
+	local copy = {}
+	for i = 1, 2 do
+		local item = src[i] or {}
+		copy[i] = {
+			name = item.name or ("Đứng " .. i),
+			animId = item.animId or "",
+			speed = tonumber(item.speed) or 75,
+		}
+	end
+	return copy
+end
+
+local function deepCopyEmotes(src)
+	if type(src) ~= "table" then return {} end
+	local copy = {}
+	for i, item in ipairs(src) do
+		if type(item) == "table" then
+			local id = normalizeAnimId(item.animId)
+			if id ~= "" then
+				table.insert(copy, {
+					name = tostring(item.name or ("Emote " .. i)),
+					animId = id,
+				})
+			end
+		elseif type(item) == "string" then
+			local id = normalizeAnimId(item)
+			if id ~= "" then
+				table.insert(copy, {
+					name = "Emote " .. i,
+					animId = id,
+				})
+			end
+		end
+	end
+	return copy
+end
+
+local function normalizeAnimPack(src)
+	src = (type(src) == "table") and src or {}
+	local extras = {}
+	if type(src.extraIdles) == "table" then
+		for _, rawId in ipairs(src.extraIdles) do
+			local norm = normalizeAnimId(rawId)
+			if norm ~= "" then
+				table.insert(extras, norm)
+			end
+		end
+	end
+	return {
+		idle1 = normalizeAnimId(src.idle1),
+		idle2 = normalizeAnimId(src.idle2),
+		extraIdles = extras,
+		walk = normalizeAnimId(src.walk),
+		run = normalizeAnimId(src.run),
+		jump = normalizeAnimId(src.jump),
+		fall = normalizeAnimId(src.fall),
+	}
+end
+
+-- ================= HÀM ĐỌC / GHI FILE TỰ ĐỘNG =================
+local function safeWriteJson(filename, dataTable)
+	if typeof(writefile) == "function" then
+		pcall(function()
+			writefile(filename, HttpService:JSONEncode(dataTable))
+		end)
+	end
+end
+
+local function safeReadJson(filename)
+	if typeof(isfile) == "function" and typeof(readfile) == "function" and isfile(filename) then
+		local ok, decoded = pcall(function()
+			return HttpService:JSONDecode(readfile(filename))
+		end)
+		if ok and type(decoded) == "table" then
+			return decoded
+		end
+	end
+	return nil
+end
+
+local function persistEmotes()
+	local env = (getgenv and getgenv()) or shared
+	env.ProSurfEmoteList = emoteList
+	safeWriteJson(EMOTE_FILE, emoteList)
+end
+
+local function loadEmotes()
+	local env = (getgenv and getgenv()) or shared
+	local fromFile = safeReadJson(EMOTE_FILE)
+	if fromFile then
+		emoteList = deepCopyEmotes(fromFile)
+		env.ProSurfEmoteList = emoteList
+		return
+	end
+	if type(env.ProSurfEmoteList) == "table" then
+		emoteList = deepCopyEmotes(env.ProSurfEmoteList)
+	end
+end
+
+local function persistActiveConfig()
+	local payload = {
+		styles = deepCopyStyles(flightStyles),
+		stands = deepCopyStandStyles(standStyles),
+		keybinds = cloneKeybinds(keybinds),
+	}
+	local env = (getgenv and getgenv()) or shared
+	env.ProSurfActiveConfig = payload
+	safeWriteJson(CONFIG_FILE, payload)
+end
+
+local function loadActiveConfig()
+	local env = (getgenv and getgenv()) or shared
+	local data = safeReadJson(CONFIG_FILE) or env.ProSurfActiveConfig
+	if type(data) == "table" then
+		if type(data.styles) == "table" then
+			flightStyles = deepCopyStyles(data.styles)
+		end
+		if type(data.stands) == "table" then
+			standStyles = deepCopyStandStyles(data.stands)
+		end
+		if type(data.keybinds) == "table" then
+			keybinds = cloneKeybinds(data.keybinds)
+		end
+	end
+end
+
+local function persistAnimPacks()
+	local env = (getgenv and getgenv()) or shared
+	env.ProSurfSavedAnimPacks = savedAnimPacks
+	safeWriteJson(ANIM_PACKS_FILE, savedAnimPacks)
+end
+
+local function loadAnimPacks()
+	local env = (getgenv and getgenv()) or shared
+	local fromFile = safeReadJson(ANIM_PACKS_FILE)
+	if fromFile then
+		savedAnimPacks = fromFile
+		env.ProSurfSavedAnimPacks = savedAnimPacks
+		return
+	end
+	if type(env.ProSurfSavedAnimPacks) == "table" then
+		savedAnimPacks = env.ProSurfSavedAnimPacks
+	end
+end
+
+local function persistActiveAnimPack()
+	local payload = {
+		active = animChangerActive,
+		name = currentPackName,
+		pack = normalizeAnimPack(currentAnimPack),
+	}
+	local env = (getgenv and getgenv()) or shared
+	env.ProSurfActiveAnimPack = payload
+	safeWriteJson(ACTIVE_ANIM_PACK_FILE, payload)
+end
+
+local function loadActiveAnimPack()
+	local env = (getgenv and getgenv()) or shared
+	local data = safeReadJson(ACTIVE_ANIM_PACK_FILE) or env.ProSurfActiveAnimPack
+	if type(data) == "table" then
+		if type(data.pack) == "table" then
+			currentAnimPack = normalizeAnimPack(data.pack)
+		end
+		if type(data.name) == "string" and data.name ~= "" then
+			currentPackName = data.name
+		end
+		animChangerActive = (data.active == true)
+	end
+end
+
+local function persistPresets()
+	local env = (getgenv and getgenv()) or shared
+	env.ProSurfFlightPresets = savedPresets
+	safeWriteJson(PRESET_FILE, savedPresets)
+end
+
+local function loadPresets()
+	local env = (getgenv and getgenv()) or shared
+	local fromFile = safeReadJson(PRESET_FILE)
+	if fromFile then
+		savedPresets = fromFile
+		env.ProSurfFlightPresets = savedPresets
+		return
+	end
+	if type(env.ProSurfFlightPresets) == "table" then
+		savedPresets = env.ProSurfFlightPresets
+	end
+end
+
+loadActiveConfig()
+loadEmotes()
+loadAnimPacks()
+loadActiveAnimPack()
+loadPresets()
+
+-- ================= LOGIC ANIM CHANGER & CHUYỂN / TẮT BỘ ANIMATION =================
+local function captureOriginalAnimateIds(character)
+	if not character then return end
+	local animateScript = character:FindFirstChild("Animate")
+	if not animateScript then return end
+
+	for _, desc in ipairs(animateScript:GetDescendants()) do
+		if desc:IsA("Animation") and originalAnimateIds[desc] == nil then
+			originalAnimateIds[desc] = desc.AnimationId
+		end
+	end
+end
+
+local function restoreOriginalAnimateIds(character)
+	if not character then return end
+	local animateScript = character:FindFirstChild("Animate")
+	if not animateScript then return end
+
+	for _, desc in ipairs(animateScript:GetDescendants()) do
+		if desc:IsA("Animation") and originalAnimateIds[desc] then
+			desc.AnimationId = originalAnimateIds[desc]
+		end
+	end
+end
+
+local function getAllIdleIds()
+	local list = {}
+	if currentAnimPack.idle1 ~= "" then
+		table.insert(list, currentAnimPack.idle1)
+	end
+	if currentAnimPack.idle2 ~= "" then
+		table.insert(list, currentAnimPack.idle2)
+	end
+	for _, id in ipairs(currentAnimPack.extraIdles or {}) do
+		if id ~= "" then
+			table.insert(list, id)
+		end
+	end
+	return list
+end
+
+local function forceReloadCharacterAnimate(character, humanoid)
+	if not character or not humanoid then return end
+
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if animator then
+		local ok, tracks = pcall(function()
+			return animator:GetPlayingAnimationTracks()
+		end)
+		if ok and type(tracks) == "table" then
+			for _, track in ipairs(tracks) do
+				if track ~= currentAnimTrack and track ~= currentEmoteTrack then
+					local prio = track.Priority
+					if prio == Enum.AnimationPriority.Idle
+						or prio == Enum.AnimationPriority.Movement
+						or prio == Enum.AnimationPriority.Core then
+						pcall(function()
+							track:Stop(0)
+							track:Destroy()
+						end)
+					end
+				end
+			end
+		end
+	end
+
+	local animateScript = character:FindFirstChild("Animate")
+	if animateScript and animateScript:IsA("Script") then
+		pcall(function()
+			animateScript.Disabled = true
+		end)
+		task.defer(function()
+			if animateScript and animateScript.Parent then
+				pcall(function()
+					animateScript.Disabled = false
+				end)
+			end
+		end)
+	end
+end
+
+local function applyPackToAnimateScript(character, humanoid, forceRefreshTracks)
+	if not character or not humanoid then return end
+	captureOriginalAnimateIds(character)
+
+	local animateScript = character:FindFirstChild("Animate")
+	if not animateScript then return end
+
+	local idles = getAllIdleIds()
+	local walkId = currentAnimPack.walk
+	local runId = (currentAnimPack.run ~= "" and currentAnimPack.run) or walkId
+	local jumpId = currentAnimPack.jump
+	local fallId = currentAnimPack.fall
+
+	local anyChanged = false
+
+	local function setFolderIds(folderName, ids)
+		if #ids == 0 then return end
+		local folder = animateScript:FindFirstChild(folderName)
+		if not folder then return end
+		local idx = 0
+		for _, child in ipairs(folder:GetChildren()) do
+			if child:IsA("Animation") then
+				idx += 1
+				local chosen = ids[((idx - 1) % #ids) + 1]
+				if chosen and chosen ~= "" and child.AnimationId ~= chosen then
+					child.AnimationId = chosen
+					anyChanged = true
+				end
+			end
+		end
+	end
+
+	setFolderIds("idle", idles)
+	if walkId ~= "" then
+		setFolderIds("walk", { walkId })
+	end
+	if runId ~= "" then
+		setFolderIds("run", { runId })
+	end
+	if jumpId ~= "" then
+		setFolderIds("jump", { jumpId })
+	end
+	if fallId ~= "" then
+		setFolderIds("fall", { fallId })
+	end
+
+	if currentAnimPack.walk ~= "" and currentAnimPack.run ~= "" and not isFlying then
+		local moveSpeed = humanoid.WalkSpeed
+		local runFolder = animateScript:FindFirstChild("run")
+		local walkFolder = animateScript:FindFirstChild("walk")
+		if moveSpeed >= RUN_SPEED_THRESHOLD and runFolder then
+			for _, child in ipairs(runFolder:GetChildren()) do
+				if child:IsA("Animation") and child.AnimationId ~= currentAnimPack.run then
+					child.AnimationId = currentAnimPack.run
+					anyChanged = true
+				end
+			end
+		elseif walkFolder then
+			for _, child in ipairs(walkFolder:GetChildren()) do
+				if child:IsA("Animation") and child.AnimationId ~= currentAnimPack.walk then
+					child.AnimationId = currentAnimPack.walk
+					anyChanged = true
+				end
+			end
+		end
+	end
+
+	if forceRefreshTracks or anyChanged then
+		forceReloadCharacterAnimate(character, humanoid)
+	end
+end
+
+local function startAnimChangerLoop(forceRefreshTracks)
+	if animHeartbeatConn then
+		animHeartbeatConn:Disconnect()
+		animHeartbeatConn = nil
+	end
+	if not animChangerActive then return end
+
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	applyPackToAnimateScript(char, hum, forceRefreshTracks)
+
+	animHeartbeatConn = RunService.Heartbeat:Connect(function()
+		if not animChangerActive then return end
+		local c = player.Character
+		local h = c and c:FindFirstChildOfClass("Humanoid")
+		applyPackToAnimateScript(c, h, false)
+	end)
+end
+
+local syncPackToAnimInputs
+local syncAnimInputsToPack
+local updateAnimBadge
+local updatePackCycleLabel
+local rebuildSavedAnimsUI
+local packNameBox
+
+local function stopAnimChangerPack()
+	animChangerActive = false
+	activePackCycleIndex = 0
+	if animHeartbeatConn then
+		animHeartbeatConn:Disconnect()
+		animHeartbeatConn = nil
+	end
+	persistActiveAnimPack()
+
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	restoreOriginalAnimateIds(char)
+	forceReloadCharacterAnimate(char, hum)
+
+	if updateAnimBadge then
+		updateAnimBadge()
+	end
+	if updatePackCycleLabel then
+		updatePackCycleLabel()
+	end
+	if rebuildSavedAnimsUI then
+		rebuildSavedAnimsUI()
+	end
+end
+
+local function activateAnimPack(packData, packLabel, autoStart)
+	currentAnimPack = normalizeAnimPack(packData)
+	currentPackName = tostring(packLabel or "Pack hiện tại")
+	if autoStart ~= false then
+		animChangerActive = true
+	end
+	persistActiveAnimPack()
+	if packNameBox then
+		packNameBox.Text = currentPackName
+	end
+	if syncPackToAnimInputs then
+		syncPackToAnimInputs()
+	end
+	if updateAnimBadge then
+		updateAnimBadge()
+	end
+	if animChangerActive then
+		startAnimChangerLoop(true)
+	end
+	if updatePackCycleLabel then
+		updatePackCycleLabel()
+	end
+	if rebuildSavedAnimsUI then
+		rebuildSavedAnimsUI()
+	end
+end
+
+local function getCycleablePacks()
+	local list = {}
+	if type(savedAnimPacks) == "table" then
+		for idx, item in ipairs(savedAnimPacks) do
+			if type(item) == "table" and type(item.pack) == "table" then
+				table.insert(list, {
+					index = idx,
+					name = tostring(item.name or ("Pack #" .. idx)),
+					pack = normalizeAnimPack(item.pack),
+				})
+			end
+		end
+	end
+	return list
+end
+
+local function cycleNextAnimPack()
+	local list = getCycleablePacks()
+	if #list == 0 then
+		activateAnimPack(currentAnimPack, currentPackName, true)
+		return
+	end
+
+	if activePackCycleIndex < 1 or activePackCycleIndex > #list then
+		activePackCycleIndex = 0
+	end
+
+	local nextIdx = (activePackCycleIndex % #list) + 1
+	activePackCycleIndex = nextIdx
+	local chosen = list[nextIdx]
+	activateAnimPack(chosen.pack, chosen.name, true)
+end
+
+-- Quản lý sàn vô hình
+local function removeInvisibleFloor()
+	if invisibleFloor then
+		invisibleFloor:Destroy()
+		invisibleFloor = nil
+	end
+end
+
+local function ensureInvisibleFloor()
+	if not invisibleFloor or not invisibleFloor.Parent then
+		local part = Instance.new("Part")
+		part.Name = "SurfAirFloor"
+		part.Size = Vector3.new(18, 1, 18)
+		part.Anchored = true
+		part.CanCollide = true
+		part.Transparency = 1
+		part.Material = Enum.Material.SmoothPlastic
+		part.Parent = workspace
+		invisibleFloor = part
+	end
+end
+
+local function updateAirFloor(character, rootPart)
+	if not isFlying or not rootPart then
+		removeInvisibleFloor()
+		return
+	end
+
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	local ignoreList = { character }
+	if invisibleFloor then
+		table.insert(ignoreList, invisibleFloor)
+	end
+	rayParams.FilterDescendantsInstances = ignoreList
+
+	local rayResult = workspace:Raycast(rootPart.Position, Vector3.new(0, -(MAX_SCAN_DIST + 10), 0), rayParams)
+
+	if rayResult then
+		local distanceToGround = (rootPart.Position.Y - rayResult.Position.Y)
+		if distanceToGround >= MIN_SCAN_DIST and distanceToGround <= MAX_SCAN_DIST then
+			ensureInvisibleFloor()
+			invisibleFloor.CFrame = CFrame.new(
+				rootPart.Position.X,
+				rootPart.Position.Y - FLOOR_OFFSET_Y,
+				rootPart.Position.Z
+			)
+		else
+			removeInvisibleFloor()
+		end
+	else
+		ensureInvisibleFloor()
+		invisibleFloor.CFrame = CFrame.new(
+			rootPart.Position.X,
+			rootPart.Position.Y - FLOOR_OFFSET_Y,
+			rootPart.Position.Z
+		)
+	end
+end
+
+-- Quản lý Emote riêng biệt (phím C chuyển, phím F1 dừng hết không ảnh hưởng X)
+local function stopCurrentEmoteTrack()
+	if currentEmoteTrack then
+		pcall(function()
+			currentEmoteTrack:Stop(0.1)
+			currentEmoteTrack:Destroy()
+		end)
+		currentEmoteTrack = nil
+	end
+	currentEmoteId = ""
+end
+
+local function playEmoteAtIndex(index, forceRestart)
+	if #emoteList == 0 then return end
+	index = ((index - 1) % #emoteList) + 1
+	activeEmoteIndex = index
+
+	local entry = emoteList[activeEmoteIndex]
+	local animId = normalizeAnimId(entry and entry.animId)
+	if animId == "" then return end
+
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	if not forceRestart and currentEmoteId == animId and currentEmoteTrack and currentEmoteTrack.IsPlaying then
+		return
+	end
+
+	stopCurrentEmoteTrack()
+
+	local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+	local animInstance = Instance.new("Animation")
+	animInstance.AnimationId = animId
+
+	local ok, track = pcall(function()
+		return animator:LoadAnimation(animInstance)
+	end)
+
+	if ok and track then
+		track.Priority = Enum.AnimationPriority.Action4
+		track.Looped = true
+		track:Play(0.12)
+		currentEmoteTrack = track
+		currentEmoteId = animId
+	end
+end
+
+local function cycleNextEmote()
+	if #emoteList == 0 then return end
+	local nextIdx = (activeEmoteIndex % #emoteList) + 1
+	playEmoteAtIndex(nextIdx, true)
+end
+
+local function stopAllListEmotes()
+	activeEmoteIndex = 0
+	stopCurrentEmoteTrack()
+end
+
+-- Lấy Animation ID của kiểu bay / kiểu đứng (X)
+local function getDesiredAnimId()
+	if isStandMode then
+		local s = standStyles[activeStandIndex]
+		return normalizeAnimId(s and s.animId)
+	else
+		local f = flightStyles[activeStyleIndex]
+		return normalizeAnimId(f and f.animId)
+	end
+end
+
+local function getActiveSpeed()
+	if isStandMode then
+		local s = standStyles[activeStandIndex]
+		return (s and s.speed) or 75
+	else
+		local f = flightStyles[activeStyleIndex]
+		return (f and f.speed) or 65
+	end
+end
+
+local function stopCurrentCustomAnim()
+	if currentAnimTrack then
+		pcall(function()
+			currentAnimTrack:Stop(0.1)
+			currentAnimTrack:Destroy()
+		end)
+		currentAnimTrack = nil
+	end
+	currentAnimId = ""
+end
+
+local function applyStyleAnimation(forceRestart)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	local animId = getDesiredAnimId()
+
+	if animId == "" then
+		stopCurrentCustomAnim()
+		return
+	end
+
+	if not forceRestart and currentAnimId == animId and currentAnimTrack and currentAnimTrack.IsPlaying then
+		return
+	end
+
+	stopCurrentCustomAnim()
+
+	local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+	local animInstance = Instance.new("Animation")
+	animInstance.AnimationId = animId
+
+	local ok, track = pcall(function()
+		return animator:LoadAnimation(animInstance)
+	end)
+
+	if ok and track then
+		track.Priority = Enum.AnimationPriority.Action3
+		track.Looped = true
+		track:Play(0.12)
+		currentAnimTrack = track
+		currentAnimId = animId
+	end
+end
+
+-- ================= TẠO GIAO DIỆN GUI =================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ProSurfFlightManagerGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local GUI_FULL_SIZE = UDim2.new(0, 340, 0, 500)
+local GUI_MINI_SIZE = UDim2.new(0, 340, 0, 32)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = GUI_FULL_SIZE
+mainFrame.Position = UDim2.new(0.02, 0, 0.12, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(18, 20, 26)
+mainFrame.BackgroundTransparency = 0.08
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Parent = screenGui
+
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(0, 175, 255)
+mainStroke.Thickness = 1.5
+mainStroke.Parent = mainFrame
+
+-- Thanh tiêu đề
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 32)
+header.BackgroundColor3 = Color3.fromRGB(26, 30, 40)
+header.BorderSizePixel = 0
+header.Parent = mainFrame
+Instance.new("UICorner", header).CornerRadius = UDim.new(0, 10)
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -70, 1, 0)
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🏄 SURF FLIGHT PRESETS"
+titleLabel.TextColor3 = Color3.fromRGB(0, 210, 255)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 13
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = header
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 24, 0, 22)
+toggleBtn.Position = UDim2.new(1, -30, 0.5, -11)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(45, 52, 68)
+toggleBtn.Text = "-"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 15
+toggleBtn.Parent = header
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 6)
+
+-- Kéo thả khung chính
+local draggingGUI, dragStartGUI, startPosGUI
+header.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingGUI = true
+		dragStartGUI = input.Position
+		startPosGUI = mainFrame.Position
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if draggingGUI and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - dragStartGUI
+		mainFrame.Position = UDim2.new(startPosGUI.X.Scale, startPosGUI.X.Offset + delta.X, startPosGUI.Y.Scale, startPosGUI.Y.Offset + delta.Y)
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingGUI = false
+	end
+end)
+
+local contentFrame = Instance.new("Frame")
+contentFrame.Size = UDim2.new(1, 0, 1, -34)
+contentFrame.Position = UDim2.new(0, 0, 0, 34)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
+
+local isMinimized = false
+toggleBtn.MouseButton1Click:Connect(function()
+	isMinimized = not isMinimized
+	contentFrame.Visible = not isMinimized
+	mainFrame.Size = isMinimized and GUI_MINI_SIZE or GUI_FULL_SIZE
+	toggleBtn.Text = isMinimized and "+" or "-"
+end)
+
+-- Thanh trạng thái & 4 Tab
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -16, 0, 20)
+statusLabel.Position = UDim2.new(0, 8, 0, 2)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "[G] Bay: TẮT | [H] Neo: TẮT | Kiểu 1"
+statusLabel.TextColor3 = Color3.fromRGB(220, 225, 235)
+statusLabel.Font = Enum.Font.GothamSemibold
+statusLabel.TextSize = 10.5
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = contentFrame
+
+local tabButtons = {}
+local tabConfigs = {
+	{ text = "Bay & Lưu", index = 1 },
+	{ text = "Emote [C]", index = 2 },
+	{ text = "Anim Pack", index = 3 },
+	{ text = "Phím", index = 4 },
+}
+
+for i, cfg in ipairs(tabConfigs) do
+	local btn = Instance.new("TextButton")
+	local w = (i == 1 or i == 3) and 0.27 or 0.23
+	local x = (i == 1 and 0) or (i == 2 and 0.27) or (i == 3 and 0.50) or 0.77
+	btn.Size = UDim2.new(w, -5, 0, 24)
+	btn.Position = UDim2.new(x, (i == 1 and 8 or 2.5), 0, 24)
+	btn.BackgroundColor3 = (i == 1) and Color3.fromRGB(0, 150, 230) or Color3.fromRGB(36, 42, 56)
+	btn.Text = cfg.text
+	btn.TextColor3 = (i == 1) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(210, 220, 240)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 10
+	btn.Parent = contentFrame
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+	tabButtons[cfg.index] = btn
+end
+
+-- ================= TAB 1: BAY & BỘ LƯU =================
+local mainTabFrame = Instance.new("Frame")
+mainTabFrame.Size = UDim2.new(1, 0, 1, -52)
+mainTabFrame.Position = UDim2.new(0, 0, 0, 52)
+mainTabFrame.BackgroundTransparency = 1
+mainTabFrame.Parent = contentFrame
+
+local styleRows = {}
+for i = 1, 3 do
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, -16, 0, 34)
+	row.Position = UDim2.new(0, 8, 0, (i - 1) * 38)
+	row.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	row.BorderSizePixel = 0
+	row.Parent = mainTabFrame
+	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
+
+	local rowStroke = Instance.new("UIStroke")
+	rowStroke.Color = Color3.fromRGB(55, 62, 80)
+	rowStroke.Thickness = 1
+	rowStroke.Parent = row
+
+	local selectBtn = Instance.new("TextButton")
+	selectBtn.Size = UDim2.new(0, 56, 0, 24)
+	selectBtn.Position = UDim2.new(0, 6, 0.5, -12)
+	selectBtn.BackgroundColor3 = Color3.fromRGB(42, 48, 62)
+	selectBtn.Text = "Kiểu " .. i
+	selectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	selectBtn.Font = Enum.Font.GothamBold
+	selectBtn.TextSize = 11
+	selectBtn.Parent = row
+	Instance.new("UICorner", selectBtn).CornerRadius = UDim.new(0, 6)
+
+	local idBox = Instance.new("TextBox")
+	idBox.Size = UDim2.new(0, 170, 0, 24)
+	idBox.Position = UDim2.new(0, 68, 0.5, -12)
+	idBox.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+	idBox.Text = flightStyles[i].animId
+	idBox.PlaceholderText = "Bay Anim ID " .. i .. "..."
+	idBox.PlaceholderColor3 = Color3.fromRGB(115, 125, 145)
+	idBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+	idBox.Font = Enum.Font.Gotham
+	idBox.TextSize = 11
+	idBox.ClearTextOnFocus = false
+	idBox.Parent = row
+	Instance.new("UICorner", idBox).CornerRadius = UDim.new(0, 6)
+
+	local speedBox = Instance.new("TextBox")
+	speedBox.Size = UDim2.new(0, 70, 0, 24)
+	speedBox.Position = UDim2.new(1, -76, 0.5, -12)
+	speedBox.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+	speedBox.Text = tostring(flightStyles[i].speed)
+	speedBox.PlaceholderText = "Tốc độ"
+	speedBox.PlaceholderColor3 = Color3.fromRGB(115, 125, 145)
+	speedBox.TextColor3 = Color3.fromRGB(90, 225, 255)
+	speedBox.Font = Enum.Font.GothamBold
+	speedBox.TextSize = 11
+	speedBox.ClearTextOnFocus = false
+	speedBox.Parent = row
+	Instance.new("UICorner", speedBox).CornerRadius = UDim.new(0, 6)
+
+	styleRows[i] = {
+		row = row,
+		stroke = rowStroke,
+		selectBtn = selectBtn,
+		idBox = idBox,
+		speedBox = speedBox,
+	}
+end
+
+local standRows = {}
+for i = 1, 2 do
+	local sRow = Instance.new("Frame")
+	sRow.Size = UDim2.new(1, -16, 0, 34)
+	sRow.Position = UDim2.new(0, 8, 0, 118 + (i - 1) * 38)
+	sRow.BackgroundColor3 = Color3.fromRGB(32, 28, 44)
+	sRow.BorderSizePixel = 0
+	sRow.Parent = mainTabFrame
+	Instance.new("UICorner", sRow).CornerRadius = UDim.new(0, 7)
+
+	local sStroke = Instance.new("UIStroke")
+	sStroke.Color = Color3.fromRGB(85, 70, 115)
+	sStroke.Thickness = 1
+	sStroke.Parent = sRow
+
+	local sBtn = Instance.new("TextButton")
+	sBtn.Size = UDim2.new(0, 68, 0, 24)
+	sBtn.Position = UDim2.new(0, 6, 0.5, -12)
+	sBtn.BackgroundColor3 = Color3.fromRGB(58, 48, 82)
+	sBtn.Text = "Đứng " .. i
+	sBtn.TextColor3 = Color3.fromRGB(235, 225, 255)
+	sBtn.Font = Enum.Font.GothamBold
+	sBtn.TextSize = 11
+	sBtn.Parent = sRow
+	Instance.new("UICorner", sBtn).CornerRadius = UDim.new(0, 6)
+
+	local sIdBox = Instance.new("TextBox")
+	sIdBox.Size = UDim2.new(1, -158, 0, 24)
+	sIdBox.Position = UDim2.new(0, 80, 0.5, -12)
+	sIdBox.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+	sIdBox.Text = standStyles[i].animId
+	sIdBox.PlaceholderText = "Stand Anim ID " .. i .. "..."
+	sIdBox.PlaceholderColor3 = Color3.fromRGB(125, 120, 150)
+	sIdBox.TextColor3 = Color3.fromRGB(240, 220, 255)
+	sIdBox.Font = Enum.Font.Gotham
+	sIdBox.TextSize = 11
+	sIdBox.ClearTextOnFocus = false
+	sIdBox.Parent = sRow
+	Instance.new("UICorner", sIdBox).CornerRadius = UDim.new(0, 6)
+
+	local sSpeedBox = Instance.new("TextBox")
+	sSpeedBox.Size = UDim2.new(0, 70, 0, 24)
+	sSpeedBox.Position = UDim2.new(1, -76, 0.5, -12)
+	sSpeedBox.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+	sSpeedBox.Text = tostring(standStyles[i].speed)
+	sSpeedBox.PlaceholderText = "Tốc độ"
+	sSpeedBox.PlaceholderColor3 = Color3.fromRGB(125, 120, 150)
+	sSpeedBox.TextColor3 = Color3.fromRGB(215, 165, 255)
+	sSpeedBox.Font = Enum.Font.GothamBold
+	sSpeedBox.TextSize = 11
+	sSpeedBox.ClearTextOnFocus = false
+	sSpeedBox.Parent = sRow
+	Instance.new("UICorner", sSpeedBox).CornerRadius = UDim.new(0, 6)
+
+	standRows[i] = {
+		row = sRow,
+		stroke = sStroke,
+		btn = sBtn,
+		idBox = sIdBox,
+		speedBox = sSpeedBox,
+	}
+end
+
+local presetNameBox = Instance.new("TextBox")
+presetNameBox.Size = UDim2.new(1, -104, 0, 28)
+presetNameBox.Position = UDim2.new(0, 8, 0, 198)
+presetNameBox.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+presetNameBox.PlaceholderText = "Đặt tên bộ bay..."
+presetNameBox.PlaceholderColor3 = Color3.fromRGB(115, 125, 145)
+presetNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+presetNameBox.Font = Enum.Font.Gotham
+presetNameBox.TextSize = 11.5
+presetNameBox.ClearTextOnFocus = false
+presetNameBox.Parent = mainTabFrame
+Instance.new("UICorner", presetNameBox).CornerRadius = UDim.new(0, 6)
+
+local savePresetBtn = Instance.new("TextButton")
+savePresetBtn.Size = UDim2.new(0, 84, 0, 28)
+savePresetBtn.Position = UDim2.new(1, -92, 0, 198)
+savePresetBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 230)
+savePresetBtn.Text = "+ Lưu bộ"
+savePresetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+savePresetBtn.Font = Enum.Font.GothamBold
+savePresetBtn.TextSize = 12
+savePresetBtn.Parent = mainTabFrame
+Instance.new("UICorner", savePresetBtn).CornerRadius = UDim.new(0, 6)
+
+local listTitle = Instance.new("TextLabel")
+listTitle.Size = UDim2.new(1, -16, 0, 18)
+listTitle.Position = UDim2.new(0, 8, 0, 230)
+listTitle.BackgroundTransparency = 1
+listTitle.Text = "DANH SÁCH BỘ BAY ĐÃ LƯU:"
+listTitle.TextColor3 = Color3.fromRGB(150, 195, 255)
+listTitle.Font = Enum.Font.GothamBold
+listTitle.TextSize = 10.5
+listTitle.TextXAlignment = Enum.TextXAlignment.Left
+listTitle.Parent = mainTabFrame
+
+local presetScroll = Instance.new("ScrollingFrame")
+presetScroll.Size = UDim2.new(1, -16, 0, 184)
+presetScroll.Position = UDim2.new(0, 8, 0, 250)
+presetScroll.BackgroundColor3 = Color3.fromRGB(23, 26, 35)
+presetScroll.BorderSizePixel = 0
+presetScroll.ScrollBarThickness = 4
+presetScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+presetScroll.Parent = mainTabFrame
+Instance.new("UICorner", presetScroll).CornerRadius = UDim.new(0, 7)
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 4)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = presetScroll
+
+listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	presetScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 8)
+end)
+
+-- ================= TAB 2: EMOTE KHÔNG GIỚI HẠN [C] & [F1] =================
+local emoteTabFrame = Instance.new("Frame")
+emoteTabFrame.Size = UDim2.new(1, 0, 1, -52)
+emoteTabFrame.Position = UDim2.new(0, 0, 0, 52)
+emoteTabFrame.BackgroundTransparency = 1
+emoteTabFrame.Visible = false
+emoteTabFrame.Parent = contentFrame
+
+local emoteNameInput = Instance.new("TextBox")
+emoteNameInput.Size = UDim2.new(0, 96, 0, 28)
+emoteNameInput.Position = UDim2.new(0, 8, 0, 0)
+emoteNameInput.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+emoteNameInput.PlaceholderText = "Tên emote..."
+emoteNameInput.PlaceholderColor3 = Color3.fromRGB(115, 125, 145)
+emoteNameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+emoteNameInput.Font = Enum.Font.Gotham
+emoteNameInput.TextSize = 11
+emoteNameInput.ClearTextOnFocus = false
+emoteNameInput.Parent = emoteTabFrame
+Instance.new("UICorner", emoteNameInput).CornerRadius = UDim.new(0, 6)
+
+local emoteIdInput = Instance.new("TextBox")
+emoteIdInput.Size = UDim2.new(1, -184, 0, 28)
+emoteIdInput.Position = UDim2.new(0, 108, 0, 0)
+emoteIdInput.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+emoteIdInput.PlaceholderText = "Emote ID..."
+emoteIdInput.PlaceholderColor3 = Color3.fromRGB(115, 125, 145)
+emoteIdInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+emoteIdInput.Font = Enum.Font.Gotham
+emoteIdInput.TextSize = 11
+emoteIdInput.ClearTextOnFocus = false
+emoteIdInput.Parent = emoteTabFrame
+Instance.new("UICorner", emoteIdInput).CornerRadius = UDim.new(0, 6)
+
+local addEmoteBtn = Instance.new("TextButton")
+addEmoteBtn.Size = UDim2.new(0, 66, 0, 28)
+addEmoteBtn.Position = UDim2.new(1, -74, 0, 0)
+addEmoteBtn.BackgroundColor3 = Color3.fromRGB(0, 165, 120)
+addEmoteBtn.Text = "+ Thêm"
+addEmoteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+addEmoteBtn.Font = Enum.Font.GothamBold
+addEmoteBtn.TextSize = 11.5
+addEmoteBtn.Parent = emoteTabFrame
+Instance.new("UICorner", addEmoteBtn).CornerRadius = UDim.new(0, 6)
+
+local emoteActionBar = Instance.new("Frame")
+emoteActionBar.Size = UDim2.new(1, -16, 0, 26)
+emoteActionBar.Position = UDim2.new(0, 8, 0, 34)
+emoteActionBar.BackgroundTransparency = 1
+emoteActionBar.Parent = emoteTabFrame
+
+local nextEmoteBtn = Instance.new("TextButton")
+nextEmoteBtn.Size = UDim2.new(0.52, -4, 1, 0)
+nextEmoteBtn.Position = UDim2.new(0, 0, 0, 0)
+nextEmoteBtn.BackgroundColor3 = Color3.fromRGB(45, 95, 185)
+nextEmoteBtn.Text = "Chuyển tiếp [" .. keybinds.cycleEmote .. "]"
+nextEmoteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+nextEmoteBtn.Font = Enum.Font.GothamBold
+nextEmoteBtn.TextSize = 11
+nextEmoteBtn.Parent = emoteActionBar
+Instance.new("UICorner", nextEmoteBtn).CornerRadius = UDim.new(0, 6)
+
+local stopEmotesBtn = Instance.new("TextButton")
+stopEmotesBtn.Size = UDim2.new(0.48, -4, 1, 0)
+stopEmotesBtn.Position = UDim2.new(0.52, 4, 0, 0)
+stopEmotesBtn.BackgroundColor3 = Color3.fromRGB(175, 65, 55)
+stopEmotesBtn.Text = "Dừng hết [" .. keybinds.stopEmotes .. "]"
+stopEmotesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+stopEmotesBtn.Font = Enum.Font.GothamBold
+stopEmotesBtn.TextSize = 11
+stopEmotesBtn.Parent = emoteActionBar
+Instance.new("UICorner", stopEmotesBtn).CornerRadius = UDim.new(0, 6)
+
+local emoteInfoLbl = Instance.new("TextLabel")
+emoteInfoLbl.Size = UDim2.new(1, -86, 0, 18)
+emoteInfoLbl.Position = UDim2.new(0, 8, 0, 64)
+emoteInfoLbl.BackgroundTransparency = 1
+emoteInfoLbl.Text = "DANH SÁCH EMOTE (0) - Tự lưu:"
+emoteInfoLbl.TextColor3 = Color3.fromRGB(130, 225, 185)
+emoteInfoLbl.Font = Enum.Font.GothamBold
+emoteInfoLbl.TextSize = 10
+emoteInfoLbl.TextXAlignment = Enum.TextXAlignment.Left
+emoteInfoLbl.Parent = emoteTabFrame
+
+local clearAllEmotesBtn = Instance.new("TextButton")
+clearAllEmotesBtn.Size = UDim2.new(0, 64, 0, 18)
+clearAllEmotesBtn.Position = UDim2.new(1, -72, 0, 64)
+clearAllEmotesBtn.BackgroundColor3 = Color3.fromRGB(70, 35, 42)
+clearAllEmotesBtn.Text = "Xóa hết"
+clearAllEmotesBtn.TextColor3 = Color3.fromRGB(255, 165, 165)
+clearAllEmotesBtn.Font = Enum.Font.GothamBold
+clearAllEmotesBtn.TextSize = 10
+clearAllEmotesBtn.Parent = emoteTabFrame
+Instance.new("UICorner", clearAllEmotesBtn).CornerRadius = UDim.new(0, 5)
+
+local emoteScroll = Instance.new("ScrollingFrame")
+emoteScroll.Size = UDim2.new(1, -16, 0, 350)
+emoteScroll.Position = UDim2.new(0, 8, 0, 86)
+emoteScroll.BackgroundColor3 = Color3.fromRGB(23, 26, 35)
+emoteScroll.BorderSizePixel = 0
+emoteScroll.ScrollBarThickness = 4
+emoteScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+emoteScroll.Parent = emoteTabFrame
+Instance.new("UICorner", emoteScroll).CornerRadius = UDim.new(0, 7)
+
+local emoteListLayout = Instance.new("UIListLayout")
+emoteListLayout.Padding = UDim.new(0, 4)
+emoteListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+emoteListLayout.Parent = emoteScroll
+
+emoteListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	emoteScroll.CanvasSize = UDim2.new(0, 0, 0, emoteListLayout.AbsoluteContentSize.Y + 8)
+end)
+
+-- ================= TAB 3: ANIM CHANGER, SAVED ANIMS & ID FINDER =================
+local animTabFrame = Instance.new("Frame")
+animTabFrame.Size = UDim2.new(1, 0, 1, -52)
+animTabFrame.Position = UDim2.new(0, 0, 0, 52)
+animTabFrame.BackgroundTransparency = 1
+animTabFrame.Visible = false
+animTabFrame.Parent = contentFrame
+
+local animScroll = Instance.new("ScrollingFrame")
+animScroll.Size = UDim2.new(1, -16, 1, -6)
+animScroll.Position = UDim2.new(0, 8, 0, 2)
+animScroll.BackgroundColor3 = Color3.fromRGB(22, 24, 30)
+animScroll.BorderSizePixel = 0
+animScroll.ScrollBarThickness = 4
+animScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+animScroll.Parent = animTabFrame
+Instance.new("UICorner", animScroll).CornerRadius = UDim.new(0, 8)
+
+local animLayout = Instance.new("UIListLayout")
+animLayout.Padding = UDim.new(0, 5)
+animLayout.SortOrder = Enum.SortOrder.LayoutOrder
+animLayout.Parent = animScroll
+
+animLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	animScroll.CanvasSize = UDim2.new(0, 0, 0, animLayout.AbsoluteContentSize.Y + 14)
+end)
+
+local animOrder = 0
+local function nextAnimOrder()
+	animOrder += 1
+	return animOrder
+end
+
+-- Header "Anim Changer"
+local animHeaderRow = Instance.new("Frame")
+animHeaderRow.Size = UDim2.new(1, -8, 0, 26)
+animHeaderRow.BackgroundTransparency = 1
+animHeaderRow.LayoutOrder = nextAnimOrder()
+animHeaderRow.Parent = animScroll
+
+local animHeaderLbl = Instance.new("TextLabel")
+animHeaderLbl.Size = UDim2.new(1, -90, 1, 0)
+animHeaderLbl.Position = UDim2.new(0, 4, 0, 0)
+animHeaderLbl.BackgroundTransparency = 1
+animHeaderLbl.Text = "Anim Changer"
+animHeaderLbl.TextColor3 = Color3.fromRGB(240, 242, 248)
+animHeaderLbl.Font = Enum.Font.GothamBold
+animHeaderLbl.TextSize = 15
+animHeaderLbl.TextXAlignment = Enum.TextXAlignment.Left
+animHeaderLbl.Parent = animHeaderRow
+
+local animStateBadge = Instance.new("TextLabel")
+animStateBadge.Size = UDim2.new(0, 84, 0, 20)
+animStateBadge.Position = UDim2.new(1, -88, 0.5, -10)
+animStateBadge.BackgroundColor3 = animChangerActive and Color3.fromRGB(30, 95, 65) or Color3.fromRGB(48, 52, 62)
+animStateBadge.Text = animChangerActive and "ĐANG BẬT" or "CHƯA BẬT"
+animStateBadge.TextColor3 = animChangerActive and Color3.fromRGB(130, 255, 190) or Color3.fromRGB(185, 190, 200)
+animStateBadge.Font = Enum.Font.GothamBold
+animStateBadge.TextSize = 9.5
+animStateBadge.Parent = animHeaderRow
+Instance.new("UICorner", animStateBadge).CornerRadius = UDim.new(0, 5)
+
+local function createAnimInputRow(leftLabelText, placeholderText, initialVal)
+	local boxCard = Instance.new("Frame")
+	boxCard.Size = UDim2.new(1, -8, 0, 36)
+	boxCard.BackgroundColor3 = Color3.fromRGB(34, 34, 37)
+	boxCard.BorderSizePixel = 0
+	boxCard.LayoutOrder = nextAnimOrder()
+	boxCard.Parent = animScroll
+	Instance.new("UICorner", boxCard).CornerRadius = UDim.new(0, 6)
+
+	local cardStroke = Instance.new("UIStroke")
+	cardStroke.Color = Color3.fromRGB(54, 54, 59)
+	cardStroke.Thickness = 1
+	cardStroke.Parent = boxCard
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(0.45, -8, 1, 0)
+	lbl.Position = UDim2.new(0, 10, 0, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Text = leftLabelText
+	lbl.TextColor3 = Color3.fromRGB(225, 226, 232)
+	lbl.Font = Enum.Font.Gotham
+	lbl.TextSize = 11.5
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.TextTruncate = Enum.TextTruncate.AtEnd
+	lbl.Parent = boxCard
+
+	local inputBox = Instance.new("TextBox")
+	inputBox.Size = UDim2.new(0.53, -6, 0, 26)
+	inputBox.Position = UDim2.new(0.46, 0, 0.5, -13)
+	inputBox.BackgroundColor3 = Color3.fromRGB(48, 48, 52)
+	inputBox.Text = initialVal or ""
+	inputBox.PlaceholderText = placeholderText
+	inputBox.PlaceholderColor3 = Color3.fromRGB(145, 146, 154)
+	inputBox.TextColor3 = Color3.fromRGB(245, 245, 250)
+	inputBox.Font = Enum.Font.Gotham
+	inputBox.TextSize = 11
+	inputBox.ClearTextOnFocus = false
+	inputBox.Parent = boxCard
+	Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0, 5)
+
+	local boxStroke = Instance.new("UIStroke")
+	boxStroke.Color = Color3.fromRGB(72, 72, 78)
+	boxStroke.Thickness = 1
+	boxStroke.Parent = inputBox
+
+	return inputBox
+end
+
+local idle1Box = createAnimInputRow("Idle 1 ID", "ID dáng đứng 1...", currentAnimPack.idle1)
+local idle2Box = createAnimInputRow("Idle 2 ID", "ID dáng đứng 2...", currentAnimPack.idle2)
+
+-- Nút "+ Thêm ID Idle >"
+local addIdleRowBtn = Instance.new("TextButton")
+addIdleRowBtn.Size = UDim2.new(1, -8, 0, 36)
+addIdleRowBtn.BackgroundColor3 = Color3.fromRGB(34, 34, 37)
+addIdleRowBtn.Text = ""
+addIdleRowBtn.BorderSizePixel = 0
+addIdleRowBtn.LayoutOrder = nextAnimOrder()
+addIdleRowBtn.Parent = animScroll
+Instance.new("UICorner", addIdleRowBtn).CornerRadius = UDim.new(0, 6)
+
+local addIdleStroke = Instance.new("UIStroke")
+addIdleStroke.Color = Color3.fromRGB(54, 54, 59)
+addIdleStroke.Thickness = 1
+addIdleStroke.Parent = addIdleRowBtn
+
+local addIdleLeft = Instance.new("TextLabel")
+addIdleLeft.Size = UDim2.new(1, -30, 1, 0)
+addIdleLeft.Position = UDim2.new(0, 10, 0, 0)
+addIdleLeft.BackgroundTransparency = 1
+addIdleLeft.Text = "+ Thêm ID Idle"
+addIdleLeft.TextColor3 = Color3.fromRGB(230, 232, 238)
+addIdleLeft.Font = Enum.Font.GothamMedium
+addIdleLeft.TextSize = 11.5
+addIdleLeft.TextXAlignment = Enum.TextXAlignment.Left
+addIdleLeft.Parent = addIdleRowBtn
+
+local addIdleArrow = Instance.new("TextLabel")
+addIdleArrow.Size = UDim2.new(0, 20, 1, 0)
+addIdleArrow.Position = UDim2.new(1, -24, 0, 0)
+addIdleArrow.BackgroundTransparency = 1
+addIdleArrow.Text = ">"
+addIdleArrow.TextColor3 = Color3.fromRGB(180, 182, 190)
+addIdleArrow.Font = Enum.Font.GothamBold
+addIdleArrow.TextSize = 14
+addIdleArrow.Parent = addIdleRowBtn
+
+-- Khung chứa các ID Idle thêm động
+local extraIdlesContainer = Instance.new("Frame")
+extraIdlesContainer.Size = UDim2.new(1, -8, 0, 0)
+extraIdlesContainer.BackgroundTransparency = 1
+extraIdlesContainer.LayoutOrder = nextAnimOrder()
+extraIdlesContainer.Parent = animScroll
+
+local extraIdlesLayout = Instance.new("UIListLayout")
+extraIdlesLayout.Padding = UDim.new(0, 5)
+extraIdlesLayout.SortOrder = Enum.SortOrder.LayoutOrder
+extraIdlesLayout.Parent = extraIdlesContainer
+
+extraIdlesLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	local h = extraIdlesLayout.AbsoluteContentSize.Y
+	extraIdlesContainer.Size = UDim2.new(1, -8, 0, h > 0 and (h + 2) or 0)
+end)
+
+-- Section "--- CÁC ANIMATION PHỤ KÈM THEO"
+local subSectionCard = Instance.new("Frame")
+subSectionCard.Size = UDim2.new(1, -8, 0, 42)
+subSectionCard.BackgroundColor3 = Color3.fromRGB(34, 34, 37)
+subSectionCard.BorderSizePixel = 0
+subSectionCard.LayoutOrder = nextAnimOrder()
+subSectionCard.Parent = animScroll
+Instance.new("UICorner", subSectionCard).CornerRadius = UDim.new(0, 6)
+
+local subSectionStroke = Instance.new("UIStroke")
+subSectionStroke.Color = Color3.fromRGB(54, 54, 59)
+subSectionStroke.Thickness = 1
+subSectionStroke.Parent = subSectionCard
+
+local subSectionLbl = Instance.new("TextLabel")
+subSectionLbl.Size = UDim2.new(1, -16, 1, 0)
+subSectionLbl.Position = UDim2.new(0, 10, 0, 0)
+subSectionLbl.BackgroundTransparency = 1
+subSectionLbl.Text = "---\nCÁC ANIMATION PHỤ KÈM THEO"
+subSectionLbl.TextColor3 = Color3.fromRGB(165, 166, 174)
+subSectionLbl.Font = Enum.Font.GothamMedium
+subSectionLbl.TextSize = 10
+subSectionLbl.TextXAlignment = Enum.TextXAlignment.Left
+subSectionLbl.Parent = subSectionCard
+
+local walkBox = createAnimInputRow("Walk ID", "ID dáng đi...", currentAnimPack.walk)
+local runBox = createAnimInputRow("Run ID", "ID dáng chạy...", currentAnimPack.run)
+local jumpBox = createAnimInputRow("Jump ID", "ID dáng nhảy...", currentAnimPack.jump)
+local fallBox = createAnimInputRow("Fall ID", "ID dáng rơi...", currentAnimPack.fall)
+packNameBox = createAnimInputRow("Tên Pack (Để Lưu)", "Ví dụ: Cute Anim...", "")
+
+-- Thanh nút nhanh: Chuyển bộ [V] & Tắt Anims [F2]
+local animQuickBar = Instance.new("Frame")
+animQuickBar.Size = UDim2.new(1, -8, 0, 32)
+animQuickBar.BackgroundTransparency = 1
+animQuickBar.LayoutOrder = nextAnimOrder()
+animQuickBar.Parent = animScroll
+
+local cyclePackQuickBtn = Instance.new("TextButton")
+cyclePackQuickBtn.Size = UDim2.new(0.56, -3, 1, 0)
+cyclePackQuickBtn.Position = UDim2.new(0, 0, 0, 0)
+cyclePackQuickBtn.BackgroundColor3 = Color3.fromRGB(85, 65, 155)
+cyclePackQuickBtn.Text = "Chuyển bộ [" .. keybinds.cycleAnimPack .. "]"
+cyclePackQuickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+cyclePackQuickBtn.Font = Enum.Font.GothamBold
+cyclePackQuickBtn.TextSize = 11
+cyclePackQuickBtn.TextTruncate = Enum.TextTruncate.AtEnd
+cyclePackQuickBtn.Parent = animQuickBar
+Instance.new("UICorner", cyclePackQuickBtn).CornerRadius = UDim.new(0, 6)
+
+local stopAnimPackBtn = Instance.new("TextButton")
+stopAnimPackBtn.Size = UDim2.new(0.44, -3, 1, 0)
+stopAnimPackBtn.Position = UDim2.new(0.56, 3, 0, 0)
+stopAnimPackBtn.BackgroundColor3 = Color3.fromRGB(175, 65, 55)
+stopAnimPackBtn.Text = "Tắt Anims [" .. keybinds.stopAnimPack .. "]"
+stopAnimPackBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+stopAnimPackBtn.Font = Enum.Font.GothamBold
+stopAnimPackBtn.TextSize = 11
+stopAnimPackBtn.TextTruncate = Enum.TextTruncate.AtEnd
+stopAnimPackBtn.Parent = animQuickBar
+Instance.new("UICorner", stopAnimPackBtn).CornerRadius = UDim.new(0, 6)
+
+local function createActionRowBtn(labelText, accentColor)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -8, 0, 36)
+	btn.BackgroundColor3 = Color3.fromRGB(34, 34, 37)
+	btn.Text = ""
+	btn.BorderSizePixel = 0
+	btn.LayoutOrder = nextAnimOrder()
+	btn.Parent = animScroll
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = accentColor or Color3.fromRGB(58, 58, 64)
+	stroke.Thickness = 1
+	stroke.Parent = btn
+
+	local leftLbl = Instance.new("TextLabel")
+	leftLbl.Size = UDim2.new(1, -30, 1, 0)
+	leftLbl.Position = UDim2.new(0, 10, 0, 0)
+	leftLbl.BackgroundTransparency = 1
+	leftLbl.Text = labelText
+	leftLbl.TextColor3 = Color3.fromRGB(235, 236, 242)
+	leftLbl.Font = Enum.Font.GothamMedium
+	leftLbl.TextSize = 11.5
+	leftLbl.TextXAlignment = Enum.TextXAlignment.Left
+	leftLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	leftLbl.Parent = btn
+
+	local arrowLbl = Instance.new("TextLabel")
+	arrowLbl.Size = UDim2.new(0, 20, 1, 0)
+	arrowLbl.Position = UDim2.new(1, -24, 0, 0)
+	arrowLbl.BackgroundTransparency = 1
+	arrowLbl.Text = ">"
+	arrowLbl.TextColor3 = Color3.fromRGB(180, 182, 190)
+	arrowLbl.Font = Enum.Font.GothamBold
+	arrowLbl.TextSize = 14
+	arrowLbl.Parent = btn
+
+	return btn, leftLbl
+end
+
+local cyclePackBtn, cyclePackLeftLbl = createActionRowBtn("Chuyển bộ Anim [" .. keybinds.cycleAnimPack .. "]", Color3.fromRGB(145, 115, 235))
+local applyNowBtn = createActionRowBtn("Áp dụng ngay", Color3.fromRGB(0, 165, 235))
+local saveAnimPackBtn = createActionRowBtn("💾 Lưu Pack Này Về Saved Anims", Color3.fromRGB(65, 165, 125))
+
+updatePackCycleLabel = function()
+	local totalSaved = #getCycleablePacks()
+	cyclePackQuickBtn.Text = "Chuyển bộ [" .. keybinds.cycleAnimPack .. "]"
+	stopAnimPackBtn.Text = "Tắt Anims [" .. keybinds.stopAnimPack .. "]"
+	if animChangerActive and totalSaved > 0 and activePackCycleIndex > 0 then
+		cyclePackLeftLbl.Text = string.format("Chuyển bộ [%s]: %s (%d/%d)", keybinds.cycleAnimPack, currentPackName, activePackCycleIndex, totalSaved)
+	else
+		cyclePackLeftLbl.Text = string.format("Chuyển bộ [%s]: %s (%d bộ lưu)", keybinds.cycleAnimPack, currentPackName, totalSaved)
+	end
+end
+
+local savedAnimsTitle = Instance.new("TextLabel")
+savedAnimsTitle.Size = UDim2.new(1, -8, 0, 20)
+savedAnimsTitle.BackgroundTransparency = 1
+savedAnimsTitle.Text = "SAVED ANIMS (TỰ ĐỘNG HOẠT ĐỘNG):"
+savedAnimsTitle.TextColor3 = Color3.fromRGB(150, 205, 255)
+savedAnimsTitle.Font = Enum.Font.GothamBold
+savedAnimsTitle.TextSize = 10.5
+savedAnimsTitle.TextXAlignment = Enum.TextXAlignment.Left
+savedAnimsTitle.LayoutOrder = nextAnimOrder()
+savedAnimsTitle.Parent = animScroll
+
+local savedAnimsContainer = Instance.new("Frame")
+savedAnimsContainer.Size = UDim2.new(1, -8, 0, 0)
+savedAnimsContainer.BackgroundTransparency = 1
+savedAnimsContainer.LayoutOrder = nextAnimOrder()
+savedAnimsContainer.Parent = animScroll
+
+local savedAnimsLayout = Instance.new("UIListLayout")
+savedAnimsLayout.Padding = UDim.new(0, 4)
+savedAnimsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+savedAnimsLayout.Parent = savedAnimsContainer
+
+savedAnimsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	local h = savedAnimsLayout.AbsoluteContentSize.Y
+	savedAnimsContainer.Size = UDim2.new(1, -8, 0, h > 0 and (h + 4) or 0)
+end)
+
+-- ================= KHU VỰC ID FINDER & TỰ ĐỘNG ĐIỀN ALL =================
+local idFinderHeader = Instance.new("Frame")
+idFinderHeader.Size = UDim2.new(1, -8, 0, 26)
+idFinderHeader.BackgroundTransparency = 1
+idFinderHeader.LayoutOrder = nextAnimOrder()
+idFinderHeader.Parent = animScroll
+
+local idFinderTitle = Instance.new("TextLabel")
+idFinderTitle.Size = UDim2.new(0.55, 0, 1, 0)
+idFinderTitle.Position = UDim2.new(0, 2, 0, 0)
+idFinderTitle.BackgroundTransparency = 1
+idFinderTitle.Text = "ID Finder"
+idFinderTitle.TextColor3 = Color3.fromRGB(238, 240, 246)
+idFinderTitle.Font = Enum.Font.GothamBold
+idFinderTitle.TextSize = 15
+idFinderTitle.TextXAlignment = Enum.TextXAlignment.Left
+idFinderTitle.Parent = idFinderHeader
+
+local fillAllScannedBtn = Instance.new("TextButton")
+fillAllScannedBtn.Size = UDim2.new(0.45, -2, 0, 22)
+fillAllScannedBtn.Position = UDim2.new(0.55, 0, 0.5, -11)
+fillAllScannedBtn.BackgroundColor3 = Color3.fromRGB(25, 145, 115)
+fillAllScannedBtn.Text = "⚡ Điền All Quét"
+fillAllScannedBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+fillAllScannedBtn.Font = Enum.Font.GothamBold
+fillAllScannedBtn.TextSize = 10.5
+fillAllScannedBtn.Parent = idFinderHeader
+Instance.new("UICorner", fillAllScannedBtn).CornerRadius = UDim.new(0, 6)
+
+local scannedListFrame = Instance.new("Frame")
+scannedListFrame.Size = UDim2.new(1, -8, 0, 128)
+scannedListFrame.BackgroundColor3 = Color3.fromRGB(27, 27, 31)
+scannedListFrame.BorderSizePixel = 0
+scannedListFrame.LayoutOrder = nextAnimOrder()
+scannedListFrame.Parent = animScroll
+Instance.new("UICorner", scannedListFrame).CornerRadius = UDim.new(0, 7)
+
+local scannedStroke = Instance.new("UIStroke")
+scannedStroke.Color = Color3.fromRGB(48, 48, 54)
+scannedStroke.Thickness = 1
+scannedStroke.Parent = scannedListFrame
+
+local scannedScroll = Instance.new("ScrollingFrame")
+scannedScroll.Size = UDim2.new(1, -6, 1, -6)
+scannedScroll.Position = UDim2.new(0, 3, 0, 3)
+scannedScroll.BackgroundTransparency = 1
+scannedScroll.BorderSizePixel = 0
+scannedScroll.ScrollBarThickness = 4
+scannedScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scannedScroll.Parent = scannedListFrame
+
+local scannedLayout = Instance.new("UIListLayout")
+scannedLayout.Padding = UDim.new(0, 6)
+scannedLayout.SortOrder = Enum.SortOrder.LayoutOrder
+scannedLayout.Parent = scannedScroll
+
+scannedLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	scannedScroll.CanvasSize = UDim2.new(0, 0, 0, scannedLayout.AbsoluteContentSize.Y + 6)
+end)
+
+-- Card "Bật/Tắt Quét ID (Scanner)" + Toggle Switch
+local scannerToggleCard = Instance.new("Frame")
+scannerToggleCard.Size = UDim2.new(1, -8, 0, 38)
+scannerToggleCard.BackgroundColor3 = Color3.fromRGB(34, 34, 37)
+scannerToggleCard.BorderSizePixel = 0
+scannerToggleCard.LayoutOrder = nextAnimOrder()
+scannerToggleCard.Parent = animScroll
+Instance.new("UICorner", scannerToggleCard).CornerRadius = UDim.new(0, 7)
+
+local scannerToggleStroke = Instance.new("UIStroke")
+scannerToggleStroke.Color = Color3.fromRGB(54, 54, 59)
+scannerToggleStroke.Thickness = 1
+scannerToggleStroke.Parent = scannerToggleCard
+
+local scannerToggleLbl = Instance.new("TextLabel")
+scannerToggleLbl.Size = UDim2.new(1, -64, 1, 0)
+scannerToggleLbl.Position = UDim2.new(0, 12, 0, 0)
+scannerToggleLbl.BackgroundTransparency = 1
+scannerToggleLbl.Text = "Bật/Tắt Quét ID (Scanner)"
+scannerToggleLbl.TextColor3 = Color3.fromRGB(228, 230, 236)
+scannerToggleLbl.Font = Enum.Font.GothamMedium
+scannerToggleLbl.TextSize = 11.5
+scannerToggleLbl.TextXAlignment = Enum.TextXAlignment.Left
+scannerToggleLbl.Parent = scannerToggleCard
+
+local switchTrack = Instance.new("TextButton")
+switchTrack.Size = UDim2.new(0, 40, 0, 22)
+switchTrack.Position = UDim2.new(1, -50, 0.5, -11)
+switchTrack.BackgroundColor3 = Color3.fromRGB(65, 68, 76)
+switchTrack.Text = ""
+switchTrack.BorderSizePixel = 0
+switchTrack.Parent = scannerToggleCard
+Instance.new("UICorner", switchTrack).CornerRadius = UDim.new(1, 0)
+
+local switchKnob = Instance.new("Frame")
+switchKnob.Size = UDim2.new(0, 16, 0, 16)
+switchKnob.Position = UDim2.new(0, 3, 0.5, -8)
+switchKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+switchKnob.BorderSizePixel = 0
+switchKnob.Parent = switchTrack
+Instance.new("UICorner", switchKnob).CornerRadius = UDim.new(1, 0)
+
+-- Nút "Clear All IDs >"
+local clearAllIdsBtn = Instance.new("TextButton")
+clearAllIdsBtn.Size = UDim2.new(1, -8, 0, 38)
+clearAllIdsBtn.BackgroundColor3 = Color3.fromRGB(34, 34, 37)
+clearAllIdsBtn.Text = ""
+clearAllIdsBtn.BorderSizePixel = 0
+clearAllIdsBtn.LayoutOrder = nextAnimOrder()
+clearAllIdsBtn.Parent = animScroll
+Instance.new("UICorner", clearAllIdsBtn).CornerRadius = UDim.new(0, 7)
+
+local clearAllIdsStroke = Instance.new("UIStroke")
+clearAllIdsStroke.Color = Color3.fromRGB(54, 54, 59)
+clearAllIdsStroke.Thickness = 1
+clearAllIdsStroke.Parent = clearAllIdsBtn
+
+local clearTrashLbl = Instance.new("TextLabel")
+clearTrashLbl.Size = UDim2.new(0, 22, 1, 0)
+clearTrashLbl.Position = UDim2.new(0, 10, 0, 0)
+clearTrashLbl.BackgroundTransparency = 1
+clearTrashLbl.Text = "🗑"
+clearTrashLbl.TextColor3 = Color3.fromRGB(175, 178, 188)
+clearTrashLbl.Font = Enum.Font.Gotham
+clearTrashLbl.TextSize = 13
+clearTrashLbl.Parent = clearAllIdsBtn
+
+local clearAllIdsLbl = Instance.new("TextLabel")
+clearAllIdsLbl.Size = UDim2.new(1, -60, 1, 0)
+clearAllIdsLbl.Position = UDim2.new(0, 34, 0, 0)
+clearAllIdsLbl.BackgroundTransparency = 1
+clearAllIdsLbl.Text = "Clear All IDs"
+clearAllIdsLbl.TextColor3 = Color3.fromRGB(228, 230, 236)
+clearAllIdsLbl.Font = Enum.Font.GothamMedium
+clearAllIdsLbl.TextSize = 11.5
+clearAllIdsLbl.TextXAlignment = Enum.TextXAlignment.Left
+clearAllIdsLbl.Parent = clearAllIdsBtn
+
+local clearArrowLbl = Instance.new("TextLabel")
+clearArrowLbl.Size = UDim2.new(0, 20, 1, 0)
+clearArrowLbl.Position = UDim2.new(1, -24, 0, 0)
+clearArrowLbl.BackgroundTransparency = 1
+clearArrowLbl.Text = ">"
+clearArrowLbl.TextColor3 = Color3.fromRGB(185, 188, 198)
+clearArrowLbl.Font = Enum.Font.GothamBold
+clearArrowLbl.TextSize = 14
+clearArrowLbl.Parent = clearAllIdsBtn
+
+local extraIdleBoxes = {}
+local rebuildExtraIdlesUI
+local rebuildScannedIdsUI
+
+-- Tự động phân loại và điền ID vào đúng ô trong Anim Changer
+local function assignIdIntoSmartSlot(rawId, rawTitle)
+	local normId = normalizeAnimId(rawId)
+	if normId == "" then return false end
+
+	syncAnimInputsToPack()
+	local lowerTitle = string.lower(tostring(rawTitle or ""))
+
+	local function appendExtraIdleIfMissing(idStr)
+		currentAnimPack.extraIdles = currentAnimPack.extraIdles or {}
+		for _, ex in ipairs(currentAnimPack.extraIdles) do
+			if ex == idStr then return end
+		end
+		table.insert(currentAnimPack.extraIdles, idStr)
+	end
+
+	if string.find(lowerTitle, "walk") then
+		currentAnimPack.walk = normId
+	elseif string.find(lowerTitle, "run") or string.find(lowerTitle, "sprint") then
+		currentAnimPack.run = normId
+	elseif string.find(lowerTitle, "jump") then
+		currentAnimPack.jump = normId
+	elseif string.find(lowerTitle, "fall") then
+		currentAnimPack.fall = normId
+	elseif string.find(lowerTitle, "idle") then
+		if currentAnimPack.idle1 == "" then
+			currentAnimPack.idle1 = normId
+		elseif currentAnimPack.idle2 == "" then
+			currentAnimPack.idle2 = normId
+		else
+			appendExtraIdleIfMissing(normId)
+		end
+	else
+		-- Tự động chia theo vị trí trống khi tên chung chung (Animation1, Animation2...)
+		if currentAnimPack.idle1 == "" then
+			currentAnimPack.idle1 = normId
+		elseif currentAnimPack.idle2 == "" then
+			currentAnimPack.idle2 = normId
+		elseif currentAnimPack.walk == "" then
+			currentAnimPack.walk = normId
+		elseif currentAnimPack.run == "" then
+			currentAnimPack.run = normId
+		elseif currentAnimPack.jump == "" then
+			currentAnimPack.jump = normId
+		elseif currentAnimPack.fall == "" then
+			currentAnimPack.fall = normId
+		else
+			appendExtraIdleIfMissing(normId)
+		end
+	end
+
+	persistActiveAnimPack()
+	syncPackToAnimInputs()
+	if animChangerActive then
+		applyPackToAnimateScript(player.Character, player.Character and player.Character:FindFirstChildOfClass("Humanoid"), true)
+	end
+	return true
+end
+
+local function fillAllScannedIdsToSlots()
+	if #scannedIds == 0 then return 0 end
+	syncAnimInputsToPack()
+
+	local appliedCount = 0
+	-- Duyệt từ cũ tới mới để ID đầu tiên vào Idle 1, tiếp theo vào Idle 2 / Walk / Run...
+	for i = #scannedIds, 1, -1 do
+		local item = scannedIds[i]
+		local normId = normalizeAnimId(item and item.id)
+		if normId ~= "" then
+			assignIdIntoSmartSlot(normId, item and item.title)
+			appliedCount += 1
+		end
+	end
+	return appliedCount
+end
+
+local function updateScannerSwitchUI()
+	if scannerEnabled then
+		switchTrack.BackgroundColor3 = Color3.fromRGB(36, 155, 240)
+		switchKnob.Position = UDim2.new(1, -19, 0.5, -8)
+	else
+		switchTrack.BackgroundColor3 = Color3.fromRGB(65, 68, 76)
+		switchKnob.Position = UDim2.new(0, 3, 0.5, -8)
+	end
+end
+
+local function recordScannedAnimId(rawId, rawTitle)
+	if not scannerEnabled then return end
+	local numericId = extractNumericId(rawId)
+	if not numericId or numericId == "" then return end
+	if seenScannedIds[numericId] then return end
+
+	seenScannedIds[numericId] = true
+	scanCounter += 1
+
+	local titleText = tostring(rawTitle or ""):gsub("^%s+", ""):gsub("%s+$", "")
+	if titleText == "" or titleText == "Animation" then
+		titleText = "Animation" .. tostring(scanCounter)
+	end
+
+	table.insert(scannedIds, 1, {
+		title = titleText,
+		id = numericId,
+	})
+
+	if #scannedIds > 80 then
+		local removed = table.remove(scannedIds)
+		if removed and removed.id then
+			seenScannedIds[removed.id] = nil
+		end
+	end
+
+	rebuildScannedIdsUI()
+end
+
+local function scanActiveAnimationsOnce()
+	if not scannerEnabled then return end
+
+	local char = player.Character
+	if not char then return end
+
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local animator = hum and hum:FindFirstChildOfClass("Animator")
+	if not animator then return end
+
+	local ok, tracks = pcall(function()
+		return animator:GetPlayingAnimationTracks()
+	end)
+	if ok and type(tracks) == "table" then
+		for _, track in ipairs(tracks) do
+			local anim = track.Animation
+			local animId = anim and anim.AnimationId or ""
+			local trackName = (anim and anim.Name ~= "Animation" and anim.Name)
+				or (track.Name ~= "" and track.Name)
+				or "Playing Anim"
+			recordScannedAnimId(animId, trackName)
+		end
+	end
+end
+
+local function setScannerEnabled(state)
+	scannerEnabled = (state == true)
+	updateScannerSwitchUI()
+
+	if scannerConn then
+		scannerConn:Disconnect()
+		scannerConn = nil
+	end
+
+	if scannerEnabled then
+		scanActiveAnimationsOnce()
+		scannerConn = RunService.Heartbeat:Connect(function()
+			if not scannerEnabled then return end
+			local now = os.clock()
+			if now - lastScanTick >= 0.35 then
+				lastScanTick = now
+				scanActiveAnimationsOnce()
+			end
+		end)
+	end
+end
+
+rebuildScannedIdsUI = function()
+	for _, child in ipairs(scannedScroll:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+
+	for idx, item in ipairs(scannedIds) do
+		local card = Instance.new("Frame")
+		card.Size = UDim2.new(1, -6, 0, 44)
+		card.BackgroundColor3 = Color3.fromRGB(36, 36, 40)
+		card.BorderSizePixel = 0
+		card.LayoutOrder = idx
+		card.Parent = scannedScroll
+		Instance.new("UICorner", card).CornerRadius = UDim.new(0, 7)
+
+		local cardStroke = Instance.new("UIStroke")
+		cardStroke.Color = Color3.fromRGB(56, 56, 62)
+		cardStroke.Thickness = 1
+		cardStroke.Parent = card
+
+		local titleLbl = Instance.new("TextLabel")
+		titleLbl.Size = UDim2.new(1, -124, 0, 18)
+		titleLbl.Position = UDim2.new(0, 8, 0, 4)
+		titleLbl.BackgroundTransparency = 1
+		titleLbl.Text = tostring(item.title or ("Animation" .. idx))
+		titleLbl.TextColor3 = Color3.fromRGB(238, 240, 246)
+		titleLbl.Font = Enum.Font.GothamBold
+		titleLbl.TextSize = 11.5
+		titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+		titleLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		titleLbl.Parent = card
+
+		local idSubLbl = Instance.new("TextLabel")
+		idSubLbl.Size = UDim2.new(1, -124, 0, 16)
+		idSubLbl.Position = UDim2.new(0, 8, 0, 22)
+		idSubLbl.BackgroundTransparency = 1
+		idSubLbl.Text = "ID: " .. tostring(item.id)
+		idSubLbl.TextColor3 = Color3.fromRGB(165, 168, 178)
+		idSubLbl.Font = Enum.Font.GothamMedium
+		idSubLbl.TextSize = 10.5
+		idSubLbl.TextXAlignment = Enum.TextXAlignment.Left
+		idSubLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		idSubLbl.Parent = card
+
+		local allBtn = Instance.new("TextButton")
+		allBtn.Size = UDim2.new(0, 48, 0, 26)
+		allBtn.Position = UDim2.new(1, -114, 0.5, -13)
+		allBtn.BackgroundColor3 = Color3.fromRGB(28, 155, 115)
+		allBtn.Text = "⚡ All"
+		allBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		allBtn.Font = Enum.Font.GothamBold
+		allBtn.TextSize = 10.5
+		allBtn.Parent = card
+		Instance.new("UICorner", allBtn).CornerRadius = UDim.new(0, 6)
+
+		local copyBtn = Instance.new("TextButton")
+		copyBtn.Size = UDim2.new(0, 56, 0, 26)
+		copyBtn.Position = UDim2.new(1, -62, 0.5, -13)
+		copyBtn.BackgroundColor3 = Color3.fromRGB(36, 118, 225)
+		copyBtn.Text = "📋 Copy"
+		copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		copyBtn.Font = Enum.Font.GothamBold
+		copyBtn.TextSize = 10.5
+		copyBtn.Parent = card
+		Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 6)
+
+		allBtn.MouseButton1Click:Connect(function()
+			assignIdIntoSmartSlot(item.id, item.title)
+			allBtn.Text = "✓ Xong"
+			allBtn.BackgroundColor3 = Color3.fromRGB(45, 185, 130)
+			task.delay(0.8, function()
+				if allBtn and allBtn.Parent then
+					allBtn.Text = "⚡ All"
+					allBtn.BackgroundColor3 = Color3.fromRGB(28, 155, 115)
+				end
+			end)
+		end)
+
+		copyBtn.MouseButton1Click:Connect(function()
+			copyToClipboardSafe(tostring(item.id))
+			copyBtn.Text = "✓ Copied"
+			copyBtn.BackgroundColor3 = Color3.fromRGB(32, 155, 100)
+			task.delay(1, function()
+				if copyBtn and copyBtn.Parent then
+					copyBtn.Text = "📋 Copy"
+					copyBtn.BackgroundColor3 = Color3.fromRGB(36, 118, 225)
+				end
+			end)
+		end)
+	end
+end
+
+fillAllScannedBtn.MouseButton1Click:Connect(function()
+	local count = fillAllScannedIdsToSlots()
+	if count > 0 then
+		fillAllScannedBtn.Text = "✓ +" .. tostring(count) .. " ô"
+		fillAllScannedBtn.BackgroundColor3 = Color3.fromRGB(45, 185, 130)
+		task.delay(1, function()
+			if fillAllScannedBtn and fillAllScannedBtn.Parent then
+				fillAllScannedBtn.Text = "⚡ Điền All Quét"
+				fillAllScannedBtn.BackgroundColor3 = Color3.fromRGB(25, 145, 115)
+			end
+		end)
+	end
+end)
+
+switchTrack.MouseButton1Click:Connect(function()
+	setScannerEnabled(not scannerEnabled)
+end)
+
+clearAllIdsBtn.MouseButton1Click:Connect(function()
+	scannedIds = {}
+	seenScannedIds = {}
+	scanCounter = 0
+	rebuildScannedIdsUI()
+end)
+
+syncAnimInputsToPack = function()
+	local extras = {}
+	for _, box in ipairs(extraIdleBoxes) do
+		local norm = normalizeAnimId(box.Text)
+		if norm ~= "" then
+			table.insert(extras, norm)
+		end
+	end
+	currentAnimPack = {
+		idle1 = normalizeAnimId(idle1Box.Text),
+		idle2 = normalizeAnimId(idle2Box.Text),
+		extraIdles = extras,
+		walk = normalizeAnimId(walkBox.Text),
+		run = normalizeAnimId(runBox.Text),
+		jump = normalizeAnimId(jumpBox.Text),
+		fall = normalizeAnimId(fallBox.Text),
+	}
+	persistActiveAnimPack()
+	updatePackCycleLabel()
+end
+
+syncPackToAnimInputs = function()
+	idle1Box.Text = currentAnimPack.idle1 or ""
+	idle2Box.Text = currentAnimPack.idle2 or ""
+	walkBox.Text = currentAnimPack.walk or ""
+	runBox.Text = currentAnimPack.run or ""
+	jumpBox.Text = currentAnimPack.jump or ""
+	fallBox.Text = currentAnimPack.fall or ""
+	rebuildExtraIdlesUI()
+	updatePackCycleLabel()
+end
+
+rebuildExtraIdlesUI = function()
+	for _, child in ipairs(extraIdlesContainer:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	extraIdleBoxes = {}
+
+	local extras = currentAnimPack.extraIdles or {}
+	for idx, rawId in ipairs(extras) do
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, 0, 0, 34)
+		row.BackgroundColor3 = Color3.fromRGB(34, 34, 37)
+		row.BorderSizePixel = 0
+		row.LayoutOrder = idx
+		row.Parent = extraIdlesContainer
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0.32, 0, 1, 0)
+		lbl.Position = UDim2.new(0, 8, 0, 0)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = "Idle " .. tostring(idx + 2) .. " ID"
+		lbl.TextColor3 = Color3.fromRGB(210, 212, 220)
+		lbl.Font = Enum.Font.Gotham
+		lbl.TextSize = 11
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.Parent = row
+
+		local box = Instance.new("TextBox")
+		box.Size = UDim2.new(0.56, 0, 0, 24)
+		box.Position = UDim2.new(0.33, 0, 0.5, -12)
+		box.BackgroundColor3 = Color3.fromRGB(48, 48, 52)
+		box.Text = rawId
+		box.PlaceholderText = "ID dáng đứng..."
+		box.PlaceholderColor3 = Color3.fromRGB(145, 146, 154)
+		box.TextColor3 = Color3.fromRGB(245, 245, 250)
+		box.Font = Enum.Font.Gotham
+		box.TextSize = 11
+		box.ClearTextOnFocus = false
+		box.Parent = row
+		Instance.new("UICorner", box).CornerRadius = UDim.new(0, 5)
+
+		table.insert(extraIdleBoxes, box)
+
+		box.FocusLost:Connect(function()
+			syncAnimInputsToPack()
+			if animChangerActive then
+				applyPackToAnimateScript(player.Character, player.Character and player.Character:FindFirstChildOfClass("Humanoid"), true)
+			end
+		end)
+
+		local delBtn = Instance.new("TextButton")
+		delBtn.Size = UDim2.new(0, 24, 0, 22)
+		delBtn.Position = UDim2.new(1, -28, 0.5, -11)
+		delBtn.BackgroundColor3 = Color3.fromRGB(165, 45, 55)
+		delBtn.Text = "X"
+		delBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		delBtn.Font = Enum.Font.GothamBold
+		delBtn.TextSize = 10
+		delBtn.Parent = row
+		Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 5)
+
+		delBtn.MouseButton1Click:Connect(function()
+			table.remove(currentAnimPack.extraIdles, idx)
+			persistActiveAnimPack()
+			rebuildExtraIdlesUI()
+			updatePackCycleLabel()
+			if animChangerActive then
+				applyPackToAnimateScript(player.Character, player.Character and player.Character:FindFirstChildOfClass("Humanoid"), true)
+			end
+		end)
+	end
+end
+
+addIdleRowBtn.MouseButton1Click:Connect(function()
+	syncAnimInputsToPack()
+	table.insert(currentAnimPack.extraIdles, "")
+	persistActiveAnimPack()
+	rebuildExtraIdlesUI()
+end)
+
+for _, box in ipairs({ idle1Box, idle2Box, walkBox, runBox, jumpBox, fallBox }) do
+	box.FocusLost:Connect(function()
+		syncAnimInputsToPack()
+		if animChangerActive then
+			applyPackToAnimateScript(player.Character, player.Character and player.Character:FindFirstChildOfClass("Humanoid"), true)
+		end
+	end)
+end
+
+updateAnimBadge = function()
+	animStateBadge.Text = animChangerActive and "ĐANG BẬT" or "CHƯA BẬT"
+	animStateBadge.BackgroundColor3 = animChangerActive and Color3.fromRGB(30, 95, 65) or Color3.fromRGB(48, 52, 62)
+	animStateBadge.TextColor3 = animChangerActive and Color3.fromRGB(130, 255, 190) or Color3.fromRGB(185, 190, 200)
+end
+
+cyclePackQuickBtn.MouseButton1Click:Connect(function()
+	cycleNextAnimPack()
+end)
+
+stopAnimPackBtn.MouseButton1Click:Connect(function()
+	stopAnimChangerPack()
+end)
+
+cyclePackBtn.MouseButton1Click:Connect(function()
+	cycleNextAnimPack()
+end)
+
+applyNowBtn.MouseButton1Click:Connect(function()
+	syncAnimInputsToPack()
+	local typedName = tostring(packNameBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+	if typedName ~= "" then
+		currentPackName = typedName
+	end
+	animChangerActive = true
+	persistActiveAnimPack()
+	updateAnimBadge()
+	updatePackCycleLabel()
+	rebuildSavedAnimsUI()
+	startAnimChangerLoop(true)
+end)
+
+rebuildSavedAnimsUI = function()
+	for _, child in ipairs(savedAnimsContainer:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+
+	for idx, item in ipairs(savedAnimPacks) do
+		local isSelected = animChangerActive and (idx == activePackCycleIndex)
+
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, 0, 0, 28)
+		row.BackgroundColor3 = isSelected and Color3.fromRGB(35, 65, 58) or Color3.fromRGB(34, 36, 44)
+		row.BorderSizePixel = 0
+		row.LayoutOrder = idx
+		row.Parent = savedAnimsContainer
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+
+		local loadBtn = Instance.new("TextButton")
+		loadBtn.Size = UDim2.new(1, -34, 1, 0)
+		loadBtn.Position = UDim2.new(0, 6, 0, 0)
+		loadBtn.BackgroundTransparency = 1
+		local prefix = isSelected and "▶ [ĐANG DÙNG] " or "▶ "
+		loadBtn.Text = prefix .. tostring(item.name or ("Pack #" .. idx))
+		loadBtn.TextColor3 = isSelected and Color3.fromRGB(130, 255, 195) or Color3.fromRGB(235, 240, 250)
+		loadBtn.Font = Enum.Font.GothamSemibold
+		loadBtn.TextSize = 11
+		loadBtn.TextXAlignment = Enum.TextXAlignment.Left
+		loadBtn.TextTruncate = Enum.TextTruncate.AtEnd
+		loadBtn.Parent = row
+
+		local delBtn = Instance.new("TextButton")
+		delBtn.Size = UDim2.new(0, 24, 0, 20)
+		delBtn.Position = UDim2.new(1, -27, 0.5, -10)
+		delBtn.BackgroundColor3 = Color3.fromRGB(165, 45, 55)
+		delBtn.Text = "X"
+		delBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		delBtn.Font = Enum.Font.GothamBold
+		delBtn.TextSize = 10
+		delBtn.Parent = row
+		Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 5)
+
+		loadBtn.MouseButton1Click:Connect(function()
+			activePackCycleIndex = idx
+			activateAnimPack(item.pack, item.name or ("Pack #" .. idx), true)
+		end)
+
+		delBtn.MouseButton1Click:Connect(function()
+			table.remove(savedAnimPacks, idx)
+			if activePackCycleIndex == idx then
+				activePackCycleIndex = 0
+			elseif idx < activePackCycleIndex then
+				activePackCycleIndex -= 1
+			end
+			persistAnimPacks()
+			rebuildSavedAnimsUI()
+			updatePackCycleLabel()
+		end)
+	end
+end
+
+saveAnimPackBtn.MouseButton1Click:Connect(function()
+	syncAnimInputsToPack()
+	local customName = tostring(packNameBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+	if customName == "" then
+		customName = "Anim Pack #" .. (#savedAnimPacks + 1)
+	end
+
+	local normalizedPack = normalizeAnimPack(currentAnimPack)
+	table.insert(savedAnimPacks, 1, {
+		name = customName,
+		pack = normalizedPack,
+	})
+	activePackCycleIndex = 1
+	currentPackName = customName
+	animChangerActive = true
+	persistAnimPacks()
+	persistActiveAnimPack()
+	rebuildSavedAnimsUI()
+	updateAnimBadge()
+	updatePackCycleLabel()
+	startAnimChangerLoop(true)
+	packNameBox.Text = ""
+end)
+
+-- ================= TAB 4: CÀI ĐẶT TOÀN BỘ PHÍM =================
+local keysTabFrame = Instance.new("Frame")
+keysTabFrame.Size = UDim2.new(1, 0, 1, -52)
+keysTabFrame.Position = UDim2.new(0, 0, 0, 52)
+keysTabFrame.BackgroundTransparency = 1
+keysTabFrame.Visible = false
+keysTabFrame.Parent = contentFrame
+
+local keyGuideLabel = Instance.new("TextLabel")
+keyGuideLabel.Size = UDim2.new(1, -16, 0, 22)
+keyGuideLabel.Position = UDim2.new(0, 8, 0, 0)
+keyGuideLabel.BackgroundTransparency = 1
+keyGuideLabel.Text = "Bấm vào nút phím rồi nhấn phím mới bất kỳ để đổi"
+keyGuideLabel.TextColor3 = Color3.fromRGB(160, 185, 220)
+keyGuideLabel.Font = Enum.Font.Gotham
+keyGuideLabel.TextSize = 11
+keyGuideLabel.TextXAlignment = Enum.TextXAlignment.Left
+keyGuideLabel.Parent = keysTabFrame
+
+local keyScroll = Instance.new("ScrollingFrame")
+keyScroll.Size = UDim2.new(1, -16, 0, 374)
+keyScroll.Position = UDim2.new(0, 8, 0, 24)
+keyScroll.BackgroundColor3 = Color3.fromRGB(23, 26, 35)
+keyScroll.BorderSizePixel = 0
+keyScroll.ScrollBarThickness = 4
+keyScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+keyScroll.Parent = keysTabFrame
+Instance.new("UICorner", keyScroll).CornerRadius = UDim.new(0, 7)
+
+local keyListLayout = Instance.new("UIListLayout")
+keyListLayout.Padding = UDim.new(0, 5)
+keyListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+keyListLayout.Parent = keyScroll
+
+keyListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	keyScroll.CanvasSize = UDim2.new(0, 0, 0, keyListLayout.AbsoluteContentSize.Y + 8)
+end)
+
+local bindDefinitions = {
+	{ action = "toggleFly", label = "Bật / Tắt bay" },
+	{ action = "toggleHover", label = "Neo độ cao (đứng yên)" },
+	{ action = "cycleStand", label = "Đổi kiểu đứng 1 / 2" },
+	{ action = "cycleEmote", label = "Chuyển tiếp emote danh sách" },
+	{ action = "stopEmotes", label = "Dừng toàn bộ emote danh sách" },
+	{ action = "cycleAnimPack", label = "Chuyển bộ Animation" },
+	{ action = "stopAnimPack", label = "Tắt bộ Animation đang chạy" },
+	{ action = "upOrStyle", label = "Bay lên / Đổi kiểu bay 1-2-3" },
+	{ action = "down", label = "Hạ thấp thẳng đứng" },
+	{ action = "forward", label = "Bay tới (theo chuột)" },
+	{ action = "backward", label = "Bay lùi" },
+	{ action = "left", label = "Lượn trái + nghiêng" },
+	{ action = "right", label = "Lượn phải + nghiêng" },
+}
+
+local bindButtons = {}
+
+local function refreshKeybindButtons()
+	for action, btn in pairs(bindButtons) do
+		if listeningAction == action then
+			btn.Text = "Nhấn phím..."
+			btn.BackgroundColor3 = Color3.fromRGB(220, 145, 30)
+		else
+			btn.Text = tostring(keybinds[action] or DEFAULT_KEYBINDS[action])
+			btn.BackgroundColor3 = Color3.fromRGB(45, 55, 75)
+		end
+	end
+	if nextEmoteBtn then
+		nextEmoteBtn.Text = "Chuyển tiếp [" .. keybinds.cycleEmote .. "]"
+	end
+	if stopEmotesBtn then
+		stopEmotesBtn.Text = "Dừng hết [" .. keybinds.stopEmotes .. "]"
+	end
+	if updatePackCycleLabel then
+		updatePackCycleLabel()
+	end
+end
+
+for idx, def in ipairs(bindDefinitions) do
+	local kRow = Instance.new("Frame")
+	kRow.Size = UDim2.new(1, -8, 0, 32)
+	kRow.BackgroundColor3 = Color3.fromRGB(32, 37, 50)
+	kRow.BorderSizePixel = 0
+	kRow.LayoutOrder = idx
+	kRow.Parent = keyScroll
+	Instance.new("UICorner", kRow).CornerRadius = UDim.new(0, 6)
+
+	local nameLbl = Instance.new("TextLabel")
+	nameLbl.Size = UDim2.new(1, -118, 1, 0)
+	nameLbl.Position = UDim2.new(0, 8, 0, 0)
+	nameLbl.BackgroundTransparency = 1
+	nameLbl.Text = def.label
+	nameLbl.TextColor3 = Color3.fromRGB(235, 240, 250)
+	nameLbl.Font = Enum.Font.GothamSemibold
+	nameLbl.TextSize = 11
+	nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+	nameLbl.Parent = kRow
+
+	local keyBtn = Instance.new("TextButton")
+	keyBtn.Size = UDim2.new(0, 102, 0, 24)
+	keyBtn.Position = UDim2.new(1, -108, 0.5, -12)
+	keyBtn.BackgroundColor3 = Color3.fromRGB(45, 55, 75)
+	keyBtn.Text = keybinds[def.action]
+	keyBtn.TextColor3 = Color3.fromRGB(95, 225, 255)
+	keyBtn.Font = Enum.Font.GothamBold
+	keyBtn.TextSize = 11
+	keyBtn.Parent = kRow
+	Instance.new("UICorner", keyBtn).CornerRadius = UDim.new(0, 5)
+
+	bindButtons[def.action] = keyBtn
+
+	keyBtn.MouseButton1Click:Connect(function()
+		listeningAction = def.action
+		refreshKeybindButtons()
+	end)
+end
+
+local resetKeysBtn = Instance.new("TextButton")
+resetKeysBtn.Size = UDim2.new(1, -16, 0, 28)
+resetKeysBtn.Position = UDim2.new(0, 8, 0, 404)
+resetKeysBtn.BackgroundColor3 = Color3.fromRGB(150, 55, 65)
+resetKeysBtn.Text = "Khôi phục phím mặc định"
+resetKeysBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+resetKeysBtn.Font = Enum.Font.GothamBold
+resetKeysBtn.TextSize = 11.5
+resetKeysBtn.Parent = keysTabFrame
+Instance.new("UICorner", resetKeysBtn).CornerRadius = UDim.new(0, 6)
+
+-- Chuyển tab (1 = Bay & Lưu, 2 = Emote [C], 3 = Anim Pack, 4 = Phím)
+local tabFrames = { mainTabFrame, emoteTabFrame, animTabFrame, keysTabFrame }
+
+local function switchTab(tabIndex)
+	for idx, frame in ipairs(tabFrames) do
+		frame.Visible = (idx == tabIndex)
+		local btn = tabButtons[idx]
+		if btn then
+			btn.BackgroundColor3 = (idx == tabIndex) and Color3.fromRGB(0, 150, 230) or Color3.fromRGB(36, 42, 56)
+			btn.TextColor3 = (idx == tabIndex) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(210, 220, 240)
+		end
+	end
+
+	if tabIndex ~= 4 then
+		listeningAction = nil
+		refreshKeybindButtons()
+	end
+end
+
+for idx, btn in pairs(tabButtons) do
+	btn.MouseButton1Click:Connect(function()
+		switchTab(idx)
+	end)
+end
+
+-- ================= ĐỒNG BỘ & TRẠNG THÁI =================
+local function updateStatusText()
+	local gText = isFlying and "BẬT" or "TẮT"
+	local hText = (isFlying and isHovering) and "BẬT" or "TẮT"
+	local spd = getActiveSpeed()
+	local kFly = keybinds.toggleFly
+	local kHover = keybinds.toggleHover
+	local emoteTag = ""
+	if activeEmoteIndex > 0 and emoteList[activeEmoteIndex] then
+		emoteTag = " | E:" .. tostring(activeEmoteIndex)
+	end
+
+	if isStandMode then
+		statusLabel.Text = string.format("[%s] Bay: %s | [%s] Neo: %s | Đứng %d (%d)%s", kFly, gText, kHover, hText, activeStandIndex, spd, emoteTag)
+		statusLabel.TextColor3 = Color3.fromRGB(215, 165, 255)
+	else
+		statusLabel.Text = string.format("[%s] Bay: %s | [%s] Neo: %s | Kiểu %d (%d)%s", kFly, gText, kHover, hText, activeStyleIndex, spd, emoteTag)
+		statusLabel.TextColor3 = isFlying and Color3.fromRGB(95, 255, 140) or Color3.fromRGB(220, 225, 235)
+	end
+end
+
+-- Kéo thả sắp xếp thứ tự emote trong danh sách C (tự lưu sau khi kéo)
+local draggingEmoteIndex = nil
+local dragEmoteConn = nil
+local dragEmoteEndConn = nil
+local rebuildEmoteListUI
+
+local function moveEmoteItem(fromIdx, toIdx)
+	if fromIdx == toIdx then return end
+	if fromIdx < 1 or fromIdx > #emoteList then return end
+	toIdx = math.clamp(toIdx, 1, #emoteList)
+
+	local activeEntry = (activeEmoteIndex > 0) and emoteList[activeEmoteIndex] or nil
+	local movedItem = table.remove(emoteList, fromIdx)
+	table.insert(emoteList, toIdx, movedItem)
+
+	if activeEntry then
+		activeEmoteIndex = 0
+		for i, entry in ipairs(emoteList) do
+			if entry == activeEntry then
+				activeEmoteIndex = i
+				break
+			end
+		end
+	end
+	persistEmotes()
+end
+
+local function stopEmoteDrag()
+	draggingEmoteIndex = nil
+	if dragEmoteConn then
+		dragEmoteConn:Disconnect()
+		dragEmoteConn = nil
+	end
+	if dragEmoteEndConn then
+		dragEmoteEndConn:Disconnect()
+		dragEmoteEndConn = nil
+	end
+	emoteScroll.ScrollingEnabled = true
+end
+
+local function startEmoteDrag(sourceIndex)
+	stopEmoteDrag()
+	if sourceIndex < 1 or sourceIndex > #emoteList then return end
+
+	draggingEmoteIndex = sourceIndex
+	emoteScroll.ScrollingEnabled = false
+
+	dragEmoteConn = UserInputService.InputChanged:Connect(function(input)
+		if draggingEmoteIndex and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local relY = (input.Position.Y - emoteScroll.AbsolutePosition.Y) + emoteScroll.CanvasPosition.Y
+			local stepHeight = 32
+			local targetIdx = math.clamp(math.floor(relY / stepHeight) + 1, 1, #emoteList)
+			if targetIdx ~= draggingEmoteIndex then
+				moveEmoteItem(draggingEmoteIndex, targetIdx)
+				draggingEmoteIndex = targetIdx
+				rebuildEmoteListUI()
+				updateStatusText()
+			end
+		end
+	end)
+
+	dragEmoteEndConn = UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			stopEmoteDrag()
+			persistEmotes()
+			rebuildEmoteListUI()
+		end
+	end)
+end
+
+rebuildEmoteListUI = function()
+	emoteInfoLbl.Text = string.format("DANH SÁCH EMOTE (%d) - Tự lưu:", #emoteList)
+
+	for _, child in ipairs(emoteScroll:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+
+	for idx, item in ipairs(emoteList) do
+		local isSelected = (idx == activeEmoteIndex)
+		local isBeingDragged = (idx == draggingEmoteIndex)
+
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, -8, 0, 28)
+		row.BackgroundColor3 = isBeingDragged and Color3.fromRGB(65, 95, 145)
+			or (isSelected and Color3.fromRGB(35, 65, 58) or Color3.fromRGB(32, 37, 50))
+		row.BorderSizePixel = 0
+		row.LayoutOrder = idx
+		row.Parent = emoteScroll
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+
+		local dragHandle = Instance.new("TextButton")
+		dragHandle.Size = UDim2.new(0, 24, 0, 22)
+		dragHandle.Position = UDim2.new(0, 4, 0.5, -11)
+		dragHandle.BackgroundColor3 = Color3.fromRGB(48, 56, 76)
+		dragHandle.Text = "☰"
+		dragHandle.TextColor3 = Color3.fromRGB(165, 215, 255)
+		dragHandle.Font = Enum.Font.GothamBold
+		dragHandle.TextSize = 12
+		dragHandle.Parent = row
+		Instance.new("UICorner", dragHandle).CornerRadius = UDim.new(0, 5)
+
+		dragHandle.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+				startEmoteDrag(idx)
+			end
+		end)
+
+		local playBtn = Instance.new("TextButton")
+		playBtn.Size = UDim2.new(1, -62, 1, 0)
+		playBtn.Position = UDim2.new(0, 32, 0, 0)
+		playBtn.BackgroundTransparency = 1
+		local prefix = isSelected and "▶ [ĐANG CHẠY] " or (tostring(idx) .. ". ")
+		playBtn.Text = prefix .. tostring(item.name or ("Emote " .. idx))
+		playBtn.TextColor3 = isSelected and Color3.fromRGB(130, 255, 195) or Color3.fromRGB(235, 240, 250)
+		playBtn.Font = Enum.Font.GothamSemibold
+		playBtn.TextSize = 11
+		playBtn.TextXAlignment = Enum.TextXAlignment.Left
+		playBtn.TextTruncate = Enum.TextTruncate.AtEnd
+		playBtn.Parent = row
+
+		local delBtn = Instance.new("TextButton")
+		delBtn.Size = UDim2.new(0, 24, 0, 20)
+		delBtn.Position = UDim2.new(1, -27, 0.5, -10)
+		delBtn.BackgroundColor3 = Color3.fromRGB(165, 45, 55)
+		delBtn.Text = "X"
+		delBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		delBtn.Font = Enum.Font.GothamBold
+		delBtn.TextSize = 10
+		delBtn.Parent = row
+		Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 5)
+
+		playBtn.MouseButton1Click:Connect(function()
+			if draggingEmoteIndex then return end
+			playEmoteAtIndex(idx, true)
+			rebuildEmoteListUI()
+			updateStatusText()
+		end)
+
+		delBtn.MouseButton1Click:Connect(function()
+			local removingCurrent = (idx == activeEmoteIndex)
+			table.remove(emoteList, idx)
+			if removingCurrent then
+				stopCurrentEmoteTrack()
+				activeEmoteIndex = 0
+			elseif idx < activeEmoteIndex then
+				activeEmoteIndex -= 1
+			end
+			persistEmotes()
+			rebuildEmoteListUI()
+			updateStatusText()
+		end)
+	end
+end
+
+addEmoteBtn.MouseButton1Click:Connect(function()
+	local normId = normalizeAnimId(emoteIdInput.Text)
+	if normId == "" then return end
+
+	local customName = tostring(emoteNameInput.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+	if customName == "" then
+		customName = "Emote #" .. (#emoteList + 1)
+	end
+
+	table.insert(emoteList, {
+		name = customName,
+		animId = normId,
+	})
+	persistEmotes()
+	emoteNameInput.Text = ""
+	emoteIdInput.Text = ""
+	rebuildEmoteListUI()
+end)
+
+nextEmoteBtn.MouseButton1Click:Connect(function()
+	cycleNextEmote()
+	rebuildEmoteListUI()
+	updateStatusText()
+end)
+
+stopEmotesBtn.MouseButton1Click:Connect(function()
+	stopAllListEmotes()
+	rebuildEmoteListUI()
+	updateStatusText()
+end)
+
+clearAllEmotesBtn.MouseButton1Click:Connect(function()
+	stopAllListEmotes()
+	emoteList = {}
+	persistEmotes()
+	rebuildEmoteListUI()
+	updateStatusText()
+end)
+
+resetKeysBtn.MouseButton1Click:Connect(function()
+	keybinds = cloneKeybinds(DEFAULT_KEYBINDS)
+	listeningAction = nil
+	persistActiveConfig()
+	refreshKeybindButtons()
+	updateStatusText()
+end)
+
+local function syncInputsToStyles()
+	for i = 1, 3 do
+		local r = styleRows[i]
+		flightStyles[i].animId = normalizeAnimId(r.idBox.Text)
+		local numSpeed = tonumber(r.speedBox.Text)
+		if numSpeed and numSpeed > 0 then
+			flightStyles[i].speed = math.clamp(numSpeed, 10, 500)
+		end
+		r.speedBox.Text = tostring(flightStyles[i].speed)
+	end
+
+	for i = 1, 2 do
+		local sr = standRows[i]
+		standStyles[i].animId = normalizeAnimId(sr.idBox.Text)
+		local numSpeed = tonumber(sr.speedBox.Text)
+		if numSpeed and numSpeed > 0 then
+			standStyles[i].speed = math.clamp(numSpeed, 10, 500)
+		end
+		sr.speedBox.Text = tostring(standStyles[i].speed)
+	end
+	persistActiveConfig()
+end
+
+local function syncStylesToInputs()
+	for i = 1, 3 do
+		local r = styleRows[i]
+		r.idBox.Text = flightStyles[i].animId
+		r.speedBox.Text = tostring(flightStyles[i].speed)
+	end
+
+	for i = 1, 2 do
+		local sr = standRows[i]
+		sr.idBox.Text = standStyles[i].animId
+		sr.speedBox.Text = tostring(standStyles[i].speed or 75)
+	end
+end
+
+local function refreshStyleHighlight()
+	for i = 1, 3 do
+		local r = styleRows[i]
+		if (not isStandMode) and i == activeStyleIndex then
+			r.selectBtn.BackgroundColor3 = Color3.fromRGB(0, 165, 245)
+			r.stroke.Color = Color3.fromRGB(0, 210, 255)
+			r.stroke.Thickness = 1.5
+		else
+			r.selectBtn.BackgroundColor3 = Color3.fromRGB(42, 48, 62)
+			r.stroke.Color = Color3.fromRGB(55, 62, 80)
+			r.stroke.Thickness = 1
+		end
+	end
+
+	for i = 1, 2 do
+		local sr = standRows[i]
+		if isStandMode and i == activeStandIndex then
+			sr.btn.BackgroundColor3 = Color3.fromRGB(165, 95, 255)
+			sr.stroke.Color = Color3.fromRGB(205, 150, 255)
+			sr.stroke.Thickness = 1.5
+		else
+			sr.btn.BackgroundColor3 = Color3.fromRGB(58, 48, 82)
+			sr.stroke.Color = Color3.fromRGB(85, 70, 115)
+			sr.stroke.Thickness = 1
+		end
+	end
+end
+
+local function selectFlightStyle(index)
+	index = math.clamp(tonumber(index) or 1, 1, 3)
+	syncInputsToStyles()
+	isStandMode = false
+	activeStyleIndex = index
+	refreshStyleHighlight()
+	updateStatusText()
+	if isFlying then
+		applyStyleAnimation(true)
+	end
+end
+
+local function selectStandStyle(index)
+	index = math.clamp(tonumber(index) or 1, 1, 2)
+	syncInputsToStyles()
+	isStandMode = true
+	activeStandIndex = index
+	refreshStyleHighlight()
+	updateStatusText()
+	if isFlying then
+		applyStyleAnimation(true)
+	end
+end
+
+local function cycleStandStyle()
+	if not isStandMode then
+		selectStandStyle(activeStandIndex)
+	else
+		local nextStand = (activeStandIndex % 2) + 1
+		selectStandStyle(nextStand)
+	end
+end
+
+for i = 1, 3 do
+	local r = styleRows[i]
+	r.selectBtn.MouseButton1Click:Connect(function()
+		selectFlightStyle(i)
+	end)
+	r.idBox.FocusLost:Connect(function()
+		syncInputsToStyles()
+		if (not isStandMode) and i == activeStyleIndex and isFlying then
+			applyStyleAnimation(true)
+		end
+	end)
+	r.speedBox.FocusLost:Connect(function()
+		syncInputsToStyles()
+		updateStatusText()
+	end)
+end
+
+for i = 1, 2 do
+	local sr = standRows[i]
+	sr.btn.MouseButton1Click:Connect(function()
+		selectStandStyle(i)
+	end)
+	sr.idBox.FocusLost:Connect(function()
+		syncInputsToStyles()
+		if isStandMode and i == activeStandIndex and isFlying then
+			applyStyleAnimation(true)
+		end
+	end)
+	sr.speedBox.FocusLost:Connect(function()
+		syncInputsToStyles()
+		updateStatusText()
+	end)
+end
+
+-- Danh sách bộ bay đã lưu
+local function rebuildPresetList()
+	for _, child in ipairs(presetScroll:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+
+	for idx, preset in ipairs(savedPresets) do
+		local item = Instance.new("Frame")
+		item.Size = UDim2.new(1, -8, 0, 26)
+		item.BackgroundColor3 = Color3.fromRGB(34, 39, 52)
+		item.BorderSizePixel = 0
+		item.LayoutOrder = idx
+		item.Parent = presetScroll
+		Instance.new("UICorner", item).CornerRadius = UDim.new(0, 6)
+
+		local loadBtn = Instance.new("TextButton")
+		loadBtn.Size = UDim2.new(1, -34, 1, 0)
+		loadBtn.Position = UDim2.new(0, 6, 0, 0)
+		loadBtn.BackgroundTransparency = 1
+		loadBtn.Text = "▶ " .. tostring(preset.name or ("Bộ #" .. idx))
+		loadBtn.TextColor3 = Color3.fromRGB(240, 245, 255)
+		loadBtn.Font = Enum.Font.GothamSemibold
+		loadBtn.TextSize = 11
+		loadBtn.TextXAlignment = Enum.TextXAlignment.Left
+		loadBtn.TextTruncate = Enum.TextTruncate.AtEnd
+		loadBtn.Parent = item
+
+		local delBtn = Instance.new("TextButton")
+		delBtn.Size = UDim2.new(0, 24, 0, 20)
+		delBtn.Position = UDim2.new(1, -27, 0.5, -10)
+		delBtn.BackgroundColor3 = Color3.fromRGB(165, 45, 55)
+		delBtn.Text = "X"
+		delBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		delBtn.Font = Enum.Font.GothamBold
+		delBtn.TextSize = 10
+		delBtn.Parent = item
+		Instance.new("UICorner", delBtn).CornerRadius = UDim.new(0, 5)
+
+		loadBtn.MouseButton1Click:Connect(function()
+			stopAllListEmotes()
+			flightStyles = deepCopyStyles(preset.styles)
+			standStyles = deepCopyStandStyles(preset.stands)
+			if type(preset.emotes) == "table" and #preset.emotes > 0 then
+				emoteList = deepCopyEmotes(preset.emotes)
+				persistEmotes()
+			end
+			if preset.keybinds then
+				keybinds = cloneKeybinds(preset.keybinds)
+				refreshKeybindButtons()
+			end
+			persistActiveConfig()
+			syncStylesToInputs()
+			rebuildEmoteListUI()
+			selectFlightStyle(1)
+			presetNameBox.Text = tostring(preset.name or "")
+		end)
+
+		delBtn.MouseButton1Click:Connect(function()
+			table.remove(savedPresets, idx)
+			persistPresets()
+			rebuildPresetList()
+		end)
+	end
+end
+
+savePresetBtn.MouseButton1Click:Connect(function()
+	syncInputsToStyles()
+	local customName = tostring(presetNameBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+	if customName == "" then
+		customName = "Bộ bay #" .. (#savedPresets + 1)
+	end
+
+	table.insert(savedPresets, 1, {
+		name = customName,
+		styles = deepCopyStyles(flightStyles),
+		stands = deepCopyStandStyles(standStyles),
+		emotes = deepCopyEmotes(emoteList),
+		keybinds = cloneKeybinds(keybinds),
+	})
+	persistPresets()
+	rebuildPresetList()
+	presetNameBox.Text = ""
+end)
+
+-- ================= LOGIC BAY =================
+local function stopFlying()
+	isFlying = false
+	isHovering = false
+	isStandMode = false
+	stopCurrentCustomAnim()
+	removeInvisibleFloor()
+
+	if flightConnection then
+		flightConnection:Disconnect()
+		flightConnection = nil
+	end
+	if animKeepConnection then
+		animKeepConnection:Disconnect()
+		animKeepConnection = nil
+	end
+	if bodyGyro then
+		bodyGyro:Destroy()
+		bodyGyro = nil
+	end
+	if bodyVelocity then
+		bodyVelocity:Destroy()
+		bodyVelocity = nil
+	end
+	refreshStyleHighlight()
+	updateStatusText()
+end
+
+local function startFlying()
+	local character = player.Character
+	if not character then return end
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not rootPart or not humanoid then return end
+
+	syncInputsToStyles()
+	isFlying = true
+	isHovering = false
+	isStandMode = false
+	refreshStyleHighlight()
+
+	applyStyleAnimation(true)
+
+	bodyGyro = Instance.new("BodyGyro")
+	bodyGyro.P = 30000
+	bodyGyro.D = 1000
+	bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+	bodyGyro.CFrame = rootPart.CFrame
+	bodyGyro.Parent = rootPart
+
+	bodyVelocity = Instance.new("BodyVelocity")
+	bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+	bodyVelocity.Velocity = Vector3.zero
+	bodyVelocity.Parent = rootPart
+
+	animKeepConnection = RunService.Heartbeat:Connect(function()
+		if not isFlying or not humanoid then return end
+		updateAirFloor(character, rootPart)
+
+		local expectedId = getDesiredAnimId()
+		if expectedId ~= "" then
+			if not currentAnimTrack or currentAnimId ~= expectedId then
+				applyStyleAnimation(true)
+			elseif not currentAnimTrack.IsPlaying then
+				currentAnimTrack:Play(0.1)
+			end
+		end
+
+		if activeEmoteIndex > 0 and emoteList[activeEmoteIndex] then
+			local eId = normalizeAnimId(emoteList[activeEmoteIndex].animId)
+			if eId ~= "" then
+				if not currentEmoteTrack or currentEmoteId ~= eId then
+					playEmoteAtIndex(activeEmoteIndex, true)
+				elseif not currentEmoteTrack.IsPlaying then
+					currentEmoteTrack:Play(0.1)
+				end
+			end
+		end
+	end)
+
+	local currentVelocity = Vector3.zero
+
+	flightConnection = RunService.RenderStepped:Connect(function()
+		if not isFlying or not rootPart or not rootPart.Parent then
+			stopFlying()
+			return
+		end
+
+		if isHovering then
+			currentVelocity = Vector3.zero
+			bodyVelocity.Velocity = Vector3.zero
+			local lookFlat = Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z)
+			if lookFlat.Magnitude > 0 then
+				local targetCFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + lookFlat)
+				bodyGyro.CFrame = bodyGyro.CFrame:Lerp(targetCFrame, SMOOTHNESS)
+			end
+			return
+		end
+
+		local activeSpeed = getActiveSpeed()
+		local moveDirection = Vector3.zero
+		local rollAngle = 0
+
+		if isBindPressed("forward") then
+			moveDirection += camera.CFrame.LookVector
+		end
+		if isBindPressed("backward") then
+			moveDirection -= camera.CFrame.LookVector
+		end
+		if isBindPressed("left") then
+			moveDirection -= camera.CFrame.RightVector
+			rollAngle = math.rad(TILT_ANGLE)
+		end
+		if isBindPressed("right") then
+			moveDirection += camera.CFrame.RightVector
+			rollAngle = math.rad(-TILT_ANGLE)
+		end
+		if isBindPressed("upOrStyle") then
+			moveDirection += Vector3.new(0, 1, 0)
+		end
+		if isBindPressed("down") then
+			moveDirection -= Vector3.new(0, 1, 0)
+		end
+
+		local targetVelocity = Vector3.zero
+		if moveDirection.Magnitude > 0 then
+			targetVelocity = moveDirection.Unit * activeSpeed
+		end
+
+		currentVelocity = currentVelocity:Lerp(targetVelocity, SMOOTHNESS)
+		bodyVelocity.Velocity = currentVelocity
+
+		local targetRotation
+		if isStandMode then
+			local lookFlat = Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z)
+			if lookFlat.Magnitude > 0.001 then
+				targetRotation = CFrame.lookAt(Vector3.zero, lookFlat.Unit) * CFrame.Angles(0, 0, rollAngle * 0.5)
+			else
+				targetRotation = CFrame.Angles(0, 0, rollAngle * 0.5)
+			end
+		else
+			targetRotation = camera.CFrame.Rotation * CFrame.Angles(0, 0, rollAngle)
+		end
+
+		bodyGyro.CFrame = bodyGyro.CFrame:Lerp(targetRotation, SMOOTHNESS)
+	end)
+
+	updateStatusText()
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+
+	-- Ưu tiên xử lý khi đang chờ bấm phím mới trong tab Phím
+	if listeningAction then
+		if input.KeyCode == Enum.KeyCode.Escape then
+			listeningAction = nil
+			refreshKeybindButtons()
+			return
+		end
+		if input.KeyCode ~= Enum.KeyCode.Unknown then
+			keybinds[listeningAction] = input.KeyCode.Name
+			listeningAction = nil
+			persistActiveConfig()
+			refreshKeybindButtons()
+			updateStatusText()
+		end
+		return
+	end
+
+	-- Chỉ bỏ qua khi đang gõ vào ô nhập liệu TextBox
+	if UserInputService:GetFocusedTextBox() then return end
+
+	local codeName = input.KeyCode.Name
+
+	if codeName == keybinds.toggleFly then
+		if isFlying then
+			stopFlying()
+		else
+			startFlying()
+		end
+	elseif codeName == keybinds.toggleHover then
+		if isFlying then
+			isHovering = not isHovering
+			updateStatusText()
+		end
+	elseif codeName == keybinds.cycleStand then
+		cycleStandStyle()
+	elseif codeName == keybinds.cycleEmote then
+		cycleNextEmote()
+		rebuildEmoteListUI()
+		updateStatusText()
+	elseif codeName == keybinds.stopEmotes then
+		stopAllListEmotes()
+		rebuildEmoteListUI()
+		updateStatusText()
+	elseif codeName == keybinds.cycleAnimPack then
+		cycleNextAnimPack()
+	elseif codeName == keybinds.stopAnimPack then
+		stopAnimChangerPack()
+	elseif codeName == keybinds.upOrStyle then
+		styleTapCount += 1
+		if styleTapTimer then
+			task.cancel(styleTapTimer)
+		end
+		styleTapTimer = task.delay(MULTI_TAP_WINDOW, function()
+			local taps = math.clamp(styleTapCount, 1, 3)
+			styleTapCount = 0
+			styleTapTimer = nil
+			selectFlightStyle(taps)
+		end)
+	end
+end)
+
+player.CharacterAdded:Connect(function(newCharacter)
+	originalAnimateIds = {}
+	stopEmoteDrag()
+	stopAllListEmotes()
+	stopFlying()
+	if animChangerActive then
+		task.defer(function()
+			local hum = newCharacter:FindFirstChildOfClass("Humanoid") or newCharacter:WaitForChild("Humanoid", 5)
+			captureOriginalAnimateIds(newCharacter)
+			applyPackToAnimateScript(newCharacter, hum, true)
+			startAnimChangerLoop(false)
+		end)
+	end
+end)
+
+if player.Character then
+	captureOriginalAnimateIds(player.Character)
+end
+
+syncStylesToInputs()
+syncPackToAnimInputs()
+updateAnimBadge()
+updateScannerSwitchUI()
+refreshKeybindButtons()
+refreshStyleHighlight()
+rebuildEmoteListUI()
+rebuildSavedAnimsUI()
+rebuildScannedIdsUI()
+rebuildPresetList()
+updateStatusText()
+
+if animChangerActive then
+	startAnimChangerLoop(true)
+end
