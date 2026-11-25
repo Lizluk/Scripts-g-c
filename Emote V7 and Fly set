@@ -27,6 +27,7 @@ local DEFAULT_KEYBINDS = {
 	toggleFly = "G",
 	toggleHover = "H",
 	cycleStand = "X",
+	standPoseFromFlight = "Z",
 	upOrStyle = "Space",
 	down = "LeftControl",
 	forward = "W",
@@ -37,12 +38,14 @@ local DEFAULT_KEYBINDS = {
 	stopEmotes = "F1",
 	cycleAnimPack = "V",
 	stopAnimPack = "F2",
+	toggleGui = "F5",
 }
 
 local keybinds = {
 	toggleFly = DEFAULT_KEYBINDS.toggleFly,
 	toggleHover = DEFAULT_KEYBINDS.toggleHover,
 	cycleStand = DEFAULT_KEYBINDS.cycleStand,
+	standPoseFromFlight = DEFAULT_KEYBINDS.standPoseFromFlight,
 	upOrStyle = DEFAULT_KEYBINDS.upOrStyle,
 	down = DEFAULT_KEYBINDS.down,
 	forward = DEFAULT_KEYBINDS.forward,
@@ -53,6 +56,7 @@ local keybinds = {
 	stopEmotes = DEFAULT_KEYBINDS.stopEmotes,
 	cycleAnimPack = DEFAULT_KEYBINDS.cycleAnimPack,
 	stopAnimPack = DEFAULT_KEYBINDS.stopAnimPack,
+	toggleGui = DEFAULT_KEYBINDS.toggleGui,
 }
 
 local listeningAction = nil
@@ -84,7 +88,7 @@ local flightStyles = {
 	{ name = "Kiểu 3", animId = "", speed = 130 },
 }
 
--- Dữ liệu 2 kiểu đứng khi bấm phím chuyển đứng
+-- Dữ liệu 2 kiểu đứng khi bấm phím chuyển đứng (hoặc chuyển sang dáng đứng bằng Z khi bay)
 local standStyles = {
 	{ name = "Đứng 1", animId = "", speed = 75 },
 	{ name = "Đứng 2", animId = "", speed = 75 },
@@ -126,6 +130,7 @@ local savedPresets = {}
 local activeStyleIndex = 1
 local isStandMode = false
 local activeStandIndex = 1
+local useAirFloor = true -- Khi bấm Z: tắt sàn vô hình để bay tự do theo chuột với dáng đứng X
 
 local currentAnimTrack = nil
 local currentAnimId = ""
@@ -659,7 +664,7 @@ local function cycleNextAnimPack()
 	activateAnimPack(chosen.pack, chosen.name, true)
 end
 
--- Quản lý sàn vô hình
+-- Quản lý sàn vô hình (bị tắt khi bấm Z để bay tự do theo chuột với dáng đứng X)
 local function removeInvisibleFloor()
 	if invisibleFloor then
 		invisibleFloor:Destroy()
@@ -682,7 +687,7 @@ local function ensureInvisibleFloor()
 end
 
 local function updateAirFloor(character, rootPart)
-	if not isFlying or not rootPart then
+	if not isFlying or not useAirFloor or not rootPart then
 		removeInvisibleFloor()
 		return
 	end
@@ -781,20 +786,20 @@ end
 -- Lấy Animation ID của kiểu bay / kiểu đứng (X)
 local function getDesiredAnimId()
 	if isStandMode then
-		local s = standStyles[activeStandIndex]
+		local s = standStyles[activeStandIndex] or standStyles[1]
 		return normalizeAnimId(s and s.animId)
 	else
-		local f = flightStyles[activeStyleIndex]
+		local f = flightStyles[activeStyleIndex] or flightStyles[1]
 		return normalizeAnimId(f and f.animId)
 	end
 end
 
 local function getActiveSpeed()
 	if isStandMode then
-		local s = standStyles[activeStandIndex]
+		local s = standStyles[activeStandIndex] or standStyles[1]
 		return (s and s.speed) or 75
 	else
-		local f = flightStyles[activeStyleIndex]
+		local f = flightStyles[activeStyleIndex] or flightStyles[1]
 		return (f and f.speed) or 65
 	end
 end
@@ -1733,7 +1738,6 @@ local extraIdleBoxes = {}
 local rebuildExtraIdlesUI
 local rebuildScannedIdsUI
 
--- Tự động phân loại và điền ID vào đúng ô trong Anim Changer
 local function assignIdIntoSmartSlot(rawId, rawTitle)
 	local normId = normalizeAnimId(rawId)
 	if normId == "" then return false end
@@ -1766,7 +1770,6 @@ local function assignIdIntoSmartSlot(rawId, rawTitle)
 			appendExtraIdleIfMissing(normId)
 		end
 	else
-		-- Tự động chia theo vị trí trống khi tên chung chung (Animation1, Animation2...)
 		if currentAnimPack.idle1 == "" then
 			currentAnimPack.idle1 = normId
 		elseif currentAnimPack.idle2 == "" then
@@ -1797,7 +1800,6 @@ local function fillAllScannedIdsToSlots()
 	syncAnimInputsToPack()
 
 	local appliedCount = 0
-	-- Duyệt từ cũ tới mới để ID đầu tiên vào Idle 1, tiếp theo vào Idle 2 / Walk / Run...
 	for i = #scannedIds, 1, -1 do
 		local item = scannedIds[i]
 		local normId = normalizeAnimId(item and item.id)
@@ -2295,10 +2297,12 @@ local bindDefinitions = {
 	{ action = "toggleFly", label = "Bật / Tắt bay" },
 	{ action = "toggleHover", label = "Neo độ cao (đứng yên)" },
 	{ action = "cycleStand", label = "Đổi kiểu đứng 1 / 2" },
+	{ action = "standPoseFromFlight", label = "Bay dáng đứng X (tắt sàn giữ cao)" },
 	{ action = "cycleEmote", label = "Chuyển tiếp emote danh sách" },
 	{ action = "stopEmotes", label = "Dừng toàn bộ emote danh sách" },
 	{ action = "cycleAnimPack", label = "Chuyển bộ Animation" },
 	{ action = "stopAnimPack", label = "Tắt bộ Animation đang chạy" },
+	{ action = "toggleGui", label = "Ẩn / Hiện toàn bộ GUI" },
 	{ action = "upOrStyle", label = "Bay lên / Đổi kiểu bay 1-2-3" },
 	{ action = "down", label = "Hạ thấp thẳng đứng" },
 	{ action = "forward", label = "Bay tới (theo chuột)" },
@@ -2418,7 +2422,8 @@ local function updateStatusText()
 	end
 
 	if isStandMode then
-		statusLabel.Text = string.format("[%s] Bay: %s | [%s] Neo: %s | Đứng %d (%d)%s", kFly, gText, kHover, hText, activeStandIndex, spd, emoteTag)
+		local floorTag = (isFlying and not useAirFloor) and " [Tự do]" or ""
+		statusLabel.Text = string.format("[%s] Bay: %s | [%s] Neo: %s | Đứng %d (%d)%s%s", kFly, gText, kHover, hText, activeStandIndex, spd, floorTag, emoteTag)
 		statusLabel.TextColor3 = Color3.fromRGB(215, 165, 255)
 	else
 		statusLabel.Text = string.format("[%s] Bay: %s | [%s] Neo: %s | Kiểu %d (%d)%s", kFly, gText, kHover, hText, activeStyleIndex, spd, emoteTag)
@@ -2694,14 +2699,22 @@ local function refreshStyleHighlight()
 	end
 end
 
+-- ================= LOGIC BAY & TẠO DÁNG ĐỨNG (X) =================
+local startFlying
+local stopFlying
+local enterStandPoseFromFlight
+
 local function selectFlightStyle(index)
 	index = math.clamp(tonumber(index) or 1, 1, 3)
 	syncInputsToStyles()
+	useAirFloor = true
 	isStandMode = false
 	activeStyleIndex = index
-	refreshStyleHighlight()
-	updateStatusText()
-	if isFlying then
+	if not isFlying then
+		startFlying()
+	else
+		refreshStyleHighlight()
+		updateStatusText()
 		applyStyleAnimation(true)
 	end
 end
@@ -2847,14 +2860,11 @@ savePresetBtn.MouseButton1Click:Connect(function()
 	presetNameBox.Text = ""
 end)
 
--- ================= LOGIC BAY =================
-local function stopFlying()
+stopFlying = function()
 	isFlying = false
 	isHovering = false
 	isStandMode = false
-	stopCurrentCustomAnim()
-	removeInvisibleFloor()
-
+	useAirFloor = true
 	if flightConnection then
 		flightConnection:Disconnect()
 		flightConnection = nil
@@ -2871,11 +2881,31 @@ local function stopFlying()
 		bodyVelocity:Destroy()
 		bodyVelocity = nil
 	end
+	stopCurrentCustomAnim()
+	removeInvisibleFloor()
 	refreshStyleHighlight()
 	updateStatusText()
 end
 
-local function startFlying()
+-- Bấm Z: Giữ chế độ bay tự do theo chuột, gỡ sàn giữ độ cao và chuyển sang dáng đứng trong X
+enterStandPoseFromFlight = function()
+	syncInputsToStyles()
+	useAirFloor = false
+	isStandMode = true
+	isHovering = false
+	activeStandIndex = math.clamp(tonumber(activeStandIndex) or 1, 1, 2)
+	removeInvisibleFloor()
+
+	if not isFlying then
+		startFlying()
+	else
+		refreshStyleHighlight()
+		updateStatusText()
+		applyStyleAnimation(true)
+	end
+end
+
+startFlying = function()
 	local character = player.Character
 	if not character then return end
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
@@ -2885,10 +2915,12 @@ local function startFlying()
 	syncInputsToStyles()
 	isFlying = true
 	isHovering = false
-	isStandMode = false
 	refreshStyleHighlight()
 
 	applyStyleAnimation(true)
+
+	if bodyGyro then bodyGyro:Destroy() end
+	if bodyVelocity then bodyVelocity:Destroy() end
 
 	bodyGyro = Instance.new("BodyGyro")
 	bodyGyro.P = 30000
@@ -3022,10 +3054,17 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
 	local codeName = input.KeyCode.Name
 
+	if codeName == keybinds.toggleGui then
+		screenGui.Enabled = not screenGui.Enabled
+		return
+	end
+
 	if codeName == keybinds.toggleFly then
 		if isFlying then
 			stopFlying()
 		else
+			useAirFloor = true
+			isStandMode = false
 			startFlying()
 		end
 	elseif codeName == keybinds.toggleHover then
@@ -3035,6 +3074,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		end
 	elseif codeName == keybinds.cycleStand then
 		cycleStandStyle()
+	elseif codeName == keybinds.standPoseFromFlight then
+		enterStandPoseFromFlight()
 	elseif codeName == keybinds.cycleEmote then
 		cycleNextEmote()
 		rebuildEmoteListUI()
